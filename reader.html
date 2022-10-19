@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data:; frame-src blob: data:; object-src 'none'; form-action 'none';">
+<style>
+* {
+    box-sizing: border-box;
+}
+body {
+    margin: 0;
+    font-family: system-ui, sans-serif;
+}
+#drop-target {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+#nav-bar {
+    visibility: hidden;
+    position: absolute;
+    bottom: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    height: 48px;
+    padding: 6px;
+    opacity: .25;
+    transition: opacity 250ms ease;
+}
+#nav-bar:hover {
+    opacity: 1;
+}
+#nav-bar button {
+    padding: 3px;
+    border-radius: 6px;
+    background: none;
+    border: 0;
+}
+#nav-bar button:hover {
+    background: rgba(0, 0, 0, .1);
+}
+#progress-label {
+    font-size: small;
+    font-variant-numeric: tabular-nums;
+}
+.icon {
+    display: block;
+    fill: none;
+    stroke: currentcolor;
+    stroke-width: 2px;
+}
+</style>
+<input type="file" id="file-input" hidden>
+<div id="drop-target" class="filter">Drop a file here to open it.</div>
+<div id="nav-bar">
+    <button id="left-button" aria-label="Turn left page">
+        <svg class="icon" width="24" height="24" aria-hidden="true">
+            <path d="M 15 6 L 9 12 L 15 18"/>
+        </svg>
+    </button>
+    <div id="progress-label"></div>
+    <button id="right-button" aria-label="Turn right page">
+        <svg class="icon" width="24" height="24" aria-hidden="true">
+            <path d="M 9 6 L 15 12 L 9 18"/>
+        </svg>
+    </button>
+</div>
+<script src="vendor/zip-no-worker.min.js"></script>
+<script src="vendor/fflate.min.js"></script>
+<script src="reader.js" type="module"></script>
