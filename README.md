@@ -10,7 +10,6 @@ Features:
 - Does not depend on or include any library for unzipping; bring your own Zip library
 - Does not require loading whole file into memory
 - Does not care about older browsers
-- No tests :(
 - No continuous scrolling mode :(
 
 ## Demo

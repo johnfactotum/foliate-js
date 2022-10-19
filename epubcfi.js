@@ -244,9 +244,8 @@ const partsToNode = (node, parts) => {
     let sum = 0
     for (const n of node) {
         const { length } = n.nodeValue
-        if (sum + length > offset) return { node: n, offset: offset - sum }
+        if (sum + length >= offset) return { node: n, offset: offset - sum }
         sum += length
-        if (n === node[node.length - 1]) return { node: n, offset: length - 1 }
     }
 }
 
