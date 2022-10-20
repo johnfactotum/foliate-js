@@ -7,6 +7,7 @@
 <style>
 body {
     margin: 0;
+    font: menu;
     font-family: system-ui, sans-serif;
 }
 #drop-target {
@@ -111,6 +112,34 @@ body {
     opacity: 1;
     transition-delay: 0s;
 }
+#side-bar-header {
+    padding: 1rem;
+    display: flex;
+    border-bottom: 1px solid rgba(0, 0, 0, .1);
+    align-items: center;
+}
+#side-bar-cover {
+    height: 10vh;
+    min-height: 60px;
+    max-height: 180px;
+    border-radius: 3px;
+    border: 0;
+    background: lightgray;
+    box-shadow: 0 0 1px rgba(0, 0, 0, .1), 0 0 16px rgba(0, 0, 0, .1);
+    margin-inline-end: 1rem;
+}
+#side-bar-cover:not([src]) {
+    display: none;
+}
+#side-bar-title {
+    margin: .5rem 0;
+    font-size: inherit;
+}
+#side-bar-author {
+    margin: .5rem 0;
+    font-size: small;
+    color: GrayText;
+}
 #toc-view {
     padding: .5rem;
     overflow-y: scroll;
@@ -179,6 +208,13 @@ body {
 </div>
 <div id="dimming-overlay" aria-hidden="true"></div>
 <div id="side-bar">
+    <div id="side-bar-header">
+        <img id="side-bar-cover">
+        <div>
+            <h1 id="side-bar-title"></h1>
+            <p id="side-bar-author"></p>
+        </div>
+    </div>
     <div id="toc-view"></div>
 </div>
 <div id="header-bar" class="toolbar">

@@ -132,15 +132,25 @@ const open = async file => {
     view.setAppearance({ css: getCSS(style) })
     view.renderer.next()
 
-    const title = view.book.metadata?.title
-    if (title) document.title = title
+    const { book } = view
+    const title = book.metadata?.title ?? 'Untitled Book'
+    document.title = title
+    $('#side-bar-title').innerText = title
+    const author = book.metadata?.author
+    $('#side-bar-author').innerText = typeof author === 'string' ? author
+        : author
+            ?.map(author => typeof author === 'string' ? author : author.name)
+            ?.join(', ')
+            ?? ''
+    book.getCover?.()?.then(blob =>
+        blob ? $('#side-bar-cover').src = URL.createObjectURL(blob) : null)
 
     const closeSideBar = () => {
         $('#dimming-overlay').classList.remove('show')
         $('#side-bar').classList.remove('show')
     }
 
-    const toc = view.book.toc
+    const toc = book.toc
     if (toc) {
         const onclick = href => {
             view.goTo(href).catch(e => console.error(e))
