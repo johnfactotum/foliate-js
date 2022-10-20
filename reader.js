@@ -1,5 +1,6 @@
 /* global zip: false, fflate: false */
 import { View } from './view.js'
+import { createTOCView } from './ui/tree.js'
 
 const { ZipReader, BlobReader, TextWriter, BlobWriter } = zip
 zip.configure({ useWebWorkers: false })
@@ -102,16 +103,19 @@ const $ = document.querySelector.bind(document)
 const locales = 'en'
 const percentFormat = new Intl.NumberFormat(locales, { style: 'percent' })
 
+let setCurrentHref
+
 const emit = obj => {
     console.debug(obj)
     switch (obj.type) {
         case 'relocated': {
-            const { fraction, location, pageItem } = obj
+            const { fraction, location, tocItem, pageItem } = obj
             const percent = percentFormat.format(fraction)
             const loc = pageItem
                 ? `Page ${pageItem.label}`
                 : `Loc ${location.current}`
             $('#progress-label').innerText = `${percent} · ${loc}`
+            if (tocItem?.href) setCurrentHref?.(tocItem.href)
             break
         }
     }
@@ -133,6 +137,30 @@ const dropHandler = e => {
                 }
                 view.setAppearance({ css: getCSS(style) })
                 view.renderer.next()
+
+                const closeSideBar = () => {
+                    $('#dimming-overlay').classList.remove('show')
+                    $('#side-bar').classList.remove('show')
+                }
+
+                const toc = view.book.toc
+                if (toc) {
+                    const onclick = href => {
+                        view.goTo(href).catch(e => console.error(e))
+                        closeSideBar()
+                    }
+                    const tocView = createTOCView(toc, onclick)
+                    setCurrentHref = tocView.setCurrentHref
+                    $('#toc-view').append(tocView.element)
+                }
+
+                $('#header-bar').style.visibility = 'visible'
+                $('#side-bar-button').addEventListener('click', () => {
+                    $('#dimming-overlay').classList.add('show')
+                    $('#side-bar').classList.add('show')
+                })
+                $('#dimming-overlay').addEventListener('click', closeSideBar)
+
                 $('#nav-bar').style.visibility = 'visible'
                 $('#left-button').addEventListener('click', () => view.goLeft())
                 $('#right-button').addEventListener('click', () => view.goRight())
