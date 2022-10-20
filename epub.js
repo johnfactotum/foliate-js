@@ -613,6 +613,7 @@ export class EPUB {
             return {
                 id: this.resources.getItemByID(idref)?.href,
                 load: () => loader.loadItem(item),
+                unload: () => loader.unloadItem(item),
                 createDocument: () => this.loadDocument(item),
                 size: this.getSize(item.href),
                 cfi: this.resources.cfis[index],
