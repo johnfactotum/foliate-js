@@ -80,14 +80,68 @@ The paginator uses the same pagination strategy as [Epub.js](https://github.com/
 
 To simplify things, it has a totally separate renderer for fixed layout books. As such there's no support for mixed layout books.
 
+### Highlighting Text
+
+There is a generic module for overlaying arbitrary SVG elements, `overlayer.js`. It can be used to implement highlighting text for annotations. It's the same technique used by [marks-pane](https://github.com/fchasen/marks), used by Epub.js, but it's designed to be easily extensible. You can return any SVG element in the `draw` function, making it possible to add custom styles such as squiggly lines or even free hand drawings.
+
+### EPUB CFI
+
+Parsed CFIs are represented as a plain array or object. The basic type is called a "part", which is an object with the following structure: `{ index, id, offset, temporal, spatial, text, side }`, corresponding to a step + offset in the CFI.
+
+A collapsed, non-range CFI is represented as an array whose elements are arrays of parts, each corresponding to a full path. That is, `/6/4!/4` is turned into
+
+```json
+[
+    [
+        { "index": 6 },
+        { "index": 4 }
+    ],
+    [
+        { "index": 4 }
+    ]
+]
+```
+
+A range CFI is an object `{ parent, start, end }`, each property being the same type as a collapsed CFI. For example, `/6/4!/2,/2,/4` is represented as
+
+```json
+{
+    "parent": [
+        [
+            { "index": 6 },
+            { "index": 4 }
+        ],
+        [
+            { "index": 2 }
+        ]
+    ],
+    "start": [
+        [
+            { "index": 2 }
+        ]
+    ],
+    "end": [
+        [
+            { "index": 4 }
+        ]
+    ]
+}
+```
+
+The parser uses a state machine rather than regex, and should handle assertions that contain escaped characters correctly (see tests for examples of this).
+
+It can parse and stringify spatial and temporal offsets, as well as text location assertions and side bias, but there's no support for employing them when rendering yet. It's also missing the ability to ignore certain nodes (which is needed if you want to inject your own nodes into the document).
+
 ### Supported Browsers
 
 The main use of the library is for use in [Foliate](https://github.com/johnfactotum/foliate), which uses WebKitGTK. As such it's the only engine that has been tested extensively. But it should also work in Chromium and Firefox. Currently, one severe bug is that vertical writing is broken on Firefox.
+
+Apart from the renderers, using the modules outside browsers is also possible. Most features depend on having the global objects `Blob`, `TextDecoder`, `TextEncoder`, `DOMParser`, `XMLSerializer`, and `URL`, and should work if you polyfill them. Note that `epubcfi.js` can be used as is in any envirnoment if you only need to parse or sort CFIs.
 
 ## License
 
 MIT.
 
 Vendored libraries for the demo:
-- Zip.js is licensed under the BSD-3-Clause license.
-- fflate is MIT licensed.
+- Zip.js is licensed under the BSD-3-Clause license. Copyright © 2022 Gildas Lormeau.
+- fflate is MIT licensed. Copyright © 2020 Arjun Barrett.
