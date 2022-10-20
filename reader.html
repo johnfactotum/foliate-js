@@ -3,6 +3,7 @@
 <meta name="color-scheme" content="light dark">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data:; frame-src blob: data:; object-src 'none'; form-action 'none';">
+<title>E-Book Reader</title>
 <style>
 body {
     margin: 0;
@@ -13,12 +14,27 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    text-align: center;
+}
+#drop-target h1 {
+    font-weight: 900; 
+}
+#file-button {
+    font: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    text-decoration: underline;
+    cursor: pointer;
 }
 .icon {
     display: block;
     fill: none;
     stroke: currentcolor;
     stroke-width: 2px;
+}
+.empty-state-icon {
+    margin: auto;
 }
 .toolbar {
     box-sizing: border-box;
@@ -152,7 +168,15 @@ body {
 }
 </style>
 <input type="file" id="file-input" hidden>
-<div id="drop-target" class="filter">Drop a file here to open it.</div>
+<div id="drop-target" class="filter">
+    <div>
+        <svg class="icon empty-state-icon" width="72" height="72" aria-hidden="true">
+            <path d="M36 18s-6-6-12-6-15 6-15 6v42s9-6 15-6 12 6 12 6c4-4 8-6 12-6s12 2 15 6V18c-6-4-12-6-15-6-4 0-8 2-12 6m0 0v42"/>
+        </svg>
+        <h1>Drop a book here!</h1>
+        <p>Or <button id="file-button">choose a file</button> to open it.</p>
+    </div>
+</div>
 <div id="dimming-overlay" aria-hidden="true"></div>
 <div id="side-bar">
     <div id="toc-view"></div>

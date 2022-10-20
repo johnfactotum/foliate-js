@@ -32,7 +32,7 @@ const isFBZ = ({ name, type }) =>
     type === 'application/x-zip-compressed-fb2'
     || name.endsWith('.fb2.zip') || name.endsWith('.fbz')
 
-globalThis.open = async (file, emit) => {
+const getView = async (file, emit) => {
     if (!file.size) throw new Error('File not found')
     let book
     if (await isZip(file)) {
@@ -121,53 +121,59 @@ const emit = obj => {
     }
 }
 
+const open = async file => {
+    document.body.removeChild($('#drop-target'))
+    const view = await getView(file, emit)
+    const style = {
+        spacing: 1.4,
+        justify: true,
+        hyphenate: true,
+    }
+    view.setAppearance({ css: getCSS(style) })
+    view.renderer.next()
+
+    const title = view.book.metadata?.title
+    if (title) document.title = title
+
+    const closeSideBar = () => {
+        $('#dimming-overlay').classList.remove('show')
+        $('#side-bar').classList.remove('show')
+    }
+
+    const toc = view.book.toc
+    if (toc) {
+        const onclick = href => {
+            view.goTo(href).catch(e => console.error(e))
+            closeSideBar()
+        }
+        const tocView = createTOCView(toc, onclick)
+        setCurrentHref = tocView.setCurrentHref
+        $('#toc-view').append(tocView.element)
+    }
+
+    $('#header-bar').style.visibility = 'visible'
+    $('#side-bar-button').addEventListener('click', () => {
+        $('#dimming-overlay').classList.add('show')
+        $('#side-bar').classList.add('show')
+    })
+    $('#dimming-overlay').addEventListener('click', closeSideBar)
+
+    $('#nav-bar').style.visibility = 'visible'
+    $('#left-button').addEventListener('click', () => view.goLeft())
+    $('#right-button').addEventListener('click', () => view.goRight())
+}
+
 const dragOverHandler = e => e.preventDefault()
 const dropHandler = e => {
     e.preventDefault()
     const file = Array.from(e.dataTransfer.items)
         .find(item => item.kind === 'file')?.getAsFile()
-    if (file) {
-        document.body.removeChild($('#drop-target'))
-        open(file, emit)
-            .then(view => {
-                const style = {
-                    spacing: 1.4,
-                    justify: true,
-                    hyphenate: true,
-                }
-                view.setAppearance({ css: getCSS(style) })
-                view.renderer.next()
-
-                const closeSideBar = () => {
-                    $('#dimming-overlay').classList.remove('show')
-                    $('#side-bar').classList.remove('show')
-                }
-
-                const toc = view.book.toc
-                if (toc) {
-                    const onclick = href => {
-                        view.goTo(href).catch(e => console.error(e))
-                        closeSideBar()
-                    }
-                    const tocView = createTOCView(toc, onclick)
-                    setCurrentHref = tocView.setCurrentHref
-                    $('#toc-view').append(tocView.element)
-                }
-
-                $('#header-bar').style.visibility = 'visible'
-                $('#side-bar-button').addEventListener('click', () => {
-                    $('#dimming-overlay').classList.add('show')
-                    $('#side-bar').classList.add('show')
-                })
-                $('#dimming-overlay').addEventListener('click', closeSideBar)
-
-                $('#nav-bar').style.visibility = 'visible'
-                $('#left-button').addEventListener('click', () => view.goLeft())
-                $('#right-button').addEventListener('click', () => view.goRight())
-            })
-            .catch(e => emit(e))
-    }
+    if (file) open(file).catch(e => emit(e))
 }
 const dropTarget = $('#drop-target')
 dropTarget.addEventListener('drop', dropHandler)
 dropTarget.addEventListener('dragover', dragOverHandler)
+
+$('#file-input').addEventListener('change', e =>
+    open(e.target.files[0]).catch(e => emit(e)))
+$('#file-button').addEventListener('click', () => $('#file-input').click())
