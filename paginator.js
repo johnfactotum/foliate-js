@@ -164,12 +164,18 @@ class View {
                 const doc = this.document
                 afterLoad?.(doc)
 
+                // it needs to be visible for Firefox to get computed style
+                this.#iframe.style.display = 'block'
                 const { vertical, rtl } = getDirection(doc)
+                this.#iframe.style.display = 'none'
+
                 this.#vertical = vertical
                 this.#rtl = rtl
 
                 this.#contentRange.selectNodeContents(doc.body)
-                this.render(beforeRender?.({ vertical, rtl }))
+                const layout = beforeRender?.({ vertical, rtl })
+                this.#iframe.style.display = 'block'
+                this.render(layout)
                 new ResizeObserver(() => this.expand()).observe(doc.body)
 
                 resolve()
@@ -185,7 +191,6 @@ class View {
     }
     scrolled({ gap, columnWidth }) {
         const vertical = this.#vertical
-        this.#iframe.style.display = 'block'
         const doc = this.document
         Object.assign(doc.documentElement.style, {
             boxSizing: 'border-box',
@@ -204,7 +209,6 @@ class View {
     columnize({ width, height, margin, gap, columnWidth }) {
         const vertical = this.#vertical
         this.#size = vertical ? height : width
-        this.#iframe.style.display = 'block'
 
         const doc = this.document
         const gapPadding = `${gap / 2}px`

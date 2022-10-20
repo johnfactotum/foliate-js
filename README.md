@@ -134,7 +134,7 @@ It can parse and stringify spatial and temporal offsets, as well as text locatio
 
 ### Supported Browsers
 
-The main use of the library is for use in [Foliate](https://github.com/johnfactotum/foliate), which uses WebKitGTK. As such it's the only engine that has been tested extensively. But it should also work in Chromium and Firefox. Currently, one severe bug is that vertical writing is broken on Firefox.
+The main use of the library is for use in [Foliate](https://github.com/johnfactotum/foliate), which uses WebKitGTK. As such it's the only engine that has been tested extensively. But it should also work in Chromium and Firefox.
 
 Apart from the renderers, using the modules outside browsers is also possible. Most features depend on having the global objects `Blob`, `TextDecoder`, `TextEncoder`, `DOMParser`, `XMLSerializer`, and `URL`, and should work if you polyfill them. Note that `epubcfi.js` can be used as is in any envirnoment if you only need to parse or sort CFIs.
 
