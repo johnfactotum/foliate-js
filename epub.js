@@ -689,9 +689,11 @@ export class EPUB {
                 else this.metadata[key] = [value]
             }))
 
-        this.getCover = () => {
-            const href = this.resources?.cover?.href
-            return href ? this.loadBlob(href) : null
+        this.getCover = async () => {
+            const cover = this.resources?.cover
+            return cover?.href
+                ? new Blob([await this.loadBlob(cover.href)], { type: cover.mediaType })
+                : null
         }
         return this
     }
