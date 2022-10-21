@@ -237,6 +237,20 @@ body {
     background-repeat: no-repeat;
     background-image: url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223%22%2F%3E%3C%2Fsvg%3E');
 }
+.popover {
+    background: Canvas;
+    color: CanvasText;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 16px rgba(0, 0, 0, .1), 0 0 32px rgba(0, 0, 0, .1);
+}
+.popover-arrow-down {
+    fill: Canvas;
+    filter: drop-shadow(0 -1px 0 rgba(0, 0, 0, .2));
+}
+.popover-arrow-up {
+    fill: Canvas;
+    filter: drop-shadow(0 1px 0 rgba(0, 0, 0, .2));
+}
 </style>
 <input type="file" id="file-input" hidden>
 <div id="drop-target" class="filter">

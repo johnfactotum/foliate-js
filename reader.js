@@ -2,6 +2,7 @@
 import { View } from './view.js'
 import { createTOCView } from './ui/tree.js'
 import { createMenu } from './ui/menu.js'
+import { createPopover } from './ui/popover.js'
 
 const { ZipReader, BlobReader, TextWriter, BlobWriter } = zip
 zip.configure({ useWebWorkers: false })
@@ -118,6 +119,30 @@ const emit = obj => {
             $('#progress-label').innerText = `${percent} · ${loc}`
             if (tocItem?.href) setCurrentHref?.(tocItem.href)
             break
+        }
+        case 'reference': {
+            const { content, pos: { point, dir } } = obj
+            const iframe = document.createElement('iframe')
+            iframe.sandbox = 'allow-same-origin'
+            iframe.srcdoc = content
+            iframe.onload = () => {
+                const doc = iframe.contentDocument
+                doc.documentElement.style.colorScheme = 'light dark'
+                doc.body.style.margin = '18px'
+            }
+            Object.assign(iframe.style, {
+                border: '0',
+                width: '100%',
+                height: '100%',
+            })
+            const { popover, arrow, overlay } = createPopover(300, 250, point, dir)
+            overlay.style.zIndex = 3
+            popover.style.zIndex = 3
+            arrow.style.zIndex = 3
+            popover.append(iframe)
+            document.body.append(overlay)
+            document.body.append(popover)
+            document.body.append(arrow)
         }
     }
 }
