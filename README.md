@@ -10,13 +10,18 @@ Features:
 - Does not depend on or include any library for unzipping; bring your own Zip library
 - Does not require loading whole file into memory
 - Does not care about older browsers
-- No continuous scrolling mode :(
 
 ## Demo
 
-Serve the files with a server, and open `reader.html`. Or visit https://johnfactotum.github.io/foliate-js/reader.html.
+The repo includes a demo viewer that can be used to open local files. To use it, serve the files with a server, and navigate to `reader.html`. Or visit the [online demo](https://johnfactotum.github.io/foliate-js/reader.html) hosted on GitHub. Note that it is very incomplete at the moment, and lacks many basic features such as keyboard shortcuts.
 
-Note that deobfuscating fonts with the IDPF algorithm requires a SHA-1 function. By default it uses Web Crypto, which is only available in secure contexts. Without HTTPS, you will need to modify `reader.js` and pass your own SHA-1 implementation.
+Also note that deobfuscating fonts with the IDPF algorithm requires a SHA-1 function. By default it uses Web Crypto, which is only available in secure contexts. Without HTTPS, you will need to modify `reader.js` and pass your own SHA-1 implementation.
+
+## Current Status
+
+It's far from complete or stable yet, though it should have near feature parity with [Epub.js](https://github.com/futurepress/epub.js). There's no support for continuous scrolling, however.
+
+Among other things, the fixed-layout renderer is notably unfinished at the moment.
 
 ## Documentation
 
@@ -53,7 +58,7 @@ The following methods are consumed by `progress.js`, for getting the correct TOC
 
 Almost all of the properties and methods are optional. At minimum it needs `.sections` and the `.load()` method for the sections, as otherwise there won't be anything to render.
 
-### Compressed Data
+### Archived Files
 
 Reading Zip-based formats requires a separate library. Both `epub.js` and `comic-book.js` expect a `loader` object that implements the following interface:
 
@@ -64,7 +69,11 @@ Reading Zip-based formats requires a separate library. Both `epub.js` and `comic
 
 In the demo, this is implemented using [Zip.js](https://github.com/gildas-lormeau/zip.js), which is highly recommended because it seems to be the only library that supports random access for `File` objects (as well as HTTP range requests).
 
-Also note that KF8 files can contain fonts that are zlib-compressed. The demo uses [fflate](https://github.com/101arrowz/fflate) to decompress them.
+### Mobipocket and Kindle Files
+
+It can read both MOBI and KF8 (.azw3, and combo .mobi files) from a `File` (or `Blob`) object. For MOBI files, it decompresses all text at once and splits the raw markup into sections at every `<mbp:pagebreak>`, instead of outputing one long page for the whole book, which drastically improves rendering performance. For KF8 files, it tries to decompress as little text as possible when loading a section, but it can still be quite slow due to the slowness of the current HUFF/CDIC decompressor implementation. In all cases, images and other resources are not loaded until they are needed.
+
+Note that KF8 files can contain fonts that are zlib-compressed. They need to be decompressed with an external library. The demo uses [fflate](https://github.com/101arrowz/fflate) to decompress them.
 
 ### The Renderers
 
@@ -79,10 +88,6 @@ The paginator uses the same pagination strategy as [Epub.js](https://github.com/
 - It supports switching between scrolled and paginated mode without reloading (I can't figure out how to do this in Epub.js).
 
 To simplify things, it has a totally separate renderer for fixed layout books. As such there's no support for mixed layout books.
-
-### Highlighting Text
-
-There is a generic module for overlaying arbitrary SVG elements, `overlayer.js`. It can be used to implement highlighting text for annotations. It's the same technique used by [marks-pane](https://github.com/fchasen/marks), used by Epub.js, but it's designed to be easily extensible. You can return any SVG element in the `draw` function, making it possible to add custom styles such as squiggly lines or even free hand drawings.
 
 ### EPUB CFI
 
@@ -131,6 +136,14 @@ A range CFI is an object `{ parent, start, end }`, each property being the same 
 The parser uses a state machine rather than regex, and should handle assertions that contain escaped characters correctly (see tests for examples of this).
 
 It can parse and stringify spatial and temporal offsets, as well as text location assertions and side bias, but there's no support for employing them when rendering yet. It's also missing the ability to ignore certain nodes (which is needed if you want to inject your own nodes into the document).
+
+### Highlighting Text
+
+There is a generic module for overlaying arbitrary SVG elements, `overlayer.js`. It can be used to implement highlighting text for annotations. It's the same technique used by [marks-pane](https://github.com/fchasen/marks), used by Epub.js, but it's designed to be easily extensible. You can return any SVG element in the `draw` function, making it possible to add custom styles such as squiggly lines or even free hand drawings.
+
+### Searching
+
+It provides a search module, which can in fact be used as a standalone module for searching across any array of strings. There's no limit on the number of strings a match is allowed to span. It's based on `Intl.Collator` and `Intl.Segmenter`, to support ignoring diacritics and matching whole words only. It's extrenely slow, and you'd probably want to load results incrementally.
 
 ### Supported Browsers
 
