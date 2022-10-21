@@ -5,6 +5,16 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'self' blob:; script-src 'self'; style-src 'self' blob: 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' blob: data:; frame-src blob: data:; object-src 'none'; form-action 'none';">
 <title>E-Book Reader</title>
 <style>
+:root {
+    --active-bg: rgba(0, 0, 0, .05);
+}
+@supports (color-scheme: light dark) {
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --active-bg: rgba(255, 255, 255, .1);
+        }
+    }
+}
 body {
     margin: 0;
     font: menu;
@@ -47,21 +57,19 @@ body {
     width: 100%;
     height: 48px;
     padding: 6px;
-    opacity: .25;
     transition: opacity 250ms ease;
     visibility: hidden;
-}
-.toolbar:hover {
-    opacity: 1;
 }
 .toolbar button {
     padding: 3px;
     border-radius: 6px;
     background: none;
     border: 0;
+    color: GrayText;
 }
 .toolbar button:hover {
     background: rgba(0, 0, 0, .1);
+    color: currentcolor;
 }
 #header-bar {
     top: 0;
@@ -72,6 +80,13 @@ body {
 #progress-label {
     font-size: small;
     font-variant-numeric: tabular-nums;
+    color: GrayText;
+}
+.scrolled #progress-label {
+    color: #fff;
+    background: #000;
+    border-radius: 2em;
+    padding: 6px 12px;
 }
 #side-bar {
     visibility: hidden;
@@ -143,14 +158,6 @@ body {
 #toc-view {
     padding: .5rem;
     overflow-y: scroll;
-    --active-bg: rgba(0, 0, 0, .05);
-}
-@supports (color-scheme: light dark) {
-    @media (prefers-color-scheme: dark) {
-        #toc-view {
-            --active-bg: rgba(255, 255, 255, .1);
-        }
-    }
 }
 #toc-view li, #toc-view ol {
     margin: 0;
@@ -195,6 +202,41 @@ body {
 #toc-view [aria-expanded="false"] + [role="group"] {
     display: none;
 }
+.menu-container {
+    position: relative;
+}
+.menu, .menu ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+.menu {
+    visibility: hidden;
+    position: absolute;
+    right: 0;
+    background: Canvas;
+    color: CanvasText;
+    border-radius: 6px;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, .2), 0 0 16px rgba(0, 0, 0, .1);
+    padding: 6px;
+    cursor: default;
+}
+.menu.show {
+    visibility: visible;
+}
+.menu li {
+    padding: 6px 12px;
+    padding-left: 24px;
+    border-radius: 6px;
+}
+.menu li:hover {
+    background: var(--active-bg);
+}
+.menu li[aria-checked="true"] {
+    background-position: center left;
+    background-repeat: no-repeat;
+    background-image: url('data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%3E%3Ccircle%20cx%3D%2212%22%20cy%3D%2212%22%20r%3D%223%22%2F%3E%3C%2Fsvg%3E');
+}
 </style>
 <input type="file" id="file-input" hidden>
 <div id="drop-target" class="filter">
@@ -223,15 +265,23 @@ body {
             <path d="M 4 6 h 16 M 4 12 h 16 M 4 18 h 16"/>
         </svg>
     </button>
+    <div id="menu-button" class="menu-container">
+        <button aria-label="Show settings" aria-haspopup="true">
+            <svg class="icon" width="24" height="24" aria-hidden="true">
+                <path d="M5 12.7a7 7 0 0 1 0-1.4l-1.8-2 2-3.5 2.7.5a7 7 0 0 1 1.2-.7L10 3h4l.9 2.6 1.2.7 2.7-.5 2 3.4-1.8 2a7 7 0 0 1 0 1.5l1.8 2-2 3.5-2.7-.5a7 7 0 0 1-1.2.7L14 21h-4l-.9-2.6a7 7 0 0 1-1.2-.7l-2.7.5-2-3.4 1.8-2Z"/>
+                <circle cx="12" cy="12" r="3"/>
+            </svg>
+        </button>
+    </div>
 </div>
 <div id="nav-bar" class="toolbar">
-    <button id="left-button" aria-label="Turn left page">
+    <button id="left-button" aria-label="Go left">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 15 6 L 9 12 L 15 18"/>
         </svg>
     </button>
     <div id="progress-label"></div>
-    <button id="right-button" aria-label="Turn right page">
+    <button id="right-button" aria-label="Go right">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 9 6 L 15 12 L 9 18"/>
         </svg>

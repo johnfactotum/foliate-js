@@ -1,6 +1,7 @@
 /* global zip: false, fflate: false */
 import { View } from './view.js'
 import { createTOCView } from './ui/tree.js'
+import { createMenu } from './ui/menu.js'
 
 const { ZipReader, BlobReader, TextWriter, BlobWriter } = zip
 zip.configure({ useWebWorkers: false })
@@ -129,7 +130,17 @@ const open = async file => {
         justify: true,
         hyphenate: true,
     }
-    view.setAppearance({ css: getCSS(style) })
+    const layout = {
+        margin: 48,
+        gap: 48,
+        maxColumnWidth: 720,
+    }
+    const setAppearance = () => {
+        view.setAppearance({ css: getCSS(style), layout })
+        const scrolled = layout.flow === 'scrolled'
+        document.documentElement.classList.toggle('scrolled', scrolled)
+    }
+    setAppearance()
     view.renderer.next()
 
     const { book } = view
@@ -171,6 +182,28 @@ const open = async file => {
     $('#nav-bar').style.visibility = 'visible'
     $('#left-button').addEventListener('click', () => view.goLeft())
     $('#right-button').addEventListener('click', () => view.goRight())
+
+    const menu = createMenu([
+        {
+            name: 'layout',
+            label: 'Layout',
+            type: 'radio',
+            items: [
+                ['Paginated', 'paginated'],
+                ['Scrolled', 'scrolled'],
+            ],
+            onclick: value => {
+                layout.flow = value
+                setAppearance()
+            },
+        }
+    ])
+    menu.element.classList.add('menu')
+
+    $('#menu-button').append(menu.element)
+    $('#menu-button > button').addEventListener('click', () =>
+        menu.element.classList.toggle('show'))
+    menu.groups.layout.select('paginated')
 }
 
 const dragOverHandler = e => e.preventDefault()
