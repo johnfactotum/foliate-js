@@ -114,6 +114,7 @@ class Container {
             Object.assign(element.style, {
                 width: `${(width ?? blankWidth) * scale}px`,
                 height: `${(height ?? blankHeight) * scale}px`,
+                overflow: 'hidden',
                 display: 'block',
             })
             if (portrait && frame !== target) {
