@@ -27,7 +27,13 @@ Among other things, the fixed-layout renderer is notably unfinished at the momen
 
 ### Overview
 
-The project is designed to be modular. It has two renderers, one for paginating reflowable books, and one for fixed layout. The `View` class defined in `view.js` is the one that strings everything together.
+This project uses native ES modules. There's no build step, and you can import them directly.
+
+The modules are designed to be modular. In general, they don't directly depend on each other (except for `epub.js`, which imports `epubcfi.js`). Instead they depend on certain interfaces, detailed below.
+
+The exception is `view.js`. It is the one that strings everything together, and you can think of it as the main entry point of the library.
+
+### The Main Interface for Books
 
 Processors for each book format return an object that implements the following interface:
 - `.sections`: an array of sections in the book. Each item has the following properties:
@@ -76,6 +82,18 @@ It can read both MOBI and KF8 (.azw3, and combo .mobi files) from a `File` (or `
 Note that KF8 files can contain fonts that are zlib-compressed. They need to be decompressed with an external library. The demo uses [fflate](https://github.com/101arrowz/fflate) to decompress them.
 
 ### The Renderers
+
+It has two renderers, one for paginating reflowable books, and one for fixed-layout. The constructor of a renderer takes a single object with the following properties:
+- `.book`: the book object that will be rendered.
+- `.onLoad(doc, index)`: callback when a section is loaded. Takes a `Document` object and the index of the section.
+- `.onRelocated(range, index, fraction)`: callback when locations changes. `range` is a `Range` object containing the current visible area. `fraction` is a number between 0 and 1, representing the reading progress within the section.
+- `createOverlayers(doc, index)`: callback for adding overlays to the page. It should return an object whose property values are overlayer objects (see the description for `overlayer.js` below). The key names can be any string you want.
+
+A renderer's interface is currently mainly:
+- `.element`: the DOM element of the renderer. It needs to be manually appended to the document by the consumer of the renderer.
+- `.goTo({ index, anchor })`: navigate to a destination. The argument has the same type as the one returned by `.resolveHref()` in the book object.
+- `.prev()`: go to previous page.
+- `.next()`: go to next page.
 
 The paginator uses the same pagination strategy as [Epub.js](https://github.com/futurepress/epub.js): it uses CSS multi-column. As such it shares much of the same limitations (it's slow, some CSS styles do not work as expected, and other bugs). There are a few differences:
 - It is a totally standalone module. You can use it to paginate any content.
@@ -140,6 +158,12 @@ It can parse and stringify spatial and temporal offsets, as well as text locatio
 ### Highlighting Text
 
 There is a generic module for overlaying arbitrary SVG elements, `overlayer.js`. It can be used to implement highlighting text for annotations. It's the same technique used by [marks-pane](https://github.com/fchasen/marks), used by Epub.js, but it's designed to be easily extensible. You can return any SVG element in the `draw` function, making it possible to add custom styles such as squiggly lines or even free hand drawings.
+
+The overlay has no event listeners by default. It only provides a `.hitTest(event)` method, that can be used to do hit tests. Currently it does this with the client rects of `Range`s, not the element returned by `draw()`.
+
+An overlayer object implements the following interface for the consumption of renderers:
+- `.element`: the DOM element of the overlayer. This element will be inserted, resized, and positioned automatically by the renderer on top of the page.
+- `.redraw()`: called by the renderer when the overlay needs to be redrawn.
 
 ### Searching
 
