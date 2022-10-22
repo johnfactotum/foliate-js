@@ -530,7 +530,12 @@ class Loader {
             /@import\s*["']([^"'\n]*?)["']/gi,
             (_, url) => this.loadHref(url, href, parents)
                 .then(url => `@import "${url}"`))
-        return replacedImports.replaceAll('-epub-', '')
+        const w = window?.innerWidth ?? 800
+        const h = window?.innerHeight ?? 600
+        const replacedVwVh = replacedImports
+            .replace(/(\d*\.?\d+)vw/g, (_, d) => parseFloat(d) * w / 100 + 'px')
+            .replace(/(\d*\.?\d+)vh/g, (_, d) => parseFloat(d) * h / 100 + 'px')
+        return replacedVwVh.replaceAll('-epub-', '')
     }
     // find & replace all possible relative paths for all assets without parsing
     replaceString(str, href, parents = []) {
