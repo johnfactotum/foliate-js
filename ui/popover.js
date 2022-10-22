@@ -10,6 +10,7 @@ const createSVGElement = tag =>
 const createArrow = down => {
     const h = arrowHeight + 1
     const svg = createSVGElement('svg')
+    svg.setAttribute('aria-hidden', 'true')
     svg.setAttribute('width', arrowWidth)
     svg.setAttribute('height', arrowHeight)
     const polygon = createSVGElement('polygon')
@@ -33,22 +34,23 @@ export const createPopover = (width, height, { x, y }, dir) => {
         height: '100vh',
     })
     const arrow = createArrow(down)
+    const top = clamp(0, window.innerHeight - (down ? height : fullHeight),
+        down ? y + arrowHeight : y - fullHeight)
     Object.assign(arrow.style, {
         position: 'absolute',
         left: `${clamp(radius, window.innerWidth - arrowWidth - radius,
             x - arrowWidth / 2)}px`,
-        top: `${clamp(0, window.innerHeight - arrowHeight,
-            down ? y : y - arrowHeight)}px`,
+        top: `${down ? top - arrowHeight : top + height}px`,
     })
     const popover = document.createElement('div')
+    popover.setAttribute('role', 'dialog')
     popover.classList.add('popover')
     Object.assign(popover.style, {
         position: 'absolute',
         boxSizing: 'border-box',
         overflow: 'hidden',
         left: `${clamp(0, window.innerWidth - width, x - width / 2)}px`,
-        top: `${clamp(0, window.innerHeight - fullHeight,
-            down ? y + arrowHeight : y - fullHeight)}px`,
+        top: `${top}px`,
         width: `${width}px`,
         height: `${height}px`,
     })
