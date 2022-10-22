@@ -172,6 +172,8 @@ export class View {
                     return
                 } else this.goTo(uri)
             })
+
+        this.emit?.({ type: 'loaded', doc })
     }
     getCFI(index, range) {
         if (!range) return ''

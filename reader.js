@@ -105,130 +105,145 @@ const $ = document.querySelector.bind(document)
 const locales = 'en'
 const percentFormat = new Intl.NumberFormat(locales, { style: 'percent' })
 
-let setCurrentHref
+class Reader {
+    #tocView
+    style = {
+        spacing: 1.4,
+        justify: true,
+        hyphenate: true,
+    }
+    layout = {
+        margin: 48,
+        gap: 48,
+        maxColumnWidth: 720,
+    }
+    closeSideBar() {
+        $('#dimming-overlay').classList.remove('show')
+        $('#side-bar').classList.remove('show')
+    }
+    constructor() {
+        $('#side-bar-button').addEventListener('click', () => {
+            $('#dimming-overlay').classList.add('show')
+            $('#side-bar').classList.add('show')
+        })
+        $('#dimming-overlay').addEventListener('click', () => this.closeSideBar())
 
-const emit = obj => {
-    console.debug(obj)
-    switch (obj.type) {
-        case 'relocated': {
-            const { fraction, location, tocItem, pageItem } = obj
-            const percent = percentFormat.format(fraction)
-            const loc = pageItem
-                ? `Page ${pageItem.label}`
-                : `Loc ${location.current}`
-            $('#progress-label').innerText = `${percent} · ${loc}`
-            if (tocItem?.href) setCurrentHref?.(tocItem.href)
-            break
-        }
-        case 'reference': {
-            const { content, pos: { point, dir } } = obj
-            const iframe = document.createElement('iframe')
-            iframe.sandbox = 'allow-same-origin'
-            iframe.srcdoc = content
-            iframe.onload = () => {
-                const doc = iframe.contentDocument
-                doc.documentElement.style.colorScheme = 'light dark'
-                doc.body.style.margin = '18px'
+        const menu = createMenu([
+            {
+                name: 'layout',
+                label: 'Layout',
+                type: 'radio',
+                items: [
+                    ['Paginated', 'paginated'],
+                    ['Scrolled', 'scrolled'],
+                ],
+                onclick: value => {
+                    this.layout.flow = value
+                    this.setAppearance()
+                },
             }
-            Object.assign(iframe.style, {
-                border: '0',
-                width: '100%',
-                height: '100%',
+        ])
+        menu.element.classList.add('menu')
+
+        $('#menu-button').append(menu.element)
+        $('#menu-button > button').addEventListener('click', () =>
+            menu.element.classList.toggle('show'))
+        menu.groups.layout.select('paginated')
+    }
+    async open(file) {
+        this.view = await getView(file, this.#handleEvent.bind(this))
+        this.setAppearance()
+        this.view.renderer.next()
+
+        $('#header-bar').style.visibility = 'visible'
+        $('#nav-bar').style.visibility = 'visible'
+        $('#left-button').addEventListener('click', () => this.view.goLeft())
+        $('#right-button').addEventListener('click', () => this.view.goRight())
+
+        document.addEventListener('keydown', this.#handleKeydown.bind(this))
+
+        const { book } = this.view
+        const title = book.metadata?.title ?? 'Untitled Book'
+        document.title = title
+        $('#side-bar-title').innerText = title
+        const author = book.metadata?.author
+        $('#side-bar-author').innerText = typeof author === 'string' ? author
+            : author
+                ?.map(author => typeof author === 'string' ? author : author.name)
+                ?.join(', ')
+                ?? ''
+        book.getCover?.()?.then(blob =>
+            blob ? $('#side-bar-cover').src = URL.createObjectURL(blob) : null)
+
+        const toc = book.toc
+        if (toc) {
+            this.#tocView = createTOCView(toc, href => {
+                this.view.goTo(href).catch(e => console.error(e))
+                this.closeSideBar()
             })
-            const { popover, arrow, overlay } = createPopover(300, 250, point, dir)
-            overlay.style.zIndex = 3
-            popover.style.zIndex = 3
-            arrow.style.zIndex = 3
-            popover.append(iframe)
-            document.body.append(overlay)
-            document.body.append(popover)
-            document.body.append(arrow)
+            $('#toc-view').append(this.#tocView.element)
         }
+    }
+    setAppearance = () => {
+        this.view?.setAppearance({ css: getCSS(this.style), layout: this.layout })
+        const scrolled = this.layout.flow === 'scrolled'
+        document.documentElement.classList.toggle('scrolled', scrolled)
+    }
+    #handleEvent(obj) {
+        console.debug(obj)
+        switch (obj.type) {
+            case 'loaded': this.#onLoaded(obj); break
+            case 'relocated': this.#onRelocated(obj); break
+            case 'reference': this.#onReference(obj); break
+        }
+    }
+    #handleKeydown(event) {
+        const k = event.key
+        if (k === 'ArrowLeft' || k === 'h') this.view.goLeft()
+        else if(k === 'ArrowRight' || k === 'l') this.view.goRight()
+    }
+    #onLoaded({ doc }) {
+        doc.addEventListener('keydown', this.#handleKeydown.bind(this))
+    }
+    #onRelocated(obj) {
+        const { fraction, location, tocItem, pageItem } = obj
+        const percent = percentFormat.format(fraction)
+        const loc = pageItem
+            ? `Page ${pageItem.label}`
+            : `Loc ${location.current}`
+        $('#progress-label').innerText = `${percent} · ${loc}`
+        if (tocItem?.href) this.#tocView.setCurrentHref?.(tocItem.href)
+    }
+    #onReference(obj) {
+        const { content, pos: { point, dir } } = obj
+        const iframe = document.createElement('iframe')
+        iframe.sandbox = 'allow-same-origin'
+        iframe.srcdoc = content
+        iframe.onload = () => {
+            const doc = iframe.contentDocument
+            doc.documentElement.style.colorScheme = 'light dark'
+            doc.body.style.margin = '18px'
+        }
+        Object.assign(iframe.style, {
+            border: '0',
+            width: '100%',
+            height: '100%',
+        })
+        const { popover, arrow, overlay } = createPopover(300, 250, point, dir)
+        overlay.style.zIndex = 3
+        popover.style.zIndex = 3
+        arrow.style.zIndex = 3
+        popover.append(iframe)
+        document.body.append(overlay)
+        document.body.append(popover)
+        document.body.append(arrow)
     }
 }
 
 const open = async file => {
     document.body.removeChild($('#drop-target'))
-    const view = await getView(file, emit)
-    const style = {
-        spacing: 1.4,
-        justify: true,
-        hyphenate: true,
-    }
-    const layout = {
-        margin: 48,
-        gap: 48,
-        maxColumnWidth: 720,
-    }
-    const setAppearance = () => {
-        view.setAppearance({ css: getCSS(style), layout })
-        const scrolled = layout.flow === 'scrolled'
-        document.documentElement.classList.toggle('scrolled', scrolled)
-    }
-    setAppearance()
-    view.renderer.next()
-
-    const { book } = view
-    const title = book.metadata?.title ?? 'Untitled Book'
-    document.title = title
-    $('#side-bar-title').innerText = title
-    const author = book.metadata?.author
-    $('#side-bar-author').innerText = typeof author === 'string' ? author
-        : author
-            ?.map(author => typeof author === 'string' ? author : author.name)
-            ?.join(', ')
-            ?? ''
-    book.getCover?.()?.then(blob =>
-        blob ? $('#side-bar-cover').src = URL.createObjectURL(blob) : null)
-
-    const closeSideBar = () => {
-        $('#dimming-overlay').classList.remove('show')
-        $('#side-bar').classList.remove('show')
-    }
-
-    const toc = book.toc
-    if (toc) {
-        const onclick = href => {
-            view.goTo(href).catch(e => console.error(e))
-            closeSideBar()
-        }
-        const tocView = createTOCView(toc, onclick)
-        setCurrentHref = tocView.setCurrentHref
-        $('#toc-view').append(tocView.element)
-    }
-
-    $('#header-bar').style.visibility = 'visible'
-    $('#side-bar-button').addEventListener('click', () => {
-        $('#dimming-overlay').classList.add('show')
-        $('#side-bar').classList.add('show')
-    })
-    $('#dimming-overlay').addEventListener('click', closeSideBar)
-
-    $('#nav-bar').style.visibility = 'visible'
-    $('#left-button').addEventListener('click', () => view.goLeft())
-    $('#right-button').addEventListener('click', () => view.goRight())
-
-    const menu = createMenu([
-        {
-            name: 'layout',
-            label: 'Layout',
-            type: 'radio',
-            items: [
-                ['Paginated', 'paginated'],
-                ['Scrolled', 'scrolled'],
-            ],
-            onclick: value => {
-                layout.flow = value
-                setAppearance()
-            },
-        }
-    ])
-    menu.element.classList.add('menu')
-
-    $('#menu-button').append(menu.element)
-    $('#menu-button > button').addEventListener('click', () =>
-        menu.element.classList.toggle('show'))
-    menu.groups.layout.select('paginated')
+    const reader = new Reader()
+    await reader.open(file)
 }
 
 const dragOverHandler = e => e.preventDefault()
@@ -236,12 +251,12 @@ const dropHandler = e => {
     e.preventDefault()
     const file = Array.from(e.dataTransfer.items)
         .find(item => item.kind === 'file')?.getAsFile()
-    if (file) open(file).catch(e => emit(e))
+    if (file) open(file).catch(e => console.error(e))
 }
 const dropTarget = $('#drop-target')
 dropTarget.addEventListener('drop', dropHandler)
 dropTarget.addEventListener('dragover', dragOverHandler)
 
 $('#file-input').addEventListener('change', e =>
-    open(e.target.files[0]).catch(e => emit(e)))
+    open(e.target.files[0]).catch(e => console.error(e)))
 $('#file-button').addEventListener('click', () => $('#file-input').click())
