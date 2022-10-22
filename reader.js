@@ -152,6 +152,7 @@ class Reader {
     }
     async open(file) {
         this.view = await getView(file, this.#handleEvent.bind(this))
+        const { book } = this.view
         this.setAppearance()
         this.view.renderer.next()
 
@@ -160,9 +161,24 @@ class Reader {
         $('#left-button').addEventListener('click', () => this.view.goLeft())
         $('#right-button').addEventListener('click', () => this.view.goRight())
 
+        const slider = $('#progress-slider')
+        slider.dir = book.dir
+        slider.addEventListener('input', e =>
+            this.view.goToFraction(parseFloat(e.target.value)))
+        const sizes = book.sections.filter(s => s.linear !== 'no').map(s => s.size)
+        if (sizes.length < 100) {
+            const total = sizes.reduce((a, b) => a + b, 0)
+            let sum = 0
+            for (const size of sizes.slice(0, -1)) {
+                sum += size
+                const option = document.createElement('option')
+                option.value = sum / total
+                $('#tick-marks').append(option)
+            }
+        }
+
         document.addEventListener('keydown', this.#handleKeydown.bind(this))
 
-        const { book } = this.view
         const title = book.metadata?.title ?? 'Untitled Book'
         document.title = title
         $('#side-bar-title').innerText = title
@@ -211,8 +227,11 @@ class Reader {
         const loc = pageItem
             ? `Page ${pageItem.label}`
             : `Loc ${location.current}`
-        $('#progress-label').innerText = `${percent} · ${loc}`
-        if (tocItem?.href) this.#tocView.setCurrentHref?.(tocItem.href)
+        const slider = $('#progress-slider')
+        slider.style.visibility = 'visible'
+        slider.value = fraction
+        slider.title = `${percent} · ${loc}`
+        if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
     }
     #onReference(obj) {
         const { content, pos: { point, dir } } = obj

@@ -77,16 +77,10 @@ body {
 #nav-bar {
     bottom: 0;
 }
-#progress-label {
-    font-size: small;
-    font-variant-numeric: tabular-nums;
-    color: GrayText;
-}
-.scrolled #progress-label {
-    color: #fff;
-    background: #000;
-    border-radius: 2em;
-    padding: 6px 12px;
+#progress-slider {
+    flex-grow: 1;
+    margin: 0 12px;
+    visibility: hidden;
 }
 #side-bar {
     visibility: hidden;
@@ -294,7 +288,8 @@ body {
             <path d="M 15 6 L 9 12 L 15 18"/>
         </svg>
     </button>
-    <div id="progress-label"></div>
+    <input id="progress-slider" type="range" min="0" max="1" step="any" list="tick-marks">
+    <datalist id="tick-marks"></datalist>
     <button id="right-button" aria-label="Go right">
         <svg class="icon" width="24" height="24" aria-hidden="true">
             <path d="M 9 6 L 15 12 L 9 18"/>
