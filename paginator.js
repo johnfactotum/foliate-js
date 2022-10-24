@@ -124,7 +124,7 @@ class View {
     #element = document.createElement('div')
     #iframe = document.createElement('iframe')
     #contentRange = document.createRange()
-    #overlayers = {}
+    #overlayer
     #vertical = false
     #rtl = false
     #column = true
@@ -273,10 +273,10 @@ class View {
             this.#element.style[side] = `${expandedSize}px`
             this.#iframe.style[otherSide] = '100%'
             this.#element.style[otherSide] = '100%'
-            for (const overlayer of Object.values(this.#overlayers)) {
-                overlayer.element.style.margin = '0'
-                overlayer.element.style[side] = `${expandedSize}px`
-                overlayer.redraw()
+            if (this.#overlayer) {
+                this.#overlayer.element.style.margin = '0'
+                this.#overlayer.element.style[side] = `${expandedSize}px`
+                this.#overlayer.redraw()
             }
         } else {
             const side = this.#vertical ? 'width' : 'height'
@@ -291,20 +291,19 @@ class View {
             this.#element.style[side] = `${expandedSize}px`
             this.#iframe.style[otherSide] = '100%'
             this.#element.style[otherSide] = '100%'
-            for (const overlayer of Object.values(this.#overlayers)) {
-                overlayer.element.style.margin = padding
-                overlayer.element.style[side] = `${expandedSize}px`
-                overlayer.redraw()
+            if (this.#overlayer) {
+                this.#overlayer.element.style.margin = padding
+                this.#overlayer.element.style[side] = `${expandedSize}px`
+                this.#overlayer.redraw()
             }
         }
     }
-    set overlayers(overlayers) {
-        this.#overlayers = overlayers
-        for (const overlayer of Object.values(overlayers))
-            this.#element.append(overlayer.element)
+    set overlayer(overlayer) {
+        this.#overlayer = overlayer
+        this.#element.append(overlayer.element)
     }
-    get overlayers() {
-        return this.#overlayers
+    get overlayer() {
+        return this.#overlayer
     }
 }
 
@@ -323,11 +322,11 @@ export class Paginator {
         gap: 40,
         maxColumnWidth: 700,
     }
-    constructor({ book, onLoad, onRelocated, createOverlayers }) {
+    constructor({ book, onLoad, onRelocated, createOverlayer }) {
         this.sections = book.sections
         this.onLoad = onLoad
         this.onRelocated = onRelocated
-        this.createOverlayers = createOverlayers
+        this.createOverlayer = createOverlayer
         Object.assign(this.#element.style, {
             display: 'flex',
             flexWrap: 'nowrap',
@@ -533,8 +532,8 @@ export class Paginator {
             }
             const beforeRender = this.#beforeRender.bind(this)
             await view.load(src, afterLoad, beforeRender)
-            const overlayers = this.createOverlayers?.(view.document, index)
-            if (overlayers) view.overlayers = overlayers
+            const overlayer = this.createOverlayer?.(view.document, index)
+            if (overlayer) view.overlayer = overlayer
             this.#view = view
         }
         this.#anchor = (typeof anchor === 'function'
@@ -630,13 +629,12 @@ export class Paginator {
         const index = this.sections.findLastIndex(section => section.linear !== 'no')
         return this.goTo({ index })
     }
-    getOverlayers() {
-        if (!this.#view) return []
-        return [{
+    getOverlayer() {
+        if (this.#view) return {
             index: this.#index,
-            overlayers: this.#view.overlayers,
-            document: this.#view.document,
-        }]
+            overlayer: this.#view.overlayer,
+            doc: this.#view.document,
+        }
     }
     setStyle(style) {
         const $style = this.#styleMap.get(this.#view?.document)

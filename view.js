@@ -1,5 +1,7 @@
 import * as CFI from './epubcfi.js'
 import { TOCProgress, SectionProgress } from './progress.js'
+import { Overlayer } from './overlayer.js'
+import { Annotations } from './annotations.js'
 
 const textWalker = function* (doc, func) {
     const filter = NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT
@@ -73,11 +75,32 @@ export class View {
     #sectionProgress
     #tocProgress
     #pageProgress
+    #css
     language = 'en'
     textDirection = ''
     isCJK = false
     isFixedLayout = false
-    #css
+    annotations = new Annotations({
+        resolve: value => this.resolveCFI(value),
+        compare: CFI.compare,
+        onAdd: (annotation, index, position) => {
+            const o = this.#getOverlayer(index)
+            if (o) this.#drawAnnotation(o.doc, o.overlayer, annotation)
+            const label = this.#tocProgress.getProgress(index)?.label ?? ''
+            this?.emit({ type: 'add-annotation', annotation, label, index, position })
+        },
+        onDelete: (key, index, position) => {
+            this.#getOverlayer(index)?.overlayer?.remove(key)
+            this?.emit({ type: 'delete-annotation', index, position })
+        },
+        onUpdate: (annotation, index) => {
+            const o = this.#getOverlayer(index)
+            if (o) {
+                o.overlayer.remove(annotation.value)
+                this.#drawAnnotation(o.doc, o.overlayer, annotation)
+            }
+        },
+    })
     constructor(book, emit) {
         this.book = book
         this.emit = emit
@@ -109,6 +132,7 @@ export class View {
             book: this.book,
             onLoad: this.#onLoad.bind(this),
             onRelocated: this.#onRelocated.bind(this),
+            createOverlayer: this.#createOverlayer.bind(this),
         }
         this.isFixedLayout = this.book.rendition?.layout === 'pre-paginated'
         if (this.isFixedLayout) {
@@ -119,6 +143,19 @@ export class View {
             this.renderer = new Paginator(opts)
         }
         return this.renderer.element
+    }
+    async init({ lastLocation, annotations }) {
+        if (lastLocation) {
+            const resolved = this.resolveNavigation(lastLocation)
+            if (resolved) await this.renderer.goTo(resolved)
+            else await this.renderer.next()
+        } else await this.renderer.next()
+
+        if (annotations) {
+            annotations.sort((a, b) => CFI.compare(a.value, b.value))
+            for (const annotation of annotations)
+                await this.annotations.add(annotation, true)
+        }
     }
     #onRelocated(range, index, fraction) {
         if (!this.#sectionProgress) return
@@ -174,6 +211,38 @@ export class View {
             })
 
         this.emit?.({ type: 'loaded', doc })
+    }
+    #drawAnnotation(doc, overlayer, annotation) {
+        const { value } = annotation
+        const anchor = this.annotations.getAnchor(value)
+        const range = doc ? anchor(doc) : anchor
+        const [func, opts] = this.emit({ type: 'draw-annotation', annotation })
+        overlayer.add(value, range, func, opts)
+    }
+    #getOverlayer(index) {
+        const obj = this.renderer.getOverlayer()
+        if (obj.index === index) return obj
+    }
+    #createOverlayer(doc, index) {
+        const overlayer = new Overlayer()
+        for (const annotation of this.annotations.getByIndex(index))
+            this.#drawAnnotation(doc, overlayer, annotation)
+        doc.addEventListener('click', e => {
+            const [value, range] = overlayer.hitTest(e)
+            if (value) {
+                const pos = getPosition(range)
+                this.emit?.({ type: 'show-annotation', value, pos })
+            }
+        }, false)
+        return overlayer
+    }
+    async showAnnotation(annotation) {
+        const { value } = annotation
+        const { index, anchor } = await this.goTo(value)
+        const { doc } =  this.#getOverlayer(index)
+        const range = anchor(doc)
+        const pos = getPosition(range)
+        this.emit?.({ type: 'show-annotation', value, pos })
     }
     getCFI(index, range) {
         if (!range) return ''

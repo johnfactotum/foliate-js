@@ -87,7 +87,7 @@ It has two renderers, one for paginating reflowable books, and one for fixed-lay
 - `.book`: the book object that will be rendered.
 - `.onLoad(doc, index)`: callback when a section is loaded. Takes a `Document` object and the index of the section.
 - `.onRelocated(range, index, fraction)`: callback when locations changes. `range` is a `Range` object containing the current visible area. `fraction` is a number between 0 and 1, representing the reading progress within the section.
-- `createOverlayers(doc, index)`: callback for adding overlays to the page. It should return an object whose property values are overlayer objects (see the description for `overlayer.js` below). The key names can be any string you want.
+- `createOverlayer(doc, index)`: callback for adding an overlay to the page. It should return an overlayer object (see the description for `overlayer.js` below).
 
 A renderer's interface is currently mainly:
 - `.element`: the DOM element of the renderer. It needs to be manually appended to the document by the consumer of the renderer.
