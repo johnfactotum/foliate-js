@@ -83,6 +83,7 @@ const getCSS = ({ spacing, justify, hyphenate }) => `
         line-height: ${spacing};
         text-align: ${justify ? 'justify' : 'start'};
         -webkit-hyphens: ${hyphenate ? 'auto' : 'manual'};
+        hyphens: ${hyphenate ? 'auto' : 'manual'};
         -webkit-hyphenate-limit-before: 3;
         -webkit-hyphenate-limit-after: 2;
         -webkit-hyphenate-limit-lines: 2;
