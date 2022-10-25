@@ -194,7 +194,6 @@ export class View {
                     this.emit?.({ type: 'external-link', uri })
                 else if (SSV.isRef(a)) {
                     const { index, anchor } = book.resolveHref(uri)
-                    const pos = getPosition(a)
                     Promise.resolve(book.sections[index].createDocument())
                         .then(doc => [anchor(doc), doc.contentType])
                         .then(([el, type]) =>
@@ -203,14 +202,14 @@ export class View {
                             ? this.emit?.({
                                 type: 'reference',
                                 href: isNote ? null : uri,
-                                content, contentType, pos,
+                                content, contentType, element: a,
                             }) : null)
                         .catch(e => console.error(e))
                     return
                 } else this.goTo(uri)
             })
 
-        this.emit?.({ type: 'loaded', doc })
+        this.emit?.({ type: 'loaded', doc, index })
     }
     #drawAnnotation(doc, overlayer, annotation) {
         const { value } = annotation
@@ -230,8 +229,7 @@ export class View {
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
             if (value) {
-                const pos = getPosition(range)
-                this.emit?.({ type: 'show-annotation', value, pos })
+                this.emit?.({ type: 'show-annotation', value, range })
             }
         }, false)
         return overlayer
@@ -241,8 +239,7 @@ export class View {
         const { index, anchor } = await this.goTo(value)
         const { doc } =  this.#getOverlayer(index)
         const range = anchor(doc)
-        const pos = getPosition(range)
-        this.emit?.({ type: 'show-annotation', value, pos })
+        this.emit?.({ type: 'show-annotation', value, range })
     }
     getCFI(index, range) {
         if (!range) return ''

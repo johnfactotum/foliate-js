@@ -1,5 +1,5 @@
 /* global zip: false, fflate: false */
-import { View } from './view.js'
+import { View, getPosition } from './view.js'
 import { createTOCView } from './ui/tree.js'
 import { createMenu } from './ui/menu.js'
 import { createPopover } from './ui/popover.js'
@@ -234,7 +234,8 @@ class Reader {
         if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
     }
     #onReference(obj) {
-        const { content, pos: { point, dir } } = obj
+        const { content, element } = obj
+        const { point, dir } = getPosition(element)
         const iframe = document.createElement('iframe')
         iframe.sandbox = 'allow-same-origin'
         iframe.srcdoc = content
