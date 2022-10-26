@@ -725,9 +725,9 @@ class MOBI6 {
         // which will be used to insert anchor elements
         // because only then can they be referenced in the DOM
         this.#fileposList = [...new Set(fileposInNCX
-            .concat(Array.from(str.matchAll(fileposRegex), m => m[1]))
+            .concat(Array.from(str.matchAll(fileposRegex), m => m[1])))]
             .map(filepos => ({ filepos, number: Number(filepos) }))
-            .sort((a, b) => a.number - b.number))]
+            .sort((a, b) => a.number - b.number)
 
         this.metadata = this.mobi.getMetadata()
         this.getCover = this.mobi.getCover.bind(this.mobi)
