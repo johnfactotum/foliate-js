@@ -146,9 +146,12 @@ const parseXML = async blob => {
     const str = new TextDecoder('utf-8').decode(buffer)
     const parser = new DOMParser()
     const doc = parser.parseFromString(str, MIME.XML)
-    // FIXME: `Document.xmlEncoding` is deprecated
-    if (doc.xmlEncoding && doc.xmlEncoding !== 'utf-8') {
-        const str = new TextDecoder(doc.xmlEncoding).decode(buffer)
+    const encoding = doc.xmlEncoding
+        // `Document.xmlEncoding` is deprecated, and already removed in Firefox
+        // so parse the XML declaration manually
+        || str.match(/^<\?xml\s+version\s*=\s*["']1.\d+"\s+encoding\s*=\s*["']([A-Za-z0-9._-]*)["']/)?.[1]
+    if (encoding && encoding.toLowerCase() !== 'utf-8') {
+        const str = new TextDecoder(encoding).decode(buffer)
         return parser.parseFromString(str, MIME.XML)
     }
     return doc
