@@ -500,6 +500,7 @@ class Loader {
             for (const el of doc.querySelectorAll('link[href]')) await replace(el, 'href')
             for (const el of doc.querySelectorAll('[src]')) await replace(el, 'src')
             for (const el of doc.querySelectorAll('[poster]')) await replace(el, 'poster')
+            for (const el of doc.querySelectorAll('object[data]')) await replace(el, 'data')
             for (const el of doc.querySelectorAll('[*|href]:not([href]'))
                 el.setAttributeNS(NS.XLINK, 'href', await this.loadHref(
                     el.getAttributeNS(NS.XLINK, 'href'), href, parents))
