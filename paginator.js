@@ -215,13 +215,11 @@ class View {
         this.setImageSize()
         this.expand()
     }
-    columnize({ width, height, margin, gap, columnWidth }) {
+    columnize({ width, height, gap, columnWidth }) {
         const vertical = this.#vertical
         this.#size = vertical ? height : width
 
         const doc = this.document
-        const gapPadding = `${gap / 2}px`
-        const marginPadding = `0`
         Object.assign(doc.documentElement.style, {
             boxSizing: 'border-box',
             columnWidth: `${columnWidth}px`,
@@ -230,9 +228,7 @@ class View {
             ...(vertical
                 ? { width: `${width}px` }
                 : { height: `${height}px` }),
-            padding: (vertical
-                ? [gapPadding, marginPadding]
-                : [marginPadding, gapPadding]).join(' '),
+            padding: vertical ? `${gap / 2}px 0` : `0 ${gap / 2}px`,
             overflow: 'hidden',
             // force wrap long words
             overflowWrap: 'anywhere',
@@ -347,9 +343,6 @@ export class Paginator {
         Object.assign(this.#container.style, {
             width: '100%',
             height: '100%',
-            display: 'flex',
-            flexWrap: 'nowrap',
-            overflow: 'hidden',
         })
         new ResizeObserver(() => this.render()).observe(this.#element)
         this.#container.addEventListener('scroll', debounce(() => {
@@ -368,8 +361,9 @@ export class Paginator {
     #beforeRender({ vertical, rtl, background }) {
         this.#vertical = vertical
         this.#rtl = rtl
+
         // set `document` background to `doc` background
-        // this is needed cause the iframe does not fill the whole element
+        // this is needed because the iframe does not fill the whole element
         this.#element.style.background = background
 
         const { flow, margin, gap, maxColumnWidth } = this.layout
@@ -386,7 +380,7 @@ export class Paginator {
         const divisor = Math.ceil(size / maxColumnWidth)
         const columnWidth = (size / divisor) - gap
         this.#element.setAttribute('dir', rtl ? 'rtl' : 'ltr')
-        const paddingH = `${vertical ? margin : gap / 2}px`
+        const paddingH = `${vertical ? gap : gap / 2}px`
         const paddingV = `${vertical ? margin - gap / 2 : margin}px`
         this.#element.style.padding = `${paddingV} ${paddingH}`
         this.#container.style.overflow ='hidden'
