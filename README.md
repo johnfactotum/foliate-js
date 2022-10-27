@@ -98,7 +98,6 @@ A renderer's interface is currently mainly:
 The paginator uses the same pagination strategy as [Epub.js](https://github.com/futurepress/epub.js): it uses CSS multi-column. As such it shares much of the same limitations (it's slow, some CSS styles do not work as expected, and other bugs). There are a few differences:
 - It is a totally standalone module. You can use it to paginate any content.
 - It is much simpler, but currently there's no support for continuous scrolling.
-- To simplify things, it always spans the whole viewport. One can always put everything in an iframe if desired.
 - It has no concept of CFIs and operates on `Range` objects directly. 
 - It uses bisecting to find the current visible range, which is more accurate than what Epub.js does.
 - It has an internal `#anchor` property, which can be a `Range`, `Element`, or a fraction that represents the current location. The view is *anchored* to it no matter how you resize the window.

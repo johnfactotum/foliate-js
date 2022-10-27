@@ -120,6 +120,14 @@ const getDirection = doc => {
     return { vertical, rtl }
 }
 
+const getBackground = doc => {
+    const bodyStyle = doc.defaultView.getComputedStyle(doc.body)
+    return bodyStyle.backgroundColor === 'rgba(0, 0, 0, 0)'
+        && bodyStyle.backgroundImage === 'none'
+            ? doc.defaultView.getComputedStyle(doc.documentElement).background
+            : bodyStyle.background
+}
+
 class View {
     #element = document.createElement('div')
     #iframe = document.createElement('iframe')
@@ -167,13 +175,14 @@ class View {
                 // it needs to be visible for Firefox to get computed style
                 this.#iframe.style.display = 'block'
                 const { vertical, rtl } = getDirection(doc)
+                const background = getBackground(doc)
                 this.#iframe.style.display = 'none'
 
                 this.#vertical = vertical
                 this.#rtl = rtl
 
                 this.#contentRange.selectNodeContents(doc.body)
-                const layout = beforeRender?.({ vertical, rtl })
+                const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
                 this.render(layout)
                 new ResizeObserver(() => this.expand()).observe(doc.body)
@@ -212,7 +221,7 @@ class View {
 
         const doc = this.document
         const gapPadding = `${gap / 2}px`
-        const marginPadding = `${margin}px`
+        const marginPadding = `0`
         Object.assign(doc.documentElement.style, {
             boxSizing: 'border-box',
             columnWidth: `${columnWidth}px`,
@@ -310,6 +319,7 @@ class View {
 // NOTE: everything here assumes the so-called "negative scroll type" for RTL
 export class Paginator {
     #element = document.createElement('div')
+    #container = document.createElement('div')
     #view
     #vertical = false
     #rtl = false
@@ -328,13 +338,21 @@ export class Paginator {
         this.onRelocated = onRelocated
         this.createOverlayer = createOverlayer
         Object.assign(this.#element.style, {
+            boxSizing: 'border-box',
+            width: '100%',
+            height: '100%',
+            position: 'absolute',
+        })
+        this.#element.append(this.#container)
+        Object.assign(this.#container.style, {
+            width: '100%',
+            height: '100%',
             display: 'flex',
             flexWrap: 'nowrap',
             overflow: 'hidden',
-            position: 'absolute',
         })
         new ResizeObserver(() => this.render()).observe(this.#element)
-        this.#element.addEventListener('scroll', debounce(() => {
+        this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) this.#afterScroll('scroll')
         }, 250))
     }
@@ -342,39 +360,36 @@ export class Paginator {
         return this.#element
     }
     #createView() {
-        if (this.#view) this.#element.removeChild(this.#view.element)
+        if (this.#view) this.#container.removeChild(this.#view.element)
         this.#view = new View({ container: this.#element })
-        this.#element.append(this.#view.element)
+        this.#container.append(this.#view.element)
         return this.#view
     }
-    #beforeRender({ vertical, rtl }) {
+    #beforeRender({ vertical, rtl, background }) {
         this.#vertical = vertical
         this.#rtl = rtl
+        // set `document` background to `doc` background
+        // this is needed cause the iframe does not fill the whole element
+        this.#element.style.background = background
+
         const { flow, margin, gap, maxColumnWidth } = this.layout
         if (flow === 'scrolled') {
             // FIXME: vertical-rl only, not -lr
             this.#element.setAttribute('dir', vertical ? 'rtl' : 'ltr')
-            Object.assign(this.#element.style, {
-                width: '100%',
-                height: '100%',
-                margin: '0',
-                overflow: 'scroll',
-            })
+            this.#element.style.padding = '0'
+            this.#container.style.overflow ='scroll'
             const columnWidth = this.layout.maxColumnWidth
             return { flow, margin, gap, columnWidth }
         }
-        const { width, height } = this.#element.getBoundingClientRect()
+        const { width, height } = this.#container.getBoundingClientRect()
         const size = vertical ? height : width
         const divisor = Math.ceil(size / maxColumnWidth)
         const columnWidth = (size / divisor) - gap
         this.#element.setAttribute('dir', rtl ? 'rtl' : 'ltr')
-        Object.assign(this.#element.style, {
-            width: vertical ? '100%' : `calc(100% - ${gap}px)`,
-            height: vertical ? `calc(100% - ${margin}px)` : '100%',
-            marginLeft: vertical ? '0' : `${gap / 2}px`,
-            marginTop: vertical ? `${margin / 2}px` : '0',
-            overflow: 'hidden',
-        })
+        const paddingH = `${vertical ? margin : gap / 2}px`
+        const paddingV = `${vertical ? margin - gap / 2 : margin}px`
+        this.#element.style.padding = `${paddingV} ${paddingH}`
+        this.#container.style.overflow ='hidden'
         return { height, width, margin, gap, columnWidth }
     }
     render() {
@@ -399,13 +414,13 @@ export class Paginator {
             : scrolled ? 'height' : 'width'
     }
     get size() {
-        return this.#element.getBoundingClientRect()[this.sideProp]
+        return this.#container.getBoundingClientRect()[this.sideProp]
     }
     get viewSize() {
         return this.#view.element.getBoundingClientRect()[this.sideProp]
     }
     get start() {
-        return Math.abs(this.#element[this.scrollProp])
+        return Math.abs(this.#container[this.scrollProp])
     }
     get end() {
         return this.start + this.size
@@ -444,7 +459,7 @@ export class Paginator {
         return this.#scrollToPage(Math.floor(offset / this.size), reason)
     }
     async #scrollTo(offset, reason) {
-        const element = this.#element
+        const element = this.#container
         const { scrollProp } = this
         if (element[scrollProp] === offset) {
             this.#afterScroll(reason)

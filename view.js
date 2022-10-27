@@ -174,15 +174,6 @@ export class View {
 
         this.renderer.setStyle(this.#css)
 
-        // set `document` background to `doc` background
-        // this is needed cause the iframe does not fill the whole viewport
-        const bodyStyle = doc.defaultView.getComputedStyle(doc.body)
-        document.body.style.background =
-            bodyStyle.backgroundColor === 'rgba(0, 0, 0, 0)'
-            && bodyStyle.backgroundImage === 'none'
-                ? doc.defaultView.getComputedStyle(doc.documentElement).background
-                : bodyStyle.background
-
         // set handlers for links
         const section = book.sections[index]
         for (const a of doc.querySelectorAll('a[href]'))
