@@ -604,7 +604,7 @@ export class EPUB {
         })
         const loader = new Loader({
             loadText: this.loadText,
-            loadBlob: uri => this.loadBlob(uri)
+            loadBlob: uri => Promise.resolve(this.loadBlob(uri))
                 .then(this.#encryption.getDecoder(uri)),
             resources: this.resources,
         })

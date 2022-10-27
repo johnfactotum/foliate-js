@@ -66,14 +66,16 @@ Almost all of the properties and methods are optional. At minimum it needs `.sec
 
 ### Archived Files
 
-Reading Zip-based formats requires a separate library. Both `epub.js` and `comic-book.js` expect a `loader` object that implements the following interface:
+Reading Zip-based formats will require adapting an external library. Both `epub.js` and `comic-book.js` expect a `loader` object that implements the following interface:
 
-- `.entries`: an array, each element of which has a `filename` property, which is a string containing the filename (the full path) (only used by `comic-book.js`)
-- `.loadText(filename)`: given the path, returns content of the file as string
-- `.loadBlob(filename)`: give the path, returns the file as a blob
-- `.getSize(filename)`: returns the file size in bytes
+- `.entries`: (only used by `comic-book.js`) an array, each element of which has a `filename` property, which is a string containing the filename (the full path).
+- `.loadText(filename)`: given the path, returns the contents of the file as string.  May be async.
+- `.loadBlob(filename)`: given the path, returns the file as a `Blob` object. May be async.
+- `.getSize(filename)`: returns the file size in bytes. Used to set the `.size` property for `.sections` (see above).
 
 In the demo, this is implemented using [Zip.js](https://github.com/gildas-lormeau/zip.js), which is highly recommended because it seems to be the only library that supports random access for `File` objects (as well as HTTP range requests).
+
+One advantage of having such an interface is that one can easily use it for reading unarchived files as well. For example, the demo has a loader that allows you to open unpacked EPUBs as directories.
 
 ### Mobipocket and Kindle Files
 

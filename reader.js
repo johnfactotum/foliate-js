@@ -24,6 +24,29 @@ const makeZipLoader = async file => {
     return { entries, loadText, loadBlob, getSize }
 }
 
+const getFileEntries = async entry => entry.isFile ? entry
+    : (await Promise.all(Array.from(
+        await new Promise((resolve, reject) => entry.createReader()
+            .readEntries(entries => resolve(entries), error => reject(error))),
+        getFileEntries))).flat()
+
+const makeDirectoryLoader = async entry => {
+    const entries = await getFileEntries(entry)
+    const files = await Promise.all(
+        entries.map(entry => new Promise((resolve, reject) =>
+            entry.file(file => resolve([file, entry.fullPath]),
+            error => reject(error)))))
+    const map = new Map(files.map(([file, path]) =>
+        [path.replace(entry.fullPath + '/', ''), file]))
+    const decoder = new TextDecoder()
+    const decode = x => x ? decoder.decode(x) : null
+    const getBuffer = name => map.get(name)?.arrayBuffer() ?? null
+    const loadText = async name => decode(await getBuffer(name))
+    const loadBlob = name => map.get(name)
+    const getSize = name => map.get(name)?.size ?? 0
+    return { loadText, loadBlob, getSize }
+}
+
 const isCBZ = ({ name, type }) =>
     type === 'application/vnd.comicbook+zip' || name.endsWith('.cbz')
 
@@ -35,9 +58,14 @@ const isFBZ = ({ name, type }) =>
     || name.endsWith('.fb2.zip') || name.endsWith('.fbz')
 
 const getView = async (file, emit) => {
-    if (!file.size) throw new Error('File not found')
     let book
-    if (await isZip(file)) {
+    if (file.isDirectory) {
+        const loader = await makeDirectoryLoader(file)
+        const { EPUB } = await import('./epub.js')
+        book = await new EPUB(loader).init()
+    }
+    else if (!file.size) throw new Error('File not found')
+    else if (await isZip(file)) {
         const loader = await makeZipLoader(file)
         if (isCBZ(file)) {
             const { makeComicBook } = await import('./comic-book.js')
@@ -195,7 +223,7 @@ class Reader {
                 ?.map(author => typeof author === 'string' ? author : author.name)
                 ?.join(', ')
                 ?? ''
-        book.getCover?.()?.then(blob =>
+        Promise.resolve(book.getCover?.())?.then(blob =>
             blob ? $('#side-bar-cover').src = URL.createObjectURL(blob) : null)
 
         const toc = book.toc
@@ -276,9 +304,12 @@ const open = async file => {
 const dragOverHandler = e => e.preventDefault()
 const dropHandler = e => {
     e.preventDefault()
-    const file = Array.from(e.dataTransfer.items)
-        .find(item => item.kind === 'file')?.getAsFile()
-    if (file) open(file).catch(e => console.error(e))
+    const item = Array.from(e.dataTransfer.items)
+        .find(item => item.kind === 'file')
+    if (item) {
+        const entry = item.webkitGetAsEntry()
+        open(entry.isFile ? item.getAsFile() : entry).catch(e => console.error(e))
+    }
 }
 const dropTarget = $('#drop-target')
 dropTarget.addEventListener('drop', dropHandler)
