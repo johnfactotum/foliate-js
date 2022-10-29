@@ -35,6 +35,7 @@ class Container {
     #portrait = false
     #left
     #right
+    #center
     #side
     constructor() {
         Object.assign(this.#element.style, {
@@ -83,8 +84,8 @@ class Container {
     }
     render(side = this.#side) {
         if (!side) return
-        const left = this.#left
-        const right = this.#right
+        const left = this.#left ?? {}
+        const right = this.#center ?? this.#right
         const target = side === 'left' ? left : right
         const { width, height } = this.#element.getBoundingClientRect()
         const portrait = height > width
@@ -121,15 +122,22 @@ class Container {
                 element.style.display = 'none'
             }
         }
-        transform(left, 'left')
-        transform(right, 'right')
+        if (this.#center) {
+            transform(this.#center)
+        } else {
+            transform(left)
+            transform(right)
+        }
     }
     async showSpread({ left, right, center, side }) {
         this.#element.replaceChildren()
         this.#left = null
         this.#right = null
+        this.#center = null
         if (center) {
-            // TODO
+            this.#center = await this.#createFrame(center)
+            this.#side = side
+            this.render()
         } else {
             this.#left = await this.#createFrame(left)
             this.#right = await this.#createFrame(right)
@@ -163,28 +171,34 @@ export class FixedLayout {
     #container = new Container()
     constructor({ book, onLoad, onRelocated }) {
         this.book = book
-        this.#container.defaultViewport = book.rendition?.viewport
         this.onLoad = onLoad
         this.onRelocated = onRelocated
+
+        const { rendition } = book
+        this.#container.spread = rendition?.spread
+        this.#container.defaultViewport = rendition?.viewport
 
         const rtl = book.dir === 'rtl'
         const ltr = !rtl
         this.rtl = rtl
-        this.#spreads = book.sections.reduce((arr, section) => {
+
+        if (rendition?.spread === 'none')
+            this.#spreads = book.sections.map(section => ({ center: section }))
+        else this.#spreads = book.sections.reduce((arr, section) => {
             const last = arr[arr.length - 1]
-            const { linear, forceCenter, forceLeft, forceRight } = section
+            const { linear, pageSpread } = section
             if (linear === 'no') return arr
             const newSpread = () => {
                 const spread = {}
                 arr.push(spread)
                 return spread
             }
-            if (forceCenter) newSpread().center = section
-            else if (forceLeft) {
+            if (pageSpread === 'center') newSpread().center = section
+            else if (pageSpread === 'left') {
                 const spread = last.center || last.left || ltr ? newSpread() : last
                 spread.left = section
             }
-            else if (forceRight) {
+            else if (pageSpread === 'right') {
                 const spread = last.center || last.right || rtl ? newSpread() : last
                 spread.right = section
             }

@@ -567,6 +567,16 @@ class Loader {
 const getHTMLFragment = (doc, id) => doc.getElementById(id)
     ?? doc.querySelector(`[name="${CSS.escape(id)}"]`)
 
+const getPageSpread = properties => {
+    for (const p of properties) {
+        if (p === 'page-spread-left' || p === 'rendition:page-spread-left')
+            return 'left'
+        if (p === 'page-spread-right' || p === 'rendition:page-spread-right')
+            return 'right'
+        if (p === 'rendition:page-spread-center') return 'center'
+    }
+}
+
 export class EPUB {
     parser = new DOMParser()
     #encryption
@@ -624,9 +634,7 @@ export class EPUB {
                 size: this.getSize(item.href),
                 cfi: this.resources.cfis[index],
                 linear,
-                forceLeft: properties.includes('page-spread-left'),
-                forceRight: properties.includes('page-spread-right'),
-                forceCenter: properties.includes('page-spread-center'),
+                pageSpread: getPageSpread(properties),
                 resolveHref: href => resolveURL(href, item.href),
             }
         }).filter(s => s)
