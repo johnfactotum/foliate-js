@@ -32,6 +32,7 @@ const getViewport = (doc, viewport) => {
 class Container {
     #element = document.createElement('div')
     defaultViewport
+    spread
     #portrait = false
     #left
     #right
@@ -88,7 +89,8 @@ class Container {
         const right = this.#center ?? this.#right
         const target = side === 'left' ? left : right
         const { width, height } = this.#element.getBoundingClientRect()
-        const portrait = height > width
+        const portrait = this.spread !== 'both' && this.spread !== 'portrait'
+            && height > width
         this.#portrait = portrait
         const blankWidth = left.width ?? right.width
         const blankHeight = left.height ?? right.height
@@ -136,7 +138,7 @@ class Container {
         this.#center = null
         if (center) {
             this.#center = await this.#createFrame(center)
-            this.#side = side
+            this.#side = 'center'
             this.render()
         } else {
             this.#left = await this.#createFrame(left)
@@ -146,6 +148,7 @@ class Container {
         }
     }
     goLeft() {
+        if (this.#center) return
         if (this.#left?.blank) return true
         if (this.#portrait && this.#left?.element?.style?.display === 'none') {
             this.#right.element.style.display = 'none'
@@ -155,6 +158,7 @@ class Container {
         }
     }
     goRight() {
+        if (this.#center) return
         if (this.#right?.blank) return true
         if (this.#portrait && this.#right?.element?.style?.display === 'none') {
             this.#left.element.style.display = 'none'
@@ -243,7 +247,7 @@ export class FixedLayout {
         const spread = this.#spreads[index]
         if (spread.center) {
             const center = await spread.center?.load?.()
-            await this.#container.showSpread({ center, side })
+            await this.#container.showSpread({ center })
         } else {
             const left = await spread.left?.load?.()
             const right = await spread.right?.load?.()
