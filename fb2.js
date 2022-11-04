@@ -248,7 +248,7 @@ export const makeFB2 = async blob => {
         modified: getDate($('document-info date')),
         description: annotation ? converter.convert(annotation,
             { annotation: ['div', SECTION] }).innerHTML : null,
-        subject: $$('title-info genre').map(getElementText)
+        subject: $$('title-info genre').map(getElementText),
     }
     book.getCover = () => fetch(getImageSrc($('coverpage image')))
         .then(res => res.blob())

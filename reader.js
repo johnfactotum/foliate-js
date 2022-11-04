@@ -35,7 +35,7 @@ const makeDirectoryLoader = async entry => {
     const files = await Promise.all(
         entries.map(entry => new Promise((resolve, reject) =>
             entry.file(file => resolve([file, entry.fullPath]),
-            error => reject(error)))))
+                error => reject(error)))))
     const map = new Map(files.map(([file, path]) =>
         [path.replace(entry.fullPath + '/', ''), file]))
     const decoder = new TextDecoder()
@@ -176,7 +176,7 @@ class Reader {
                     this.layout.flow = value
                     this.setAppearance()
                 },
-            }
+            },
         ])
         menu.element.classList.add('menu')
 

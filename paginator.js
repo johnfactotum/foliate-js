@@ -124,8 +124,8 @@ const getBackground = doc => {
     const bodyStyle = doc.defaultView.getComputedStyle(doc.body)
     return bodyStyle.backgroundColor === 'rgba(0, 0, 0, 0)'
         && bodyStyle.backgroundImage === 'none'
-            ? doc.defaultView.getComputedStyle(doc.documentElement).background
-            : bodyStyle.background
+        ? doc.defaultView.getComputedStyle(doc.documentElement).background
+        : bodyStyle.background
 }
 
 class View {
