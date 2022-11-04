@@ -736,4 +736,12 @@ export class EPUB {
     isExternal(uri) {
         return isExternal(uri)
     }
+    async getCalibreBookmarks() {
+        const txt = await this.loadText('META-INF/calibre_bookmarks.txt')
+        const magic = 'encoding=json+base64:'
+        if (txt?.startsWith(magic)) {
+            const json = atob(txt.slice(magic.length))
+            return JSON.parse(json)
+        }
+    }
 }
