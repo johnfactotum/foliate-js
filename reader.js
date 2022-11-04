@@ -298,6 +298,7 @@ class Reader {
 const open = async file => {
     document.body.removeChild($('#drop-target'))
     const reader = new Reader()
+    globalThis.reader = reader
     await reader.open(file)
 }
 
