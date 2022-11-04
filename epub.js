@@ -10,6 +10,7 @@ const NS = {
     ENC: 'http://www.w3.org/2001/04/xmlenc#',
     NCX: 'http://www.daisy.org/z3986/2005/ncx/',
     XLINK: 'http://www.w3.org/1999/xlink',
+    SMIL: 'http://www.w3.org/ns/SMIL',
 }
 
 const MIME = {
@@ -160,12 +161,13 @@ const getMetadata = opf => {
             : getValue(obj, arr.find(filter))]
     }))
 
-    const prefix = 'rendition:'
-    const rendition = Object.fromEntries($$($metadata, 'meta')
+    const getProperties = prefix => Object.fromEntries($$($metadata, 'meta')
         .filter(filterAttribute('property', x => x?.startsWith(prefix)))
         .map(el => [el.getAttribute('property').replace(prefix, ''),
             getElementText(el)]))
-    return { metadata, rendition }
+    const rendition = getProperties('rendition:')
+    const media = getProperties('media:')
+    return { metadata, rendition, media }
 }
 
 const parseNav = (doc, resolve = f => f) => {
@@ -226,6 +228,43 @@ const parseNCX = (doc, resolve = f => f) => {
             list: parseList(el, 'navTarget'),
         })),
     }
+}
+
+const parseClock = str => {
+    if (!str) return
+    const parts = str.split(':').map(x => parseFloat(x))
+    if (parts.length === 3) {
+        const [h, m, s] = parts
+        return h * 60 * 60 + m * 60 + s
+    }
+    if (parts.length === 2) {
+        const [m, s] = parts
+        return m * 60 + s
+    }
+    const [x, unit] = str.split(/(?=[^\d.])/)
+    const n = parseFloat(x)
+    const f = unit === 'h' ? 60 * 60
+        : unit === 'min' ? 60
+        : unit === 'ms' ? .001
+        : 1
+    return n * f
+}
+
+const parseSMIL = (doc, resolve = f => f) => {
+    const { $, $$$ } = childGetter(doc, NS.SMIL)
+    const resolveHref = href => href ? decodeURI(resolve(href)) : null
+    return $$$(doc, 'par').map($par => {
+        const id = $($par, 'text')?.getAttribute('src')?.split('#')?.[1]
+        const $audio = $($par, 'audio')
+        return $audio ? {
+            id,
+            audio: {
+                src: resolveHref($audio.getAttribute('src')),
+                clipBegin: parseClock($audio.getAttribute('clipBegin')),
+                clipEnd: parseClock($audio.getAttribute('clipEnd')),
+            },
+        } : { id }
+    })
 }
 
 const isUUID = /([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})/
@@ -317,7 +356,7 @@ class Resources {
         const $$itemref = $$($spine, 'itemref')
 
         this.manifest = $$($manifest, 'item')
-            .map(getAttributes('href', 'id', 'media-type', 'properties'))
+            .map(getAttributes('href', 'id', 'media-type', 'properties', 'media-overlay'))
             .map(item => {
                 item.href = resolveHref(item.href)
                 item.properties = item.properties?.split(/\s/)
@@ -636,6 +675,7 @@ export class EPUB {
                 linear,
                 pageSpread: getPageSpread(properties),
                 resolveHref: href => resolveURL(href, item.href),
+                loadMediaOverlay: () => this.loadMediaOverlay(item),
             }
         }).filter(s => s)
 
@@ -659,8 +699,10 @@ export class EPUB {
         }
         this.landmarks ??= this.resources.guide
 
-        const { metadata, rendition } = getMetadata(opf)
+        const { metadata, rendition, media } = getMetadata(opf)
         this.rendition = rendition
+        this.media = media
+        media.duration = parseClock(media.duration)
         this.dir = this.resources.pageProgressionDirection
 
         this.rawMetadata = metadata // useful for debugging, i guess
@@ -708,6 +750,14 @@ export class EPUB {
     async loadDocument(item) {
         const str = await this.loadText(item.href)
         return this.parser.parseFromString(str, item.mediaType)
+    }
+    async loadMediaOverlay(item) {
+        const id = item.mediaOverlay
+        if (!id) return null
+        const media = this.resources.getItemByID(id)
+        const doc = await this.#loadXML(media.href)
+        const parsed = parseSMIL(doc, url => resolveURL(url, media.href))
+        return parsed
     }
     resolveCFI(cfi) {
         return this.resources.resolveCFI(cfi)
