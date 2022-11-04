@@ -703,12 +703,6 @@ export class EPUB {
                 else this.metadata[key] = [value]
             }))
 
-        this.getCover = async () => {
-            const cover = this.resources?.cover
-            return cover?.href
-                ? new Blob([await this.loadBlob(cover.href)], { type: cover.mediaType })
-                : null
-        }
         return this
     }
     async loadDocument(item) {
@@ -735,6 +729,12 @@ export class EPUB {
     }
     isExternal(uri) {
         return isExternal(uri)
+    }
+    async getCover() {
+        const cover = this.resources?.cover
+        return cover?.href
+            ? new Blob([await this.loadBlob(cover.href)], { type: cover.mediaType })
+            : null
     }
     async getCalibreBookmarks() {
         const txt = await this.loadText('META-INF/calibre_bookmarks.txt')
