@@ -246,6 +246,7 @@ class Reader {
             case 'loaded': this.#onLoaded(obj); break
             case 'relocated': this.#onRelocated(obj); break
             case 'reference': this.#onReference(obj); break
+            case 'external-link': globalThis.open(obj.uri, '_blank'); break
         }
     }
     #handleKeydown(event) {
