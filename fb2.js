@@ -112,7 +112,9 @@ class FB2Converter {
     }
     convert(node, def) {
         // not an element; return text content
-        if (node.nodeType !== 1) return this.doc.createTextNode(node.textContent)
+        if (node.nodeType === 3) return this.doc.createTextNode(node.textContent)
+        if (node.nodeType === 4) return this.doc.createCDATASection(node.textContent)
+        if (node.nodeType === 8) return this.doc.createComment(node.textContent)
 
         const d = def?.[node.nodeName]
         if (!d) return null
