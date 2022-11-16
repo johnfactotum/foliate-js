@@ -112,7 +112,7 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
             const cfi = `/4/10,/3:${i},/3:${i+1}`
             const range = CFI.toRange(page, CFI.parse(cfi))
             const n = `${i}`
-            console.assert(range.toString() === n, `expted ${n}, got ${range}`)
+            console.assert(range.toString() === n, `expected ${n}, got ${range}`)
         }
     }
     test(page)
@@ -176,7 +176,7 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
         const cfi = `/4[body0^]!/1^^]/10[para^]/0^,^/5],/3:${i},/3:${i+1}`
         const range = CFI.toRange(page, CFI.parse(cfi))
         const n = `${i}`
-        console.assert(range.toString() === n, `expted ${n}, got ${range}`)
+        console.assert(range.toString() === n, `expected ${n}, got ${range}`)
     }
 }
 
