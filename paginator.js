@@ -278,6 +278,8 @@ class View {
             this.#element.style[side] = `${expandedSize}px`
             this.#iframe.style[otherSide] = '100%'
             this.#element.style[otherSide] = '100%'
+            if (this.document)
+                this.document.documentElement.style[side] = `${expandedSize}px`
             if (this.#overlayer) {
                 this.#overlayer.element.style.margin = '0'
                 this.#overlayer.element.style[side] = `${expandedSize}px`
@@ -423,7 +425,7 @@ export class Paginator {
         return Math.floor(((this.start + this.end) / 2) / this.size)
     }
     get pages() {
-        return this.viewSize / this.size
+        return Math.round(this.viewSize / this.size)
     }
     // allows one to process rects as if they were LTR and horizontal
     #getRectMapper() {
