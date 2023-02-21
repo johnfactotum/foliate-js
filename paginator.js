@@ -236,6 +236,8 @@ class View {
             position: 'static', border: '0', margin: '0',
             maxHeight: 'none', maxWidth: 'none',
             minHeight: 'none', minWidth: 'none',
+            // fix glyph clipping in WebKit
+            webkitLineBoxContain: 'block glyphs replaced',
         })
         Object.assign(doc.body.style, {
             maxHeight: 'none',
