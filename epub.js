@@ -572,10 +572,15 @@ class Loader {
                 .then(url => `@import "${url}"`))
         const w = window?.innerWidth ?? 800
         const h = window?.innerHeight ?? 600
-        const replacedVwVh = replacedImports
-            .replace(/(\d*\.?\d+)vw/g, (_, d) => parseFloat(d) * w / 100 + 'px')
-            .replace(/(\d*\.?\d+)vh/g, (_, d) => parseFloat(d) * h / 100 + 'px')
-        return replacedVwVh.replaceAll('-epub-', '')
+        return replacedImports
+            // unprefix as most of the props are (only) supported unprefixed
+            .replace(/-epub-/gi, '')
+            // replace vw and vh as they cause problems with layout
+            .replace(/(\d*\.?\d+)vw/gi, (_, d) => parseFloat(d) * w / 100 + 'px')
+            .replace(/(\d*\.?\d+)vh/gi, (_, d) => parseFloat(d) * h / 100 + 'px')
+            // `page-break-*` unsupported in columns; replace with `column-break-*`
+            .replace(/page-break-(after|before|inside)/gi, (_, x) =>
+                `-webkit-column-break-${x}`)
     }
     // find & replace all possible relative paths for all assets without parsing
     replaceString(str, href, parents = []) {
