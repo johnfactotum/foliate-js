@@ -513,6 +513,7 @@ class Loader {
             let doc = new DOMParser().parseFromString(str, mediaType)
             // change to HTML if it's not valid XHTML
             if (mediaType === MIME.XHTML && doc.querySelector('parsererror')) {
+                console.warn(doc.querySelector('parsererror').innerText)
                 item.mediaType = MIME.HTML
                 doc = new DOMParser().parseFromString(str, item.mediaType)
             }
