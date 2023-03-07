@@ -280,6 +280,20 @@ export class View {
             console.error(`Could not go to ${target}`)
         }
     }
+    async getTOCItemOf(target) {
+        try {
+            const { index, anchor } = await this.resolveNavigation(target)
+            const doc = await this.book.sections[index].createDocument()
+            const frag = anchor(doc)
+            const isRange = frag instanceof Range
+            const range = isRange ? frag : doc.createRange()
+            if (!isRange) range.selectNodeContents(frag)
+            return this.#tocProgress.getProgress(index, range)
+        } catch(e) {
+            console.error(e)
+            console.error(`Could not get ${target}`)
+        }
+    }
     goLeft() {
         return this.book.dir === 'rtl' ? this.renderer.next() : this.renderer.prev()
     }
