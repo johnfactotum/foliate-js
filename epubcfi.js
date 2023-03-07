@@ -131,7 +131,7 @@ const toInnerString = parsed => parsed.parent
 
 const toString = parsed => wrap(toInnerString(parsed))
 
-const collapse = (x, toEnd) => typeof x === 'string'
+export const collapse = (x, toEnd) => typeof x === 'string'
     ? toString(collapse(parse(x), toEnd))
     : x.parent ? concatArrays(x.parent, x[toEnd ? 'end' : 'start']) : x
 
