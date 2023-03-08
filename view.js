@@ -172,7 +172,7 @@ export class View {
         doc.documentElement.lang ||= this.language
         doc.documentElement.dir ||= this.isCJK ? '' : this.textDirection
 
-        this.renderer.setStyle(this.#css)
+        this.renderer.setStyle?.(this.#css)
 
         // set handlers for links
         const section = book.sections[index]
@@ -281,7 +281,7 @@ export class View {
         }
     }
     deselect() {
-        return this.renderer?.deselect()
+        return this.renderer.deselect?.()
     }
     async getTOCItemOf(target) {
         try {

@@ -54,7 +54,7 @@ class Container {
     get side() {
         return this.#side
     }
-    async #createFrame(src) {
+    async #createFrame({ index, src }) {
         const element = document.createElement('div')
         const iframe = document.createElement('iframe')
         element.append(iframe)
@@ -70,8 +70,8 @@ class Container {
         return new Promise(resolve => {
             const onload = () => {
                 iframe.removeEventListener('load', onload)
-                this.onLoad?.(iframe)
                 const doc = iframe.contentDocument
+                this.onLoad?.(doc, index)
                 const { width, height } = getViewport(doc, this.defaultViewport)
                 resolve({
                     element, iframe,
@@ -175,7 +175,7 @@ export class FixedLayout {
     #container = new Container()
     constructor({ book, onLoad, onRelocated }) {
         this.book = book
-        this.onLoad = onLoad
+        this.#container.onLoad = onLoad
         this.onRelocated = onRelocated
 
         const { rendition } = book
@@ -246,11 +246,16 @@ export class FixedLayout {
         this.#index = index
         const spread = this.#spreads[index]
         if (spread.center) {
-            const center = await spread.center?.load?.()
-            await this.#container.showSpread({ center })
+            const index = this.book.sections.indexOf(spread.center)
+            const src = await spread.center?.load?.()
+            await this.#container.showSpread({ center: { index, src } })
         } else {
-            const left = await spread.left?.load?.()
-            const right = await spread.right?.load?.()
+            const indexL = this.book.sections.indexOf(spread.left)
+            const indexR = this.book.sections.indexOf(spread.right)
+            const srcL = await spread.left?.load?.()
+            const srcR = await spread.right?.load?.()
+            const left = { index: indexL, src: srcL }
+            const right = { index: indexR, src: srcR }
             await this.#container.showSpread({ left, right, side })
         }
         this.onRelocated?.(null, this.index, 0, 1)
@@ -276,5 +281,9 @@ export class FixedLayout {
         const s = this.rtl ? this.#container.goRight() : this.#container.goLeft()
         if (s) this.onRelocated?.(null, this.index, 0, 1)
         else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right')
+    }
+    deselect() {
+        for (const frame of this.#container.element.querySelectorAll('iframe'))
+            frame.contentWindow.getSelection().removeAllRanges()
     }
 }
