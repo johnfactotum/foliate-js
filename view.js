@@ -27,11 +27,11 @@ const textWalker = function* (doc, func) {
     for (const match of func(strs, makeRange)) yield match
 }
 
-const frameRect = (frame, rect) => {
-    const left = rect.left + frame.left
-    const right = rect.right + frame.left
-    const top = rect.top + frame.top
-    const bottom = rect.bottom + frame.top
+const frameRect = (frame, rect, sx = 1, sy = 1) => {
+    const left = sx * rect.left + frame.left
+    const right = sx * rect.right + frame.left
+    const top = sy * rect.top + frame.top
+    const bottom = sy * rect.bottom + frame.top
     return { left, right, top, bottom }
 }
 
@@ -42,10 +42,15 @@ export const getPosition = target => {
     // TODO: vertical text
     const frameElement = (target.getRootNode?.() ?? target?.endContainer?.getRootNode?.())
         ?.defaultView?.frameElement
+
+    const transform = frameElement ? getComputedStyle(frameElement).transform : ''
+    const match = transform.match(/matrix\((.+)\)/)
+    const [sx, , , sy] = match?.[1]?.split(/\s*,\s*/)?.map(x => parseFloat(x)) ?? []
+
     const frame = frameElement?.getBoundingClientRect() ?? { top: 0, left: 0 }
     const rects = Array.from(target.getClientRects())
-    const first = frameRect(frame, rects[0])
-    const last = frameRect(frame, rects.at(-1))
+    const first = frameRect(frame, rects[0], sx, sy)
+    const last = frameRect(frame, rects.at(-1), sx, sy)
     const start = {
         point: { x: (first.left + first.right) / 2, y: first.top },
         dir: 'up',
