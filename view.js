@@ -280,6 +280,9 @@ export class View {
             console.error(`Could not go to ${target}`)
         }
     }
+    deselect() {
+        return this.renderer?.deselect()
+    }
     async getTOCItemOf(target) {
         try {
             const { index, anchor } = await this.resolveNavigation(target)

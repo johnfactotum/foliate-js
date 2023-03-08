@@ -653,6 +653,10 @@ export class Paginator {
         const $style = this.#styleMap.get(this.#view?.document)
         if ($style) $style.textContent = style
     }
+    deselect() {
+        const sel = this.#view.document.defaultView.getSelection()
+        sel.removeAllRanges()
+    }
     async #setAnchor(anchor, select) {
         this.#anchor = anchor
         await this.#scrollToAnchor(select)
