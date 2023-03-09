@@ -337,6 +337,7 @@ class View {
 // NOTE: everything here assumes the so-called "negative scroll type" for RTL
 export class Paginator {
     #element = document.createElement('div')
+    #maxSizeContainer = document.createElement('div')
     #container = document.createElement('div')
     #header = document.createElement('div')
     #footer = document.createElement('div')
@@ -361,12 +362,21 @@ export class Paginator {
             boxSizing: 'border-box',
             width: '100%',
             height: '100%',
-            position: 'absolute',
+            position: 'relative',
+            overflow: 'hidden',
         })
-        this.#element.append(this.#container)
+        this.#element.append(this.#maxSizeContainer)
+        Object.assign(this.#maxSizeContainer.style, {
+            width: '100%',
+            height: '100%',
+            margin: 'auto',
+            position: 'relative',
+        })
+        this.#maxSizeContainer.append(this.#container)
         Object.assign(this.#container.style, {
             width: '100%',
             height: '100%',
+            margin: 'auto',
         })
 
         const marginalStyle = {
@@ -375,10 +385,10 @@ export class Paginator {
             fontFamily: 'system-ui',
             opacity: '.5',
         }
-        Object.assign(this.#header.style, marginalStyle, { top: '0' })
-        Object.assign(this.#footer.style, marginalStyle, { bottom: '0' })
-        this.#element.append(this.#header)
-        this.#element.append(this.#footer)
+        Object.assign(this.#header.style, marginalStyle)
+        Object.assign(this.#footer.style, marginalStyle)
+        this.#maxSizeContainer.append(this.#header)
+        this.#maxSizeContainer.append(this.#footer)
 
         new ResizeObserver(() => this.render()).observe(this.#element)
         this.#container.addEventListener('scroll', debounce(() => {
@@ -402,13 +412,14 @@ export class Paginator {
         // this is needed because the iframe does not fill the whole element
         this.#element.style.background = background
 
-        const { flow, margin, gap, maxColumnWidth } = this.layout
+        const { flow, margin, gap, maxColumnWidth, maxColumns } = this.layout
 
         if (flow === 'scrolled') {
             // FIXME: vertical-rl only, not -lr
             this.#element.setAttribute('dir', vertical ? 'rtl' : 'ltr')
             this.#element.style.padding = '0'
             this.#container.style.overflow ='scroll'
+            this.#maxSizeContainer.style.maxWidth = 'none'
             const columnWidth = this.layout.maxColumnWidth
 
             this.heads = null
@@ -419,6 +430,7 @@ export class Paginator {
             return { flow, margin, gap, columnWidth }
         }
 
+        this.#maxSizeContainer.style.maxWidth = `${maxColumns * maxColumnWidth}px`
         const { width, height } = this.#container.getBoundingClientRect()
         const size = vertical ? height : width
         const divisor = Math.ceil(size / maxColumnWidth)
@@ -434,12 +446,12 @@ export class Paginator {
             height: marginalHeight,
             gridTemplateColumns: `repeat(${divisor}, 1fr)`,
             gap: `${gap}px`,
-            padding: `0 ${gap}px`,
+            padding: `0 ${gap / 2}px`,
             fontSize: `min(.75em, ${marginalHeight})`,
             lineHeight: marginalHeight,
         }
-        Object.assign(this.#header.style, marginalStyle)
-        Object.assign(this.#footer.style, marginalStyle)
+        Object.assign(this.#header.style, marginalStyle, { top: `-${paddingV}` })
+        Object.assign(this.#footer.style, marginalStyle, { bottom: `-${paddingV}` })
         const heads = makeMarginals(divisor)
         const feet = makeMarginals(divisor)
         this.heads = heads.map(el => el.children[0])
