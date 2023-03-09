@@ -123,7 +123,7 @@ export class View {
 
         if (book.splitTOCHref && book.getTOCFragment) {
             const ids = book.sections.map(s => s.id)
-            this.#sectionProgress = new SectionProgress(book.sections, 150, 1600)
+            this.#sectionProgress = new SectionProgress(book.sections, 1500, 1600)
             const splitHref = book.splitTOCHref.bind(book)
             const getFragment = book.getTOCFragment.bind(book)
             this.#tocProgress = new TOCProgress({
