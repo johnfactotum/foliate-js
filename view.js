@@ -162,9 +162,9 @@ export class View {
                 await this.annotations.add(annotation, true)
         }
     }
-    #onRelocated(range, index, fraction) {
+    #onRelocated(range, index, fraction, size) {
         if (!this.#sectionProgress) return
-        const progress = this.#sectionProgress.getProgress(index, fraction)
+        const progress = this.#sectionProgress.getProgress(index, fraction, size)
         const tocItem = this.#tocProgress.getProgress(index, range)
         const pageItem = this.#pageProgress.getProgress(index, range)
         const cfi = this.getCFI(index, range)

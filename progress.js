@@ -62,21 +62,23 @@ export class SectionProgress {
         this.sizeTotal = this.sizes.reduce((a, b) => a + b, 0)
     }
     // get progress given index of and fractions within a section
-    getProgress(index, fractionInSection) {
+    getProgress(index, fractionInSection, pageFraction = 0) {
         const { sizes, sizePerLoc, sizePerTimeUnit, sizeTotal } = this
         const sizeInSection = sizes[index] ?? 0
         const sizeBefore = sizes.slice(0, index).reduce((a, b) => a + b, 0)
         const size = sizeBefore + fractionInSection * sizeInSection
+        const nextSize = size + pageFraction * sizeInSection
         const remainingTotal = sizeTotal - size
         const remainingSection = (1 - fractionInSection) * sizeInSection
         return {
-            fraction: size / sizeTotal,
+            fraction: nextSize / sizeTotal,
             section: {
                 current: index,
                 total: sizes.length,
             },
             location: {
                 current: Math.floor(size / sizePerLoc),
+                next: Math.floor(nextSize / sizePerLoc),
                 total: Math.ceil(sizeTotal / sizePerLoc),
             },
             time: {
