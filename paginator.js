@@ -337,6 +337,7 @@ class View {
 // NOTE: everything here assumes the so-called "negative scroll type" for RTL
 export class Paginator {
     #element = document.createElement('div')
+    #background = document.createElement('div')
     #maxSizeContainer = document.createElement('div')
     #container = document.createElement('div')
     #header = document.createElement('div')
@@ -365,6 +366,16 @@ export class Paginator {
             position: 'relative',
             overflow: 'hidden',
         })
+
+        this.#element.append(this.#background)
+        Object.assign(this.#background.style, {
+            width: '100%',
+            height: '100%',
+            position: 'absolute',
+            top: '0', left: '0',
+        })
+        this.#background.classList.add('filter')
+
         this.#element.append(this.#maxSizeContainer)
         Object.assign(this.#maxSizeContainer.style, {
             width: '100%',
@@ -408,9 +419,9 @@ export class Paginator {
         this.#vertical = vertical
         this.#rtl = rtl
 
-        // set `document` background to `doc` background
+        // set background to `doc` background
         // this is needed because the iframe does not fill the whole element
-        this.#element.style.background = background
+        this.#background.style.background = background
 
         const { flow, margin, gap, maxColumnWidth, maxColumns } = this.layout
 

@@ -10,11 +10,6 @@ export class Overlayer {
             width: '100%', height: '100%',
             pointerEvents: 'none',
         })
-        const darkMode = matchMedia('(prefers-color-scheme: dark)')
-        const setBlendMode = () => this.#svg.style.mixBlendMode =
-            darkMode.matches ? 'normal' : 'multiply'
-        darkMode.addEventListener('change', setBlendMode)
-        setBlendMode()
     }
     get element() {
         return this.#svg
