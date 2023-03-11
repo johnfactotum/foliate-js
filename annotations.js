@@ -59,4 +59,7 @@ export class Annotations {
     getAnchor(value) {
         return this.#anchorsByValue.get(value)
     }
+    export() {
+        return Array.from(this.#annotationsByIndex.values()).flat()
+    }
 }
