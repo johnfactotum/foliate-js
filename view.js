@@ -92,11 +92,11 @@ export class View {
             const o = this.#getOverlayer(index)
             if (o) this.#drawAnnotation(o.doc, o.overlayer, annotation)
             const label = this.#tocProgress.getProgress(index)?.label ?? ''
-            this?.emit({ type: 'add-annotation', annotation, label, index, position })
+            this.emit?.({ type: 'add-annotation', annotation, label, index, position })
         },
         onDelete: (key, index, position) => {
             this.#getOverlayer(index)?.overlayer?.remove(key)
-            this?.emit({ type: 'delete-annotation', index, position })
+            this.emit?.({ type: 'delete-annotation', index, position })
         },
         onUpdate: (annotation, index) => {
             const o = this.#getOverlayer(index)
