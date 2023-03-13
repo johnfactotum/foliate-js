@@ -1,7 +1,6 @@
 import * as CFI from './epubcfi.js'
 import { TOCProgress, SectionProgress } from './progress.js'
 import { Overlayer } from './overlayer.js'
-import { Annotations } from './annotations.js'
 
 const textWalker = function* (doc, func) {
     const filter = NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT
@@ -85,27 +84,6 @@ export class View {
     textDirection = ''
     isCJK = false
     isFixedLayout = false
-    annotations = new Annotations({
-        resolve: value => this.resolveCFI(value),
-        compare: CFI.compare,
-        onAdd: (annotation, index, position) => {
-            const o = this.#getOverlayer(index)
-            if (o) this.#drawAnnotation(o.doc, o.overlayer, annotation)
-            const label = this.#tocProgress.getProgress(index)?.label ?? ''
-            this.emit?.({ type: 'add-annotation', annotation, label, index, position })
-        },
-        onDelete: (key, index, position) => {
-            this.#getOverlayer(index)?.overlayer?.remove(key)
-            this.emit?.({ type: 'delete-annotation', index, position })
-        },
-        onUpdate: (annotation, index) => {
-            const o = this.#getOverlayer(index)
-            if (o) {
-                o.overlayer.remove(annotation.value)
-                this.#drawAnnotation(o.doc, o.overlayer, annotation)
-            }
-        },
-    })
     constructor(book, emit) {
         this.book = book
         this.emit = emit
@@ -149,18 +127,12 @@ export class View {
         }
         return this.renderer.element
     }
-    async init({ lastLocation, annotations }) {
+    async init({ lastLocation }) {
         if (lastLocation) {
             const resolved = this.resolveNavigation(lastLocation)
             if (resolved) await this.renderer.goTo(resolved)
             else await this.renderer.next()
         } else await this.renderer.next()
-
-        if (annotations) {
-            annotations.sort((a, b) => CFI.compare(a.value, b.value))
-            for (const annotation of annotations)
-                await this.annotations.add(annotation, true)
-        }
     }
     #onRelocated(range, index, fraction, size) {
         if (!this.#sectionProgress) return
@@ -207,12 +179,24 @@ export class View {
 
         this.emit?.({ type: 'loaded', doc, index })
     }
-    #drawAnnotation(doc, overlayer, annotation) {
+    async addAnnotation(annotation, remove) {
         const { value } = annotation
-        const anchor = this.annotations.getAnchor(value)
-        const range = doc ? anchor(doc) : anchor
-        const [func, opts] = this.emit({ type: 'draw-annotation', annotation })
-        overlayer.add(value, range, func, opts)
+        const { index, anchor } = await this.resolveNavigation(value)
+        const obj = this.#getOverlayer(index)
+        if (obj) {
+            const { overlayer, doc } = obj
+            overlayer.remove(value)
+            if (!remove) {
+                const range = doc ? anchor(doc) : anchor
+                const [func, opts] = this.emit({ type: 'draw-annotation', annotation })
+                overlayer.add(value, range, func, opts)
+            }
+        }
+        const label = this.#tocProgress.getProgress(index)?.label ?? ''
+        return { index, label }
+    }
+    deleteAnnotation(annotation) {
+        return this.addAnnotation(annotation, true)
     }
     #getOverlayer(index) {
         const obj = this.renderer.getOverlayer()
@@ -220,14 +204,13 @@ export class View {
     }
     #createOverlayer(doc, index) {
         const overlayer = new Overlayer()
-        for (const annotation of this.annotations.getByIndex(index))
-            this.#drawAnnotation(doc, overlayer, annotation)
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
             if (value) {
                 this.emit?.({ type: 'show-annotation', value, range })
             }
         }, false)
+        this.emit?.({ type: 'create-overlay', index })
         return overlayer
     }
     async showAnnotation(annotation) {
