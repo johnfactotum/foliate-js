@@ -188,7 +188,8 @@ export class View {
             overlayer.remove(value)
             if (!remove) {
                 const range = doc ? anchor(doc) : anchor
-                const [func, opts] = this.emit({ type: 'draw-annotation', annotation })
+                const [func, opts] = this
+                    .emit({ type: 'draw-annotation', annotation, doc, range })
                 overlayer.add(value, range, func, opts)
             }
         }

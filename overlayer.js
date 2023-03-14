@@ -50,11 +50,19 @@ export class Overlayer {
         return []
     }
     static underline(rects, options = {}) {
-        // TODO: in vertical-rl, the bōsen (sideline) should be on the right
-        const { color = 'red', width: strokeWidth = 2 } = options
+        const { color = 'red', width: strokeWidth = 2, writingMode } = options
         const g = createSVGElement('g')
         g.setAttribute('fill', color)
-        for (const { left, bottom, width } of rects) {
+        if (writingMode === 'vertical-rl' || writingMode === 'vertical-lr')
+            for (const { right, top, height } of rects) {
+                const el = createSVGElement('rect')
+                el.setAttribute('x', right - strokeWidth)
+                el.setAttribute('y', top)
+                el.setAttribute('height', height)
+                el.setAttribute('width', strokeWidth)
+                g.append(el)
+            }
+        else for (const { left, bottom, width } of rects) {
             const el = createSVGElement('rect')
             el.setAttribute('x', left)
             el.setAttribute('y', bottom - strokeWidth)
