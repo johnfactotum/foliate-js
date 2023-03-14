@@ -57,6 +57,14 @@ const isFBZ = ({ name, type }) =>
     type === 'application/x-zip-compressed-fb2'
     || name.endsWith('.fb2.zip') || name.endsWith('.fbz')
 
+const isComicGalleryZIP = ({name, type}, { entries }) => {
+	if (type === 'application/zip' && name.endsWith('.zip')) {
+		return entries.every(entry => entry.filename.endsWith('.png')
+			|| entry.filename.endsWith('.jpg') || entry.filename.endsWith('.jpeg'))
+	}
+	return false
+}
+
 const getView = async (file, emit) => {
     let book
     if (file.isDirectory) {
@@ -67,7 +75,7 @@ const getView = async (file, emit) => {
     else if (!file.size) throw new Error('File not found')
     else if (await isZip(file)) {
         const loader = await makeZipLoader(file)
-        if (isCBZ(file)) {
+        if (isCBZ(file) || isComicGalleryZIP(file, loader)) {
             const { makeComicBook } = await import('./comic-book.js')
             book = makeComicBook(loader, file)
         } else if (isFBZ(file)) {
