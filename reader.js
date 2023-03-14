@@ -47,22 +47,16 @@ const makeDirectoryLoader = async entry => {
     return { loadText, loadBlob, getSize }
 }
 
-const isCBZ = ({ name, type }) =>
-    type === 'application/vnd.comicbook+zip' || name.endsWith('.cbz')
-
 const isFB2 = ({ name, type }) =>
     type === 'application/x-fictionbook+xml' || name.endsWith('.fb2')
 
-const isFBZ = ({ name, type }) =>
-    type === 'application/x-zip-compressed-fb2'
-    || name.endsWith('.fb2.zip') || name.endsWith('.fbz')
+const isEPUB = async (file) => {
+	if (file.type === 'application/epub+zip') return true
+	if (file.name?.endsWith('.epub')) return true
 
-const isComicGalleryZIP = ({name, type}, { entries }) => {
-	if (type === 'application/zip' && name.endsWith('.zip')) {
-		return entries.every(entry => entry.filename.endsWith('.png')
-			|| entry.filename.endsWith('.jpg') || entry.filename.endsWith('.jpeg'))
-	}
-	return false
+	// epub 3 RFC: https://www.w3.org/publishing/epub3/epub-ocf.html#app-media-type
+	const magicCode = await file.slice(30, 58).text()
+	return magicCode === 'mimetypeapplication/epub+zip'
 }
 
 const getView = async (file, emit) => {
@@ -75,19 +69,21 @@ const getView = async (file, emit) => {
     else if (!file.size) throw new Error('File not found')
     else if (await isZip(file)) {
         const loader = await makeZipLoader(file)
-        if (isCBZ(file) || isComicGalleryZIP(file, loader)) {
-            const { makeComicBook } = await import('./comic-book.js')
-            book = makeComicBook(loader, file)
-        } else if (isFBZ(file)) {
-            const { makeFB2 } = await import('./fb2.js')
-            const { entries } = loader
-            const entry = entries.find(entry => entry.filename.endsWith('.fb2'))
-            const blob = await loader.loadBlob((entry ?? entries[0]).filename)
-            book = await makeFB2(blob)
-        } else {
-            const { EPUB } = await import('./epub.js')
-            book = await new EPUB(loader).init()
-        }
+		if (await isEPUB(file)) {
+			const { EPUB } = await import('./epub.js')
+			book = await new EPUB(loader).init()
+		} else {
+			const { entries } = loader
+			const fb2 = entries.find(entry => entry.filename.endsWith('.fb2'))
+			if (fb2 || loader.entries.length === 1) {
+				const { makeFB2 } = await import('./fb2.js')
+				const blob = await loader.loadBlob((fb2 ?? entries[0]).filename)
+				book = await makeFB2(blob)
+			} else {
+				const { makeComicBook } = await import('./comic-book.js');
+				book = makeComicBook(loader, file);
+			}
+		}
     } else {
         const { isMOBI, MOBI } = await import('./mobi.js')
         if (await isMOBI(file))
