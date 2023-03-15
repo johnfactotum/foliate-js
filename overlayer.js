@@ -72,6 +72,29 @@ export class Overlayer {
         }
         return g
     }
+    static strikethrough(rects, options = {}) {
+        const { color = 'red', width: strokeWidth = 2, writingMode } = options
+        const g = createSVGElement('g')
+        g.setAttribute('fill', color)
+        if (writingMode === 'vertical-rl' || writingMode === 'vertical-lr')
+            for (const { right, left, top, height } of rects) {
+                const el = createSVGElement('rect')
+                el.setAttribute('x', (right + left) / 2)
+                el.setAttribute('y', top)
+                el.setAttribute('height', height)
+                el.setAttribute('width', strokeWidth)
+                g.append(el)
+            }
+        else for (const { left, top, bottom, width } of rects) {
+            const el = createSVGElement('rect')
+            el.setAttribute('x', left)
+            el.setAttribute('y', (top + bottom) / 2)
+            el.setAttribute('height', strokeWidth)
+            el.setAttribute('width', width)
+            g.append(el)
+        }
+        return g
+    }
     static squiggly(rects, options = {}) {
         const { color = 'red', width: strokeWidth = 2, writingMode } = options
         const g = createSVGElement('g')
