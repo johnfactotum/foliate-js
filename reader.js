@@ -320,3 +320,11 @@ dropTarget.addEventListener('dragover', dragOverHandler)
 $('#file-input').addEventListener('change', e =>
     open(e.target.files[0]).catch(e => console.error(e)))
 $('#file-button').addEventListener('click', () => $('#file-input').click())
+
+const params = new URLSearchParams(location.search)
+const url = params.get('url')
+if (url) fetch(url)
+    .then(res => res.blob())
+    .then(blob => open(new File([blob], new URL(url).pathname)))
+    .catch(e => console.error(e))
+else dropTarget.style.visibility = 'visible'
