@@ -29,9 +29,28 @@ Among other things, the fixed-layout renderer is notably unfinished at the momen
 
 This project uses native ES modules. There's no build step, and you can import them directly.
 
-The modules are designed to be modular. In general, they don't directly depend on each other (except for `epub.js`, which imports `epubcfi.js`). Instead they depend on certain interfaces, detailed below.
+There are mainly three kinds of modules:
 
-The exception is `view.js`. It is the one that strings everything together, and you can think of it as the main entry point of the library.
+- Modules that parse and load books, implementing the "book" interface
+    - `comic-book.js`, for comic book archives (CBZ)
+    - `epub.js` and `epubcfi.js`, for EPUB
+    - `fb2.js`, for FictionBook 2
+    - `mobi.js`, for both Mobipocket files and KF8 (commonly known as AZW3) files
+- Modules that handle pagination, implementing the "renderer" interface
+    - `fixed-layout.js`, for fixed layout books
+    - `paginator.js`, for reflowable books
+- Auxiliary modules used to add additional functionalities
+    - `overlayer.js`, for rendering annotations
+    - `progress.js`, for getting reading progress
+    - `search.js`, for searching
+
+The modules are designed to be modular. In general, they don't directly depend on each other. Instead they depend on certain interfaces, detailed below. The exception is `view.js`. It is the higher level renderer that strings most of the things together, and you can think of it as the main entry point of the library. Its basic usage is as follows:
+
+- The `View` constructor takes two arguments: `book`, an object that implements the "book" interface, and `emit`, which is a callback that you can use to handle various events. Note that for simplicity, unlike Epub.js or other libraries, there's no event or pub/sub system.
+- To render the book, you must first call `.display()`, which is an async function that returns an Element, which you must then append to the DOM yourself, e.g. `document.body.append(await view.display())`.
+- To actually display the page, you must then either call `.next()`, which will display the first linear page of the book, or use `.goTo()` to go to a specific location.
+
+The repo also includes a still higher level reader, though strictly speaking, `reader.html` (along with `reader.js` and its associated files in `ui/` and `vendor/`) is not considered part of the library itself. It's akin to [Epub.js Reader](https://github.com/futurepress/epubjs-reader). You are expected to modify it or replace it with your own code.
 
 ### The Main Interface for Books
 

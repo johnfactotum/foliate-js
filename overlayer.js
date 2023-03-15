@@ -72,6 +72,57 @@ export class Overlayer {
         }
         return g
     }
+    static strikethrough(rects, options = {}) {
+        const { color = 'red', width: strokeWidth = 2, writingMode } = options
+        const g = createSVGElement('g')
+        g.setAttribute('fill', color)
+        if (writingMode === 'vertical-rl' || writingMode === 'vertical-lr')
+            for (const { right, left, top, height } of rects) {
+                const el = createSVGElement('rect')
+                el.setAttribute('x', (right + left) / 2)
+                el.setAttribute('y', top)
+                el.setAttribute('height', height)
+                el.setAttribute('width', strokeWidth)
+                g.append(el)
+            }
+        else for (const { left, top, bottom, width } of rects) {
+            const el = createSVGElement('rect')
+            el.setAttribute('x', left)
+            el.setAttribute('y', (top + bottom) / 2)
+            el.setAttribute('height', strokeWidth)
+            el.setAttribute('width', width)
+            g.append(el)
+        }
+        return g
+    }
+    static squiggly(rects, options = {}) {
+        const { color = 'red', width: strokeWidth = 2, writingMode } = options
+        const g = createSVGElement('g')
+        g.setAttribute('fill', 'none')
+        g.setAttribute('stroke', color)
+        g.setAttribute('stroke-width', strokeWidth)
+        const block = strokeWidth * 1.5
+        if (writingMode === 'vertical-rl' || writingMode === 'vertical-lr')
+            for (const { right, top, height } of rects) {
+                const el = createSVGElement('path')
+                const n = Math.round(height / block / 1.5)
+                const inline = height / n
+                const ls = Array.from({ length: n },
+                    (_, i) => `l${i % 2 ? -block : block} ${inline}`).join('')
+                el.setAttribute('d', `M${right} ${top}${ls}`)
+                g.append(el)
+            }
+        else for (const { left, bottom, width } of rects) {
+            const el = createSVGElement('path')
+            const n = Math.round(width / block / 1.5)
+            const inline = width / n
+            const ls = Array.from({ length: n },
+                (_, i) => `l${inline} ${i % 2 ? block : -block}`).join('')
+            el.setAttribute('d', `M${left} ${bottom}${ls}`)
+            g.append(el)
+        }
+        return g
+    }
     static highlight(rects, options = {}) {
         const { color = 'red' } = options
         const g = createSVGElement('g')
