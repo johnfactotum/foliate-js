@@ -59,7 +59,7 @@ const resolveURL = (url, relativeTo) => {
     try {
         if (relativeTo.includes(':')) return new URL(url, relativeTo)
         // the base needs to be a valid URL, so set a base URL and then remove it
-        const root = 'whatever:///'
+        const root = 'https://invalid.invalid/'
         return decodeURI(new URL(url, root + relativeTo).href.replace(root, ''))
     } catch(e) {
         console.warn(e)
