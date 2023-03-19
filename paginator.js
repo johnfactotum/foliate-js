@@ -573,9 +573,13 @@ export class Paginator {
         return this.#scrollTo(offset, reason)
     }
     async #scrollToAnchor(select) {
-        const rect = uncollapse(this.#anchor).getBoundingClientRect?.()
+        const rects = uncollapse(this.#anchor)?.getClientRects()
         // if anchor is an element or a range
-        if (rect) {
+        if (rects) {
+            // when the start of the range is immediately after a hyphen in the
+            // previous column, there is an extra zero width rect in that column
+            const rect = Array.from(rects)
+                .find(r => r.width > 0 && r.height > 0) || rects[0]
             await this.#scrollToRect(rect, 'anchor')
             if (select) this.#selectAnchor()
             return
