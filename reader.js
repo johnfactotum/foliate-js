@@ -1,11 +1,7 @@
-/* global zip: false, fflate: false */
 import { View, getPosition } from './view.js'
 import { createTOCView } from './ui/tree.js'
 import { createMenu } from './ui/menu.js'
 import { createPopover } from './ui/popover.js'
-
-const { ZipReader, BlobReader, TextWriter, BlobWriter } = zip
-zip.configure({ useWebWorkers: false })
 
 const isZip = async file => {
     const arr = new Uint8Array(await file.slice(0, 4).arrayBuffer())
@@ -13,6 +9,9 @@ const isZip = async file => {
 }
 
 const makeZipLoader = async file => {
+    const { configure, ZipReader, BlobReader, TextWriter, BlobWriter } =
+        await import('./vendor/zip.js')
+    configure({ useWebWorkers: false })
     const reader = new ZipReader(new BlobReader(file))
     const entries = await reader.getEntries()
     const map = new Map(entries.map(entry => [entry.filename, entry]))
@@ -82,9 +81,10 @@ const getView = async (file, emit) => {
         }
     } else {
         const { isMOBI, MOBI } = await import('./mobi.js')
-        if (await isMOBI(file))
+        if (await isMOBI(file)) {
+            const fflate = await import('./vendor/fflate.js')
             book = await new MOBI({ unzlib: fflate.unzlibSync }).open(file)
-        else if (isFB2(file)) {
+        } else if (isFB2(file)) {
             const { makeFB2 } = await import('./fb2.js')
             book = await makeFB2(file)
         }
