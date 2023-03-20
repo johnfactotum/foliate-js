@@ -573,7 +573,7 @@ export class Paginator {
         return this.#scrollTo(offset, reason)
     }
     async #scrollToAnchor(select) {
-        const rects = uncollapse(this.#anchor)?.getClientRects()
+        const rects = uncollapse(this.#anchor)?.getClientRects?.()
         // if anchor is an element or a range
         if (rects) {
             // when the start of the range is immediately after a hyphen in the
