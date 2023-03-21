@@ -26,8 +26,12 @@ const MIME = {
 // convert to camel case
 const camel = x => x.toLowerCase().replace(/[-:](.)/g, (_, g) => g.toUpperCase())
 
-// remove leading, trailing, and excess internal whitespace
-const whitespacePreLine = str => str ? str.trim().replace(/\s{2,}/g, ' ') : ''
+// strip and collapse ASCII whitespace
+// https://infra.spec.whatwg.org/#strip-and-collapse-ascii-whitespace
+const normalizeWhitespace = str => str ? str
+    .replace(/[\t\n\f\r ]+/g, ' ')
+    .replace(/^[\t\n\f\r ]+/, '')
+    .replace(/[\t\n\f\r ]+$/, '') : ''
 
 const filterAttribute = (attr, value, isList) => isList
     ? el => el.getAttribute(attr)?.split(/\s/)?.includes(value)
@@ -38,7 +42,7 @@ const filterAttribute = (attr, value, isList) => isList
 const getAttributes = (...xs) => el =>
     el ? Object.fromEntries(xs.map(x => [camel(x), el.getAttribute(x)])) : null
 
-const getElementText = el => whitespacePreLine(el?.textContent)
+const getElementText = el => normalizeWhitespace(el?.textContent)
 
 const childGetter = (doc, ns) => {
     // ignore the namespace if it doesn't appear in document at all

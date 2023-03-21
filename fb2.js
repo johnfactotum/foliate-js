@@ -1,5 +1,8 @@
-const trim = str => str?.trim()?.replace(/\s{2,}/g, ' ')
-const getElementText = el => trim(el?.textContent)
+const normalizeWhitespace = str => str ? str
+    .replace(/[\t\n\f\r ]+/g, ' ')
+    .replace(/^[\t\n\f\r ]+/, '')
+    .replace(/[\t\n\f\r ]+$/, '') : ''
+const getElementText = el => normalizeWhitespace(el?.textContent)
 
 const NS = {
     XLINK: 'http://www.w3.org/1999/xlink',
@@ -287,7 +290,8 @@ export const makeFB2 = async blob => {
             const str = template(el.outerHTML)
             const blob = new Blob([str], { type: MIME.XHTML })
             const url = URL.createObjectURL(blob)
-            const title = trim(el.querySelector('.title, .subtitle, p')?.textContent
+            const title = normalizeWhitespace(
+                el.querySelector('.title, .subtitle, p')?.textContent
                 ?? (el.classList.contains('title') ? el.textContent : ''))
             return {
                 ids, title, titles, load: () => url,
