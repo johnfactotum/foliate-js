@@ -20,23 +20,31 @@ const makeExcerpt = (strs, { startIndex, startOffset, endIndex, endOffset }) => 
     return { pre, match, post }
 }
 
-// TODO: maybe use this for exact matches as it would be faster
-/*
-export const simpleSearch = function* (strs, query, locales = 'en') {
+const simpleSearch = function* (strs, query, options = {}) {
+    const { locales = 'en', sensitivity } = options
+    const matchCase = sensitivity === 'variant'
     const haystack = strs.join('')
-    const lowerHaystack = haystack.toLocaleLowerCase(locales)
-    const needle = query.toLocaleLowerCase(locales)
+    const lowerHaystack = matchCase ? haystack : haystack.toLocaleLowerCase(locales)
+    const needle = matchCase ? query : query.toLocaleLowerCase(locales)
     const needleLength = needle.length
     let index = -1
+    let strIndex = -1
+    let sum = 0
     do {
         index = lowerHaystack.indexOf(needle, index + 1)
         if (index > -1) {
+            while (sum <= index) sum += strs[++strIndex].length
+            const startIndex = strIndex
+            const startOffset = index - (sum - strs[strIndex].length)
             const end = index + needleLength
-            // TODO
+            while (sum <= end) sum += strs[++strIndex].length
+            const endIndex = strIndex
+            const endOffset = end - (sum - strs[strIndex].length)
+            const range = { startIndex, startOffset, endIndex, endOffset }
+            yield { range, excerpt: makeExcerpt(strs, range) }
         }
     } while (index > -1)
 }
-*/
 
 const segmenterSearch = function* (strs, query, options = {}) {
     const { locales = 'en', granularity = 'word', sensitivity = 'base' } = options
@@ -92,11 +100,19 @@ const segmenterSearch = function* (strs, query, options = {}) {
     }
 }
 
+export const search = (strs, query, options) => {
+    const { granularity = 'grapheme', sensitivity = 'base' } = options
+    if (!Intl?.Segmenter || granularity === 'grapheme'
+    && (sensitivity === 'variant' || sensitivity === 'accent'))
+        return simpleSearch(strs, query, options)
+    return segmenterSearch(strs, query, options)
+}
+
 export const searchMatcher = (textWalker, opts) => {
     const { defalutLocale, matchCase, matchDiacritics, matchWholeWords } = opts
     return function* (doc, query) {
         const iter = textWalker(doc, function* (strs, makeRange) {
-            for (const result of segmenterSearch(strs, query, {
+            for (const result of search(strs, query, {
                 locales: doc.body.lang || doc.documentElement.lang || defalutLocale || 'en',
                 granularity: matchWholeWords ? 'word' : 'grapheme',
                 sensitivity: matchDiacritics && matchCase ? 'variant'
