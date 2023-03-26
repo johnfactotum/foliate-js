@@ -161,6 +161,7 @@ class View {
         this.#iframe.classList.add('filter')
         this.#element.append(this.#iframe)
         Object.assign(this.#element.style, {
+            boxSizing: 'content-box',
             position: 'relative',
             overflow: 'hidden',
             flex: '0 0 auto',
