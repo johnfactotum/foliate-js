@@ -120,12 +120,12 @@ const getDirection = doc => {
     return { vertical, rtl }
 }
 
-const getPageStyle = doc => {
+const getBackground = doc => {
     const bodyStyle = doc.defaultView.getComputedStyle(doc.body)
     return bodyStyle.backgroundColor === 'rgba(0, 0, 0, 0)'
         && bodyStyle.backgroundImage === 'none'
-        ? doc.defaultView.getComputedStyle(doc.documentElement)
-        : bodyStyle
+        ? doc.defaultView.getComputedStyle(doc.documentElement).background
+        : bodyStyle.background
 }
 
 const makeMarginals = length => Array.from({ length }, () => {
@@ -194,14 +194,14 @@ class View {
                 // it needs to be visible for Firefox to get computed style
                 this.#iframe.style.display = 'block'
                 const { vertical, rtl } = getDirection(doc)
-                const { color, background } = getPageStyle(doc)
+                const background = getBackground(doc)
                 this.#iframe.style.display = 'none'
 
                 this.#vertical = vertical
                 this.#rtl = rtl
 
                 this.#contentRange.selectNodeContents(doc.body)
-                const layout = beforeRender?.({ vertical, rtl, color, background })
+                const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
                 this.render(layout)
                 new ResizeObserver(() => this.expand()).observe(doc.body)
@@ -416,15 +416,13 @@ export class Paginator {
         this.#container.append(this.#view.element)
         return this.#view
     }
-    #beforeRender({ vertical, rtl, color, background }) {
+    #beforeRender({ vertical, rtl, background }) {
         this.#vertical = vertical
         this.#rtl = rtl
 
         // set background to `doc` background
         // this is needed because the iframe does not fill the whole element
         this.#background.style.background = background
-        this.#header.style.color = color
-        this.#footer.style.color = color
 
         const { flow, margin, gap, maxColumnWidth, maxColumns } = this.layout
 
