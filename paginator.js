@@ -135,10 +135,10 @@ const makeMarginals = length => Array.from({ length }, () => {
     Object.assign(div.style, {
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center',
         minWidth: '0',
     })
     Object.assign(child.style, {
+        flex: '1',
         overflow: 'hidden',
         whiteSpace: 'nowrap',
         textOverflow: 'ellipsis',
@@ -394,8 +394,6 @@ export class Paginator {
         const marginalStyle = {
             position: 'absolute', left: '0', right: '0',
             display: 'grid',
-            fontFamily: 'system-ui',
-            opacity: '.5',
         }
         Object.assign(this.#header.style, marginalStyle)
         Object.assign(this.#footer.style, marginalStyle)
@@ -453,14 +451,11 @@ export class Paginator {
         this.#element.style.padding = `${paddingV} ${paddingH}`
         this.#container.style.overflow ='hidden'
 
-        const marginalHeight = `${margin * .85}px`
         const marginalStyle = {
-            height: marginalHeight,
+            height: `${margin}px`,
             gridTemplateColumns: `repeat(${divisor}, 1fr)`,
             gap: `${gap}px`,
             padding: `0 ${gap / 2}px`,
-            fontSize: `min(.75em, ${marginalHeight})`,
-            lineHeight: marginalHeight,
         }
         Object.assign(this.#header.style, marginalStyle, { top: `-${paddingV}` })
         Object.assign(this.#footer.style, marginalStyle, { bottom: `-${paddingV}` })
