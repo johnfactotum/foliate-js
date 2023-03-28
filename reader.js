@@ -1,7 +1,6 @@
 import { View, getPosition } from './view.js'
 import { createTOCView } from './ui/tree.js'
 import { createMenu } from './ui/menu.js'
-import { createPopover } from './ui/popover.js'
 
 const isZip = async file => {
     const arr = new Uint8Array(await file.slice(0, 4).arrayBuffer())
@@ -245,8 +244,6 @@ class Reader {
         switch (obj.type) {
             case 'loaded': this.#onLoaded(obj); break
             case 'relocated': this.#onRelocated(obj); break
-            case 'reference': this.#onReference(obj); break
-            case 'external-link': globalThis.open(obj.uri, '_blank'); break
         }
     }
     #handleKeydown(event) {
@@ -268,31 +265,6 @@ class Reader {
         slider.value = fraction
         slider.title = `${percent} · ${loc}`
         if (tocItem?.href) this.#tocView?.setCurrentHref?.(tocItem.href)
-    }
-    #onReference(obj) {
-        const { content, element } = obj
-        const { point, dir } = getPosition(element)
-        const iframe = document.createElement('iframe')
-        iframe.sandbox = 'allow-same-origin'
-        iframe.srcdoc = content
-        iframe.onload = () => {
-            const doc = iframe.contentDocument
-            doc.documentElement.style.colorScheme = 'light dark'
-            doc.body.style.margin = '18px'
-        }
-        Object.assign(iframe.style, {
-            border: '0',
-            width: '100%',
-            height: '100%',
-        })
-        const { popover, arrow, overlay } = createPopover(300, 250, point, dir)
-        overlay.style.zIndex = 3
-        popover.style.zIndex = 3
-        arrow.style.zIndex = 3
-        popover.append(iframe)
-        document.body.append(overlay)
-        document.body.append(popover)
-        document.body.append(arrow)
     }
 }
 

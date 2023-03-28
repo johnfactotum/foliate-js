@@ -66,15 +66,6 @@ export const getPosition = target => {
     return start.point.y > window.innerHeight - end.point.y ? start : end
 }
 
-// https://www.w3.org/TR/epub-ssv-11/
-const SSV = Object.fromEntries(Array.from(Object.entries({
-    isRef: ['annoref', 'biblioref', 'glossref', 'noteref'],
-    isLink: ['backlink'],
-    isNote: ['annotation', 'note', 'footnote', 'endnote', 'rearnote'],
-}), ([k, v]) => [k, el =>
-    el.getAttributeNS('http://www.idpf.org/2007/ops', 'type')
-        ?.split(/s/)?.some(t => v.includes(t))]))
-
 export class View {
     #sectionProgress
     #tocProgress
@@ -150,8 +141,12 @@ export class View {
         doc.documentElement.dir ||= this.isCJK ? '' : this.textDirection
 
         this.renderer.setStyle?.(this.#css)
+        this.handleLinks(doc, index, this.emit)
 
-        // set handlers for links
+        this.emit?.({ type: 'loaded', doc, index })
+    }
+    handleLinks(doc, index, emit) {
+        const { book } = this
         const section = book.sections[index]
         for (const a of doc.querySelectorAll('a[href]'))
             a.addEventListener('click', e => {
@@ -159,25 +154,13 @@ export class View {
                 const href = a.getAttribute('href')
                 const uri = section?.resolveHref?.(href) ?? href
                 if (book?.isExternal?.(uri))
-                    this.emit?.({ type: 'external-link', uri })
-                else if (SSV.isRef(a)) {
-                    const { index, anchor } = book.resolveHref(uri)
-                    Promise.resolve(book.sections[index].createDocument())
-                        .then(doc => [anchor(doc), doc.contentType])
-                        .then(([el, type]) =>
-                            [el?.innerHTML, type, SSV.isNote(el)])
-                        .then(([content, contentType, isNote]) => content
-                            ? this.emit?.({
-                                type: 'reference',
-                                href: isNote ? null : uri,
-                                content, contentType, element: a,
-                            }) : null)
+                    Promise.resolve(emit?.({ type: 'external-link', a, uri }))
+                        .then(x => x ? null : window.open(uri, '_blank'))
                         .catch(e => console.error(e))
-                    return
-                } else this.goTo(uri)
+                else Promise.resolve(emit?.({ type: 'link', a, uri }))
+                        .then(x => x ? null : this.goTo(uri))
+                        .catch(e => console.error(e))
             })
-
-        this.emit?.({ type: 'loaded', doc, index })
     }
     async addAnnotation(annotation, remove) {
         const { value } = annotation
