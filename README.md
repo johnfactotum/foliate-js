@@ -48,9 +48,21 @@ The modules are designed to be modular. In general, they don't directly depend o
 
 - The `View` constructor takes two arguments: `book`, an object that implements the "book" interface, and `emit`, which is a callback that you can use to handle various events. Note that for simplicity, unlike Epub.js or other libraries, there's no event or pub/sub system.
 - To render the book, you must first call `.display()`, which is an async function that returns an Element, which you must then append to the DOM yourself, e.g. `document.body.append(await view.display())`.
-- To actually display the page, you must then either call `.next()`, which will display the first linear page of the book, or use `.goTo()` to go to a specific location.
+- To actually display the page, you must then either call `.renderer.next()`, which will display the first linear page of the book, or use `.goTo()` to go to a specific location.
 
 The repo also includes a still higher level reader, though strictly speaking, `reader.html` (along with `reader.js` and its associated files in `ui/` and `vendor/`) is not considered part of the library itself. It's akin to [Epub.js Reader](https://github.com/futurepress/epubjs-reader). You are expected to modify it or replace it with your own code.
+
+### Security
+
+Scripting is not supported, as it is currently impossible to do so securely due to the content being served from the same origin (using `blob:` URLs).
+
+Furthermore, while the renderers do use the `sandox` attribute on iframes, it is useless, as it requires `allow-scripts` due to a WebKit bug: https://bugs.webkit.org/show_bug.cgi?id=218086.
+
+It is therefore imperative that you use [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) to block all scripts except `'self'`.
+
+> **Warning**
+>
+> Do NOT use this library without CSP unless you completely trust the content you're rendering or can block scripts by other means.
 
 ### The Main Interface for Books
 
@@ -92,7 +104,7 @@ Reading Zip-based formats will require adapting an external library. Both `epub.
 - `.loadBlob(filename)`: given the path, returns the file as a `Blob` object. May be async.
 - `.getSize(filename)`: returns the file size in bytes. Used to set the `.size` property for `.sections` (see above).
 
-In the demo, this is implemented using [Zip.js](https://github.com/gildas-lormeau/zip.js), which is highly recommended because it seems to be the only library that supports random access for `File` objects (as well as HTTP range requests).
+In the demo, this is implemented using [zip.js](https://github.com/gildas-lormeau/zip.js), which is highly recommended because it seems to be the only library that supports random access for `File` objects (as well as HTTP range requests).
 
 One advantage of having such an interface is that one can easily use it for reading unarchived files as well. For example, the demo has a loader that allows you to open unpacked EPUBs as directories.
 
@@ -108,7 +120,7 @@ It has two renderers, one for paginating reflowable books, and one for fixed-lay
 - `.book`: the book object that will be rendered.
 - `.onLoad(doc, index)`: callback when a section is loaded. Takes a `Document` object and the index of the section.
 - `.onRelocated(range, index, fraction)`: callback when locations changes. `range` is a `Range` object containing the current visible area. `fraction` is a number between 0 and 1, representing the reading progress within the section.
-- `createOverlayer(doc, index)`: callback for adding an overlay to the page. It should return an overlayer object (see the description for `overlayer.js` below).
+- `.createOverlayer(doc, index)`: callback for adding an overlay to the page. It should return an overlayer object (see the description for `overlayer.js` below).
 
 A renderer's interface is currently mainly:
 - `.element`: the DOM element of the renderer. It needs to be manually appended to the document by the consumer of the renderer.
@@ -200,5 +212,5 @@ Apart from the renderers, using the modules outside browsers is also possible. M
 MIT.
 
 Vendored libraries for the demo:
-- Zip.js is licensed under the BSD-3-Clause license. Copyright © 2022 Gildas Lormeau.
-- fflate is MIT licensed. Copyright © 2020 Arjun Barrett.
+- [zip.js](https://github.com/gildas-lormeau/zip.js) is licensed under the BSD-3-Clause license.
+- [fflate](https://github.com/101arrowz/fflate) is MIT licensed.
