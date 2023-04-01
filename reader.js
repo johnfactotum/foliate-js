@@ -1,4 +1,4 @@
-import { View, getPosition } from './view.js'
+import { View } from './view.js'
 import { createTOCView } from './ui/tree.js'
 import { createMenu } from './ui/menu.js'
 

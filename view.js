@@ -26,46 +26,6 @@ const textWalker = function* (doc, func) {
     for (const match of func(strs, makeRange)) yield match
 }
 
-const frameRect = (frame, rect, sx = 1, sy = 1) => {
-    const left = sx * rect.left + frame.left
-    const right = sx * rect.right + frame.left
-    const top = sy * rect.top + frame.top
-    const bottom = sy * rect.bottom + frame.top
-    return { left, right, top, bottom }
-}
-
-const pointIsInView = ({ x, y }) =>
-    x > 0 && y > 0 && x < window.innerWidth && y < window.innerHeight
-
-export const getPosition = target => {
-    // TODO: vertical text
-    const frameElement = (target.getRootNode?.() ?? target?.endContainer?.getRootNode?.())
-        ?.defaultView?.frameElement
-
-    const transform = frameElement ? getComputedStyle(frameElement).transform : ''
-    const match = transform.match(/matrix\((.+)\)/)
-    const [sx, , , sy] = match?.[1]?.split(/\s*,\s*/)?.map(x => parseFloat(x)) ?? []
-
-    const frame = frameElement?.getBoundingClientRect() ?? { top: 0, left: 0 }
-    const rects = Array.from(target.getClientRects())
-    const first = frameRect(frame, rects[0], sx, sy)
-    const last = frameRect(frame, rects.at(-1), sx, sy)
-    const start = {
-        point: { x: (first.left + first.right) / 2, y: first.top },
-        dir: 'up',
-    }
-    const end = {
-        point: { x: (last.left + last.right) / 2, y: last.bottom },
-        dir: 'down',
-    }
-    const startInView = pointIsInView(start.point)
-    const endInView = pointIsInView(end.point)
-    if (!startInView && !endInView) return { point: { x: 0, y: 0 } }
-    if (!startInView) return end
-    if (!endInView) return start
-    return start.point.y > window.innerHeight - end.point.y ? start : end
-}
-
 export class View {
     #sectionProgress
     #tocProgress
@@ -134,8 +94,6 @@ export class View {
         this.emit?.({ type: 'relocated', ...progress, tocItem, pageItem, cfi })
     }
     #onLoad(doc, index) {
-        const { book } = this
-
         // set language and dir if not already set
         doc.documentElement.lang ||= this.language
         doc.documentElement.dir ||= this.isCJK ? '' : this.textDirection
@@ -158,8 +116,8 @@ export class View {
                         .then(x => x ? null : window.open(uri, '_blank'))
                         .catch(e => console.error(e))
                 else Promise.resolve(emit?.({ type: 'link', a, uri }))
-                        .then(x => x ? null : this.goTo(uri))
-                        .catch(e => console.error(e))
+                    .then(x => x ? null : this.goTo(uri))
+                    .catch(e => console.error(e))
             })
     }
     async addAnnotation(annotation, remove) {
