@@ -623,9 +623,11 @@ export class Paginator {
             const view = this.#createView()
             const afterLoad = doc => {
                 if (doc.head) {
+                    const $styleBefore = doc.createElement('style')
+                    doc.head.prepend($styleBefore)
                     const $style = doc.createElement('style')
                     doc.head.append($style)
-                    this.#styleMap.set(doc, $style)
+                    this.#styleMap.set(doc, [$styleBefore, $style])
                 }
                 onLoad?.(doc, index)
             }
@@ -735,9 +737,15 @@ export class Paginator {
             doc: this.#view.document,
         }
     }
-    setStyle(style) {
-        const $style = this.#styleMap.get(this.#view?.document)
-        if ($style) $style.textContent = style
+    setStyle(styles) {
+        const $$styles = this.#styleMap.get(this.#view?.document)
+        if (!$$styles) return
+        const [$beforeStyle, $style] = $$styles
+        if (Array.isArray(styles)) {
+            const [beforeStyle, style] = styles
+            $beforeStyle.textContent = beforeStyle
+            $style.textContent = style
+        } else $style.textContent = styles
     }
     deselect() {
         const sel = this.#view.document.defaultView.getSelection()
