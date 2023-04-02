@@ -241,7 +241,7 @@ class View {
         const doc = this.document
         Object.assign(doc.documentElement.style, {
             boxSizing: 'border-box',
-            columnWidth: `${columnWidth}px`,
+            columnWidth: `${Math.trunc(columnWidth)}px`,
             columnGap: `${gap}px`,
             columnFill: 'auto',
             ...(vertical
