@@ -300,7 +300,7 @@ class View {
             this.#iframe.style[otherSide] = '100%'
             this.#element.style[otherSide] = '100%'
             if (this.document)
-                this.document.documentElement.style[side] = `${expandedSize}px`
+                this.document.documentElement.style[side] = `${this.#size}px`
             if (this.#overlayer) {
                 this.#overlayer.element.style.margin = '0'
                 this.#overlayer.element.style[side] = `${expandedSize}px`
