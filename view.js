@@ -45,7 +45,7 @@ export class View {
             const tag = typeof language === 'string' ? language : language[0]
             const locale = new Intl.Locale(tag)
             this.isCJK = ['zh', 'ja', 'kr'].includes(locale.language)
-            this.textDirection = locale.textInfo.direction
+            this.textDirection = (locale.getTextInfo?.() ?? locale.textInfo)?.direction
         } catch(e) {
             console.warn(e)
         }
