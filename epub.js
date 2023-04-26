@@ -719,6 +719,7 @@ export class EPUB {
         const title = metadata?.title?.[0]
         this.metadata = {
             title: title?.value,
+            subtitle: metadata?.title?.find(x => x.titleType === 'subtitle')?.value,
             sortAs: title?.fileAs,
             language: metadata?.language,
             identifier: getIdentifier(opf),
