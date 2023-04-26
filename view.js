@@ -163,8 +163,8 @@ export class View {
         this.emit?.({ type: 'show-annotation', value, range })
     }
     getCFI(index, range) {
-        if (!range) return ''
         const baseCFI = this.book.sections[index].cfi ?? CFI.fake.fromIndex(index)
+        if (!range) return baseCFI
         return CFI.joinIndir(baseCFI, CFI.fromRange(range))
     }
     resolveCFI(cfi) {
