@@ -91,7 +91,7 @@ export class View {
         const tocItem = this.#tocProgress.getProgress(index, range)
         const pageItem = this.#pageProgress.getProgress(index, range)
         const cfi = this.getCFI(index, range)
-        this.emit?.({ type: 'relocated', ...progress, tocItem, pageItem, cfi })
+        this.emit?.({ type: 'relocated', ...progress, tocItem, pageItem, cfi, range })
     }
     #onLoad(doc, index) {
         // set language and dir if not already set
