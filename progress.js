@@ -90,6 +90,8 @@ export class SectionProgress {
     // the inverse of `getProgress`
     // get index of and fraction in section based on total fraction
     getSection(fraction) {
+        if (fraction === 0) return [0, 0]
+        if (fraction === 1) return [this.sizes.length - 1, 1]
         const { sizes, sizeTotal } = this
         const target = fraction * sizeTotal
         let index = -1
