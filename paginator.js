@@ -434,7 +434,7 @@ export class Paginator {
 
             const { width, height } = this.#container.getBoundingClientRect()
             const size = vertical ? height : width
-            const gap = gape * size
+            const gap = Math.trunc(gape * size)
 
             this.heads = null
             this.feet = null
@@ -447,7 +447,7 @@ export class Paginator {
         this.#maxSizeContainer.style.maxWidth = `${maxColumns * maxColumnWidth}px`
         const { width, height } = this.#container.getBoundingClientRect()
         const size = vertical ? height : width
-        const gap = gape * size
+        const gap = Math.trunc(gape * size)
         const divisor = Math.ceil(size / maxColumnWidth)
         const columnWidth = (size / divisor) - gap
         this.#element.setAttribute('dir', rtl ? 'rtl' : 'ltr')
