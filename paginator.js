@@ -352,7 +352,7 @@ export class Paginator {
     #styleMap = new WeakMap()
     layout = {
         margin: 48,
-        gap: 40,
+        gap: 0.05,
         maxColumnWidth: 700,
     }
     constructor({ book, onLoad, onRelocated, createOverlayer }) {
@@ -422,7 +422,7 @@ export class Paginator {
         // this is needed because the iframe does not fill the whole element
         this.#background.style.background = background
 
-        const { flow, margin, gap, maxColumnWidth, maxColumns } = this.layout
+        const { flow, margin, gap: gape, maxColumnWidth, maxColumns } = this.layout
 
         if (flow === 'scrolled') {
             // FIXME: vertical-rl only, not -lr
@@ -431,6 +431,10 @@ export class Paginator {
             this.#container.style.overflow ='scroll'
             this.#maxSizeContainer.style.maxWidth = 'none'
             const columnWidth = this.layout.maxColumnWidth
+
+            const { width, height } = this.#container.getBoundingClientRect()
+            const size = vertical ? height : width
+            const gap = gape * size
 
             this.heads = null
             this.feet = null
@@ -443,6 +447,7 @@ export class Paginator {
         this.#maxSizeContainer.style.maxWidth = `${maxColumns * maxColumnWidth}px`
         const { width, height } = this.#container.getBoundingClientRect()
         const size = vertical ? height : width
+        const gap = gape * size
         const divisor = Math.ceil(size / maxColumnWidth)
         const columnWidth = (size / divisor) - gap
         this.#element.setAttribute('dir', rtl ? 'rtl' : 'ltr')
