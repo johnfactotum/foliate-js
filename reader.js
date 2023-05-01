@@ -148,7 +148,8 @@ class Reader {
     }
     layout = {
         margin: 48,
-        gap: 48,
+        gap: 0.05,
+        maxColumns: 2,
         maxColumnWidth: 720,
     }
     closeSideBar() {
