@@ -168,14 +168,16 @@ body > img, section > img {
     display: block;
     margin: auto;
 }
-.title {
+.title h1 {
     text-align: center;
 }
 body > section > .title, body.notesBodyType > .title {
     margin: 3em 0;
 }
+body.notesBodyType > section .title h1 {
+    text-align: start;
+}
 body.notesBodyType > section .title {
-    text-align: left;
     margin: 1em 0;
 }
 p {
@@ -255,8 +257,10 @@ export const makeFB2 = async blob => {
             { annotation: ['div', SECTION] }).innerHTML : null,
         subject: $$('title-info genre').map(getElementText),
     }
-    book.getCover = () => fetch(getImageSrc($('coverpage image')))
-        .then(res => res.blob())
+    if ($('coverpage image')) {
+        const src = getImageSrc($('coverpage image'))
+        book.getCover = () => fetch(src).then(res => res.blob())
+    } else book.getCover = () => null
 
     // get convert each body
     const bodyData = Array.from(doc.querySelectorAll('body'), body => {
