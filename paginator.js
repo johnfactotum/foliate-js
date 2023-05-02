@@ -212,6 +212,7 @@ class View {
         })
     }
     render(layout) {
+        if (!layout) return
         this.#column = layout.flow !== 'scrolled'
         this.#layout = layout
         if (this.#column) this.columnize(layout)
@@ -337,6 +338,8 @@ class View {
 
 // NOTE: everything here assumes the so-called "negative scroll type" for RTL
 export class Paginator {
+    #gap = 0
+    #shouldUpdateGap = true
     #element = document.createElement('div')
     #background = document.createElement('div')
     #maxSizeContainer = document.createElement('div')
@@ -445,15 +448,35 @@ export class Paginator {
         }
 
         this.#maxSizeContainer.style.maxWidth = `${maxColumns * maxColumnWidth}px`
+
+        if (this.#shouldUpdateGap) {
+            this.#shouldUpdateGap = false
+            const { width, height } = this.#container.getBoundingClientRect()
+            const size = vertical ? height : width
+            const gap = Math.trunc(gape * size)
+
+            const paddingH = `${vertical ? gap : gap / 2}px`
+            const paddingV = `${vertical ? margin - gap / 2 : margin}px`
+            this.#gap = gap
+            this.#element.style.padding = `${paddingV} ${paddingH}`
+            this.#header.style.top = `-${paddingV}`
+            this.#footer.style.bottom = `-${paddingV}`
+
+            const newRect = this.#container.getBoundingClientRect()
+            const newSize = vertical ? newRect.height : newRect.width
+            // if the size is different, don't do anything
+            // as the resize observer would fire in that case
+            if (newSize !== size) return
+        }
+
+        this.#shouldUpdateGap = true
+        const gap = this.#gap
+
         const { width, height } = this.#container.getBoundingClientRect()
         const size = vertical ? height : width
-        const gap = Math.trunc(gape * size)
         const divisor = Math.ceil(size / maxColumnWidth)
         const columnWidth = (size / divisor) - gap
         this.#element.setAttribute('dir', rtl ? 'rtl' : 'ltr')
-        const paddingH = `${vertical ? gap : gap / 2}px`
-        const paddingV = `${vertical ? margin - gap / 2 : margin}px`
-        this.#element.style.padding = `${paddingV} ${paddingH}`
         this.#container.style.overflow ='hidden'
 
         const marginalStyle = {
@@ -462,8 +485,8 @@ export class Paginator {
             gap: `${gap}px`,
             padding: `0 ${gap / 2}px`,
         }
-        Object.assign(this.#header.style, marginalStyle, { top: `-${paddingV}` })
-        Object.assign(this.#footer.style, marginalStyle, { bottom: `-${paddingV}` })
+        Object.assign(this.#header.style, marginalStyle)
+        Object.assign(this.#footer.style, marginalStyle)
         const heads = makeMarginals(divisor)
         const feet = makeMarginals(divisor)
         this.heads = heads.map(el => el.children[0])
