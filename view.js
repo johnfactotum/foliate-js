@@ -109,14 +109,14 @@ export class View {
         for (const a of doc.querySelectorAll('a[href]'))
             a.addEventListener('click', e => {
                 e.preventDefault()
-                const href = a.getAttribute('href')
-                const uri = section?.resolveHref?.(href) ?? href
-                if (book?.isExternal?.(uri))
-                    Promise.resolve(emit?.({ type: 'external-link', a, uri }))
-                        .then(x => x ? null : window.open(uri, '_blank'))
+                const href_ = a.getAttribute('href')
+                const href = section?.resolveHref?.(href_) ?? href_
+                if (book?.isExternal?.(href))
+                    Promise.resolve(emit?.({ type: 'external-link', a, href }))
+                        .then(x => x ? null : window.open(href, '_blank'))
                         .catch(e => console.error(e))
-                else Promise.resolve(emit?.({ type: 'link', a, uri }))
-                    .then(x => x ? null : this.goTo(uri))
+                else Promise.resolve(emit?.({ type: 'link', a, href }))
+                    .then(x => x ? null : this.goTo(href))
                     .catch(e => console.error(e))
             })
     }
