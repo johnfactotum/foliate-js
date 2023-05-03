@@ -132,17 +132,6 @@ const makeMarginals = length => Array.from({ length }, () => {
     const div = document.createElement('div')
     const child = document.createElement('div')
     div.append(child)
-    Object.assign(div.style, {
-        display: 'flex',
-        alignItems: 'center',
-        minWidth: '0',
-    })
-    Object.assign(child.style, {
-        flex: '1',
-        overflow: 'hidden',
-        whiteSpace: 'nowrap',
-        textOverflow: 'ellipsis',
-    })
     return div
 })
 
@@ -158,7 +147,7 @@ class View {
     #layout = {}
     constructor({ container }) {
         this.container = container
-        this.#iframe.classList.add('filter')
+        this.#iframe.classList.add('foliate-filter')
         this.#element.append(this.#iframe)
         Object.assign(this.#element.style, {
             boxSizing: 'content-box',
@@ -378,7 +367,7 @@ export class Paginator {
             position: 'absolute',
             top: '0', left: '0',
         })
-        this.#background.classList.add('filter')
+        this.#background.classList.add('foliate-filter')
 
         this.#element.append(this.#maxSizeContainer)
         Object.assign(this.#maxSizeContainer.style, {
@@ -400,6 +389,8 @@ export class Paginator {
         }
         Object.assign(this.#header.style, marginalStyle)
         Object.assign(this.#footer.style, marginalStyle)
+        this.#header.classList.add('foliate-header')
+        this.#footer.classList.add('foliate-footer')
         this.#maxSizeContainer.append(this.#header)
         this.#maxSizeContainer.append(this.#footer)
 

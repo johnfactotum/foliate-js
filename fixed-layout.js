@@ -67,7 +67,7 @@ class Container {
         // https://bugs.webkit.org/show_bug.cgi?id=218086
         iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts')
         iframe.setAttribute('scrolling', 'no')
-        iframe.classList.add('filter')
+        iframe.classList.add('foliate-filter')
         this.#element.append(element)
         if (!src) return { blank: true, element, iframe }
         return new Promise(resolve => {
