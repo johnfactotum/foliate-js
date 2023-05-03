@@ -139,6 +139,36 @@ The paginator uses the same pagination strategy as [Epub.js](https://github.com/
 
 To simplify things, it has a totally separate renderer for fixed layout books. As such there's no support for mixed layout books.
 
+Both renderers has the style class `.foliate-filter`, which you can apply CSS filters to, to e.g. invert colors or adjust brightness. By using this class, you can apply filters only to the book itself, leaving overlaid elements such as highlights unaffected.
+
+### The Paginator
+
+The layout can be configured from the `.layout` object, which has the following properties:
+- `.flow`: either `'paginated'` or `'scrolled'`.
+- `.margin`: number, in pixels. The height of the header and footer.
+- `.gap`: number between 0 and 1. The size of the space between columns, relative to page size.
+- `.maxColumnWidth`: number, in pixels. The maximum width of the text in each column.
+- `.maxColumns`: integer. The maximum number of columns. Has no effect in scrolled mode.
+
+It has built-in header and footer regions accessible via the `.heads` and `.feet` properties of the paginator instance. These can be used to display running heads and reading progress. They are only available in paginated mode, and there will be one element for each column. They are contained in parent divs that have the style classes `.foliate-header` and `.foliate-footer` respectively. These don't have any styles by default, but you will probably want to set something like the following:
+
+```css
+.foliate-header > *, .foliate-footer > * {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    text-align: center;
+    font-size: .75em;
+    opacity: .6;
+}
+.foliate-header > * > *, .foliate-footer > * > * {
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+```
+
 ### EPUB CFI
 
 Parsed CFIs are represented as a plain array or object. The basic type is called a "part", which is an object with the following structure: `{ index, id, offset, temporal, spatial, text, side }`, corresponding to a step + offset in the CFI.
