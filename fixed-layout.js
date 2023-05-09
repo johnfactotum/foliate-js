@@ -30,6 +30,7 @@ const getViewport = (doc, viewport) => {
 }
 
 class Container {
+    #observer = new ResizeObserver(() => this.render())
     #element = document.createElement('div')
     defaultViewport
     spread
@@ -46,7 +47,7 @@ class Container {
             justifyContent: 'center',
             alignItems: 'center',
         })
-        new ResizeObserver(() => this.render()).observe(this.#element)
+        this.#observer.observe(this.#element)
     }
     get element() {
         return this.#element
@@ -170,6 +171,10 @@ class Container {
             return true
         }
     }
+    destroy() {
+        this.#observer.unobserve(this.#element)
+        this.#element.remove()
+    }
 }
 
 export class FixedLayout {
@@ -288,5 +293,8 @@ export class FixedLayout {
     deselect() {
         for (const frame of this.#container.element.querySelectorAll('iframe'))
             frame.contentWindow.getSelection().removeAllRanges()
+    }
+    destroy() {
+        this.#container.destroy()
     }
 }

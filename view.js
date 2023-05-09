@@ -270,4 +270,8 @@ export class View {
             subitems: result.subitems,
         } : result
     }
+    destroy() {
+        this.book.destroy?.()
+        this.renderer?.destroy?.()
+    }
 }

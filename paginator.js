@@ -329,6 +329,7 @@ class View {
 export class Paginator {
     #gap = 0
     #shouldUpdateGap = true
+    #observer = new ResizeObserver(() => this.render())
     #element = document.createElement('div')
     #background = document.createElement('div')
     #maxSizeContainer = document.createElement('div')
@@ -394,7 +395,7 @@ export class Paginator {
         this.#maxSizeContainer.append(this.#header)
         this.#maxSizeContainer.append(this.#footer)
 
-        new ResizeObserver(() => this.render()).observe(this.#element)
+        this.#observer.observe(this.#element)
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) this.#afterScroll('scroll')
         }, 250))
@@ -773,5 +774,9 @@ export class Paginator {
     async #setAnchor(anchor, select) {
         this.#anchor = anchor
         await this.#scrollToAnchor(select)
+    }
+    destroy() {
+        this.#observer.unobserve(this.#element)
+        this.#element.remove()
     }
 }

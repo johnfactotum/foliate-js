@@ -272,6 +272,7 @@ export const makeFB2 = async blob => {
         }), converted]
     })
 
+    const urls = []
     const sectionData = bodyData[0][0]
         // make a separate section for each section in the first body
         .map(({ el, ids }) => {
@@ -294,6 +295,7 @@ export const makeFB2 = async blob => {
             const str = template(el.outerHTML)
             const blob = new Blob([str], { type: MIME.XHTML })
             const url = URL.createObjectURL(blob)
+            urls.push(url)
             const title = normalizeWhitespace(
                 el.querySelector('.title, .subtitle, p')?.textContent
                 ?? (el.classList.contains('title') ? el.textContent : ''))
@@ -338,5 +340,8 @@ export const makeFB2 = async blob => {
     book.splitTOCHref = href => href?.split('#')?.map(x => Number(x)) ?? []
     book.getTOCFragment = (doc, id) => doc.querySelector(`[${dataID}="${id}"]`)
 
+    book.destroy = () => {
+        for (const url of urls) URL.revokeObjectURL(url)
+    }
     return book
 }

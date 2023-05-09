@@ -611,6 +611,9 @@ class Loader {
     unloadItem(item) {
         this.unref(item?.href)
     }
+    destroy() {
+        for (const url of this.#cache.values()) URL.revokeObjectURL(url)
+    }
 }
 
 const getHTMLFragment = (doc, id) => doc.getElementById(id)
@@ -628,6 +631,7 @@ const getPageSpread = properties => {
 
 export class EPUB {
     parser = new DOMParser()
+    #loader
     #encryption
     constructor({ loadText, loadBlob, getSize, sha1 }) {
         this.loadText = loadText
@@ -662,7 +666,7 @@ export class EPUB {
             opf,
             resolveHref: url => resolveURL(url, opfPath),
         })
-        const loader = new Loader({
+        this.#loader = new Loader({
             loadText: this.loadText,
             loadBlob: uri => Promise.resolve(this.loadBlob(uri))
                 .then(this.#encryption.getDecoder(uri)),
@@ -677,8 +681,8 @@ export class EPUB {
             }
             return {
                 id: this.resources.getItemByID(idref)?.href,
-                load: () => loader.loadItem(item),
-                unload: () => loader.unloadItem(item),
+                load: () => this.#loader.loadItem(item),
+                unload: () => this.#loader.unloadItem(item),
                 createDocument: () => this.loadDocument(item),
                 size: this.getSize(item.href),
                 cfi: this.resources.cfis[index],
@@ -804,5 +808,8 @@ export class EPUB {
             const json = atob(txt.slice(magic.length))
             return JSON.parse(json)
         }
+    }
+    destroy() {
+        this.#loader?.destroy()
     }
 }

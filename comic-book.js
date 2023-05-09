@@ -36,5 +36,9 @@ export const makeComicBook = ({ entries, loadBlob, getSize }, file) => {
     book.resolveHref = href => ({ index: book.sections.findIndex(s => s.id === href) })
     book.splitTOCHref = href => [href, null]
     book.getTOCFragment = doc => doc.documentElement
+    book.destroy = () => {
+        for (const arr of urls.values())
+            for (const url of arr) URL.revokeObjectURL(url)
+    }
     return book
 }

@@ -842,6 +842,10 @@ class MOBI6 {
     isExternal(uri) {
         return /^(?!blob|filepos)\w+:/i.test(uri)
     }
+    destroy() {
+        for (const url of this.#resourceCache.values()) URL.revokeObjectURL(url)
+        for (const url of this.#cache.values()) URL.revokeObjectURL(url)
+    }
 }
 
 // handlers for `kindle:` uris
@@ -1153,5 +1157,8 @@ class KF8 {
     }
     isExternal(uri) {
         return /^(?!blob|kindle)\w+:/i.test(uri)
+    }
+    destroy() {
+        for (const url of this.#cache.values()) URL.revokeObjectURL(url)
     }
 }
