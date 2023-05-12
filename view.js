@@ -269,6 +269,7 @@ export class View {
             label: this.#tocProgress.getProgress(result.index)?.label ?? '',
             subitems: result.subitems,
         } : result
+        yield 'done'
     }
     destroy() {
         this.book.destroy?.()
