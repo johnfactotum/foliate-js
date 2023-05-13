@@ -145,8 +145,9 @@ class View {
     #column = true
     #size
     #layout = {}
-    constructor({ container }) {
+    constructor({ container, onExpand }) {
         this.container = container
+        this.onExpand = onExpand
         this.#iframe.classList.add('foliate-filter')
         this.#element.append(this.#iframe)
         Object.assign(this.#element.style, {
@@ -315,6 +316,7 @@ class View {
                 this.#overlayer.redraw()
             }
         }
+        this.onExpand()
     }
     set overlayer(overlayer) {
         this.#overlayer = overlayer
@@ -405,7 +407,10 @@ export class Paginator {
     }
     #createView() {
         if (this.#view) this.#container.removeChild(this.#view.element)
-        this.#view = new View({ container: this.#element })
+        this.#view = new View({
+            container: this.#element,
+            onExpand: this.#scrollToAnchor.bind(this),
+        })
         this.#container.append(this.#view.element)
         return this.#view
     }
@@ -596,6 +601,7 @@ export class Paginator {
             // previous column, there is an extra zero width rect in that column
             const rect = Array.from(rects)
                 .find(r => r.width > 0 && r.height > 0) || rects[0]
+            if (!rect) return
             await this.#scrollToRect(rect, 'anchor')
             if (select) this.#selectAnchor()
             return
@@ -770,10 +776,6 @@ export class Paginator {
     deselect() {
         const sel = this.#view.document.defaultView.getSelection()
         sel.removeAllRanges()
-    }
-    async #setAnchor(anchor, select) {
-        this.#anchor = anchor
-        await this.#scrollToAnchor(select)
     }
     destroy() {
         this.#observer.unobserve(this.#element)
