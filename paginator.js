@@ -357,6 +357,7 @@ export class Paginator {
         this.createOverlayer = createOverlayer
         Object.assign(this.#element.style, {
             boxSizing: 'border-box',
+            display: 'flex',
             width: '100%',
             height: '100%',
             position: 'relative',
@@ -377,7 +378,6 @@ export class Paginator {
             width: '100%',
             height: '100%',
             margin: 'auto',
-            position: 'relative',
         })
         this.#maxSizeContainer.append(this.#container)
         Object.assign(this.#container.style, {
@@ -389,6 +389,7 @@ export class Paginator {
         const marginalStyle = {
             position: 'absolute', left: '0', right: '0',
             display: 'grid',
+            margin: 'auto',
         }
         Object.assign(this.#header.style, marginalStyle)
         Object.assign(this.#footer.style, marginalStyle)
@@ -430,6 +431,7 @@ export class Paginator {
             this.#element.style.padding = '0'
             this.#container.style.overflow ='scroll'
             this.#maxSizeContainer.style.maxWidth = 'none'
+            this.#maxSizeContainer.style.maxHeight = 'none'
             const columnWidth = this.layout.maxColumnWidth
 
             const { width, height } = this.#container.getBoundingClientRect()
@@ -444,7 +446,9 @@ export class Paginator {
             return { flow, margin, gap, columnWidth }
         }
 
-        this.#maxSizeContainer.style.maxWidth = `${maxColumns * maxColumnWidth}px`
+        const maxSize = `${maxColumns * maxColumnWidth}px`
+        this.#maxSizeContainer.style.maxWidth = vertical ? 'none' : maxSize
+        this.#maxSizeContainer.style.maxHeight = vertical ? maxSize : 'none'
 
         if (this.#shouldUpdateGap) {
             this.#shouldUpdateGap = false
@@ -452,12 +456,16 @@ export class Paginator {
             const size = vertical ? height : width
             const gap = Math.trunc(gape * size)
 
-            const paddingH = `${vertical ? gap : gap / 2}px`
-            const paddingV = `${vertical ? margin - gap / 2 : margin}px`
+            const paddingH = `${vertical
+                ? Math.min(margin, Math.trunc(gape * width))
+                : gap / 2}px`
+            const paddingV = `${vertical
+                ? Math.max(margin - gap /  2, gap / 2)
+                : margin}px`
             this.#gap = gap
             this.#element.style.padding = `${paddingV} ${paddingH}`
-            this.#header.style.top = `-${paddingV}`
-            this.#footer.style.bottom = `-${paddingV}`
+            this.#header.style.padding = `0 ${paddingH}`
+            this.#footer.style.padding = `0 ${paddingH}`
 
             const newRect = this.#container.getBoundingClientRect()
             const newSize = vertical ? newRect.height : newRect.width
@@ -476,16 +484,19 @@ export class Paginator {
         this.#element.setAttribute('dir', rtl ? 'rtl' : 'ltr')
         this.#container.style.overflow ='hidden'
 
+        const marginalDivisor = vertical
+            ? Math.min(2, Math.ceil(width / maxColumnWidth))
+            : divisor
         const marginalStyle = {
+            maxWidth: vertical ? 'none' : maxSize,
             height: `${margin}px`,
-            gridTemplateColumns: `repeat(${divisor}, 1fr)`,
+            gridTemplateColumns: `repeat(${marginalDivisor}, 1fr)`,
             gap: `${gap}px`,
-            padding: `0 ${gap / 2}px`,
         }
-        Object.assign(this.#header.style, marginalStyle)
-        Object.assign(this.#footer.style, marginalStyle)
-        const heads = makeMarginals(divisor)
-        const feet = makeMarginals(divisor)
+        Object.assign(this.#header.style, marginalStyle, { top: 0 })
+        Object.assign(this.#footer.style, marginalStyle, { bottom: 0 })
+        const heads = makeMarginals(marginalDivisor)
+        const feet = makeMarginals(marginalDivisor)
         this.heads = heads.map(el => el.children[0])
         this.feet = feet.map(el => el.children[0])
         this.#header.replaceChildren(...heads)
