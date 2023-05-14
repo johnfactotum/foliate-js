@@ -565,7 +565,7 @@ export class Paginator {
     }
     async #scrollToRect(rect, reason) {
         if (this.scrolled) {
-            const offset = this.#getRectMapper()(rect).left
+            const offset = this.#getRectMapper()(rect).left - this.layout.margin
             return this.#scrollTo(offset, reason)
         }
         const offset = this.#getRectMapper()(rect).left
