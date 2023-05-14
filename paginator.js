@@ -334,7 +334,8 @@ export class Paginator {
     #observer = new ResizeObserver(() => this.render())
     #element = document.createElement('div')
     #background = document.createElement('div')
-    #maxSizeContainer = document.createElement('div')
+    #maxWidthContainer = document.createElement('div')
+    #maxHeightContainer = document.createElement('div')
     #container = document.createElement('div')
     #header = document.createElement('div')
     #footer = document.createElement('div')
@@ -374,13 +375,21 @@ export class Paginator {
         })
         this.#background.classList.add('foliate-filter')
 
-        this.#element.append(this.#maxSizeContainer)
-        Object.assign(this.#maxSizeContainer.style, {
+        this.#element.append(this.#maxWidthContainer)
+        Object.assign(this.#maxWidthContainer.style, {
+            width: '100%',
+            height: '100%',
+            margin: 'auto',
+            position: 'relative',
+            display: 'flex',
+        })
+        this.#maxWidthContainer.append(this.#maxHeightContainer)
+        Object.assign(this.#maxHeightContainer.style, {
             width: '100%',
             height: '100%',
             margin: 'auto',
         })
-        this.#maxSizeContainer.append(this.#container)
+        this.#maxHeightContainer.append(this.#container)
         Object.assign(this.#container.style, {
             width: '100%',
             height: '100%',
@@ -396,8 +405,8 @@ export class Paginator {
         Object.assign(this.#footer.style, marginalStyle)
         this.#header.classList.add('foliate-header')
         this.#footer.classList.add('foliate-footer')
-        this.#maxSizeContainer.append(this.#header)
-        this.#maxSizeContainer.append(this.#footer)
+        this.#maxWidthContainer.append(this.#header)
+        this.#maxWidthContainer.append(this.#footer)
 
         this.#observer.observe(this.#element)
         this.#container.addEventListener('scroll', debounce(() => {
@@ -431,8 +440,8 @@ export class Paginator {
             this.#element.setAttribute('dir', vertical ? 'rtl' : 'ltr')
             this.#element.style.padding = '0'
             this.#container.style.overflow ='scroll'
-            this.#maxSizeContainer.style.maxWidth = 'none'
-            this.#maxSizeContainer.style.maxHeight = 'none'
+            this.#maxWidthContainer.style.maxWidth = 'none'
+            this.#maxHeightContainer.style.maxHeight = 'none'
             const columnWidth = this.layout.maxColumnWidth
 
             const { width, height } = this.#container.getBoundingClientRect()
@@ -448,8 +457,8 @@ export class Paginator {
         }
 
         const maxSize = `${maxColumns * maxColumnWidth}px`
-        this.#maxSizeContainer.style.maxWidth = vertical ? 'none' : maxSize
-        this.#maxSizeContainer.style.maxHeight = vertical ? maxSize : 'none'
+        this.#maxWidthContainer.style.maxWidth = vertical ? 'none' : maxSize
+        this.#maxHeightContainer.style.maxHeight = vertical ? maxSize : 'none'
 
         if (this.#shouldUpdateGap) {
             this.#shouldUpdateGap = false
@@ -465,8 +474,8 @@ export class Paginator {
                 : margin}px`
             this.#gap = gap
             this.#element.style.padding = `${paddingV} ${paddingH}`
-            this.#header.style.padding = `0 ${paddingH}`
-            this.#footer.style.padding = `0 ${paddingH}`
+            this.#header.style.top = `-${paddingV}`
+            this.#footer.style.bottom = `-${paddingV}`
 
             const newRect = this.#container.getBoundingClientRect()
             const newSize = vertical ? newRect.height : newRect.width
@@ -493,10 +502,11 @@ export class Paginator {
             height: `${margin}px`,
             gridTemplateColumns: `repeat(${marginalDivisor}, 1fr)`,
             gap: `${gap}px`,
+            padding: vertical ? '0' : `0 ${gap / 2}px`,
             direction: this.bookDir === 'rtl' ? 'rtl' : 'ltr',
         }
-        Object.assign(this.#header.style, marginalStyle, { top: 0 })
-        Object.assign(this.#footer.style, marginalStyle, { bottom: 0 })
+        Object.assign(this.#header.style, marginalStyle)
+        Object.assign(this.#footer.style, marginalStyle)
         const heads = makeMarginals(marginalDivisor)
         const feet = makeMarginals(marginalDivisor)
         this.heads = heads.map(el => el.children[0])
