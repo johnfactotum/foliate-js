@@ -351,6 +351,7 @@ export class Paginator {
         maxColumnWidth: 700,
     }
     constructor({ book, onLoad, onRelocated, createOverlayer }) {
+        this.bookDir = book.dir
         this.sections = book.sections
         this.onLoad = onLoad
         this.onRelocated = onRelocated
@@ -492,6 +493,7 @@ export class Paginator {
             height: `${margin}px`,
             gridTemplateColumns: `repeat(${marginalDivisor}, 1fr)`,
             gap: `${gap}px`,
+            direction: this.bookDir === 'rtl' ? 'rtl' : 'ltr',
         }
         Object.assign(this.#header.style, marginalStyle, { top: 0 })
         Object.assign(this.#footer.style, marginalStyle, { bottom: 0 })
