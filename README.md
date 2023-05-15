@@ -51,7 +51,7 @@ The repo also includes a still higher level reader, though strictly speaking, `r
 ### Basic Usage
 
 ```js
-import from './view.js'
+import './view.js'
 
 const view = document.createElement('foliate-view')
 document.body.append(view)
@@ -179,7 +179,7 @@ foliate-view::part(head) {
     padding-bottom: 4px;
     border-bottom: 1px solid graytext;
 }
-``
+```
 
 ### EPUB CFI
 
