@@ -128,10 +128,11 @@ const getBackground = doc => {
         : bodyStyle.background
 }
 
-const makeMarginals = length => Array.from({ length }, () => {
+const makeMarginals = (length, part) => Array.from({ length }, () => {
     const div = document.createElement('div')
     const child = document.createElement('div')
     div.append(child)
+    child.setAttribute('part', part)
     return div
 })
 
@@ -148,7 +149,7 @@ class View {
     constructor({ container, onExpand }) {
         this.container = container
         this.onExpand = onExpand
-        this.#iframe.classList.add('foliate-filter')
+        this.#iframe.setAttribute('part', 'filter')
         this.#element.append(this.#iframe)
         Object.assign(this.#element.style, {
             boxSizing: 'content-box',
@@ -328,17 +329,17 @@ class View {
 }
 
 // NOTE: everything here assumes the so-called "negative scroll type" for RTL
-export class Paginator {
+export class Paginator extends HTMLElement {
+    #root = this.attachShadow({ mode: 'closed' })
     #gap = 0
     #shouldUpdateGap = true
     #observer = new ResizeObserver(() => this.render())
-    #element = document.createElement('div')
-    #background = document.createElement('div')
-    #maxWidthContainer = document.createElement('div')
-    #maxHeightContainer = document.createElement('div')
-    #container = document.createElement('div')
-    #header = document.createElement('div')
-    #footer = document.createElement('div')
+    #background
+    #maxWidthContainer
+    #maxHeightContainer
+    #container
+    #header
+    #footer
     #view
     #vertical = false
     #rtl = false
@@ -351,75 +352,82 @@ export class Paginator {
         gap: 0.05,
         maxColumnWidth: 700,
     }
-    constructor({ book, onLoad, onRelocate, createOverlayer }) {
-        this.bookDir = book.dir
-        this.sections = book.sections
-        this.onLoad = onLoad
-        this.onRelocate = onRelocate
-        this.createOverlayer = createOverlayer
-        Object.assign(this.#element.style, {
-            boxSizing: 'border-box',
-            display: 'flex',
-            width: '100%',
-            height: '100%',
-            position: 'relative',
-            overflow: 'hidden',
-        })
-
-        this.#element.append(this.#background)
-        Object.assign(this.#background.style, {
-            width: '100%',
-            height: '100%',
-            position: 'absolute',
-            top: '0', left: '0',
-        })
-        this.#background.classList.add('foliate-filter')
-
-        this.#element.append(this.#maxWidthContainer)
-        Object.assign(this.#maxWidthContainer.style, {
-            width: '100%',
-            height: '100%',
-            margin: 'auto',
-            position: 'relative',
-            display: 'flex',
-        })
-        this.#maxWidthContainer.append(this.#maxHeightContainer)
-        Object.assign(this.#maxHeightContainer.style, {
-            width: '100%',
-            height: '100%',
-            margin: 'auto',
-        })
-        this.#maxHeightContainer.append(this.#container)
-        Object.assign(this.#container.style, {
-            width: '100%',
-            height: '100%',
-            margin: 'auto',
-        })
-
-        const marginalStyle = {
-            position: 'absolute', left: '0', right: '0',
-            display: 'grid',
-            margin: 'auto',
+    constructor() {
+        super()
+        this.#root.innerHTML = `<style>
+        :host {
+            box-sizing: border-box;
+            position: relative;
+            overflow: hidden;
+            display: flex;
         }
-        Object.assign(this.#header.style, marginalStyle)
-        Object.assign(this.#footer.style, marginalStyle)
-        this.#header.classList.add('foliate-header')
-        this.#footer.classList.add('foliate-footer')
-        this.#maxWidthContainer.append(this.#header)
-        this.#maxWidthContainer.append(this.#footer)
+        #background {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        #max-width {
+            position: relative;
+            display: flex;
+        }
+        :host, #background, #max-width, #max-height, #container {
+            width: 100%;
+            height: 100%;
+            margin: auto;
+        }
+        #header, #footer {
+            position: absolute;
+            left: 0;
+            right: 0;
+            display: grid;
+            margin: auto;
+            z-index: 1;
+        }
+        :is(#header, #footer) > * {
+            display: flex;
+            align-items: center;
+            minWidth: 0;
+        }
+        :is(#header, #footer) > * > * {
+            width: 100%;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            text-align: center;
+            font-size: .75em;
+            opacity: .6;
+        }
+        </style>
+        <div id="background" part="filter"></div>
+        <div id="max-width">
+            <div id="header"></div>
+            <div id="max-height">
+                <div id="container"></div>
+            </div>
+            <div id="footer"></div>
+        </div>
+        `
 
-        this.#observer.observe(this.#element)
+        this.#background = this.#root.getElementById('background')
+        this.#maxWidthContainer = this.#root.getElementById('max-width')
+        this.#maxHeightContainer = this.#root.getElementById('max-height')
+        this.#container = this.#root.getElementById('container')
+        this.#header = this.#root.getElementById('header')
+        this.#footer = this.#root.getElementById('footer')
+
+        this.#observer.observe(this)
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) this.#afterScroll('scroll')
         }, 250))
     }
-    get element() {
-        return this.#element
+    open(book) {
+        this.bookDir = book.dir
+        this.sections = book.sections
     }
     #createView() {
         if (this.#view) this.#container.removeChild(this.#view.element)
         this.#view = new View({
-            container: this.#element,
+            container: this,
             onExpand: this.#scrollToAnchor.bind(this),
         })
         this.#container.append(this.#view.element)
@@ -437,8 +445,8 @@ export class Paginator {
 
         if (flow === 'scrolled') {
             // FIXME: vertical-rl only, not -lr
-            this.#element.setAttribute('dir', vertical ? 'rtl' : 'ltr')
-            this.#element.style.padding = '0'
+            this.setAttribute('dir', vertical ? 'rtl' : 'ltr')
+            this.style.padding = '0'
             this.#container.style.overflow ='scroll'
             this.#maxWidthContainer.style.maxWidth = 'none'
             this.#maxHeightContainer.style.maxHeight = 'none'
@@ -473,7 +481,7 @@ export class Paginator {
                 ? Math.max(margin - gap /  2, gap / 2)
                 : margin}px`
             this.#gap = gap
-            this.#element.style.padding = `${paddingV} ${paddingH}`
+            this.style.padding = `${paddingV} ${paddingH}`
             this.#header.style.top = `-${paddingV}`
             this.#footer.style.bottom = `-${paddingV}`
 
@@ -491,7 +499,7 @@ export class Paginator {
         const size = vertical ? height : width
         const divisor = Math.ceil(size / maxColumnWidth)
         const columnWidth = (size / divisor) - gap
-        this.#element.setAttribute('dir', rtl ? 'rtl' : 'ltr')
+        this.setAttribute('dir', rtl ? 'rtl' : 'ltr')
         this.#container.style.overflow ='hidden'
 
         const marginalDivisor = vertical
@@ -507,8 +515,8 @@ export class Paginator {
         }
         Object.assign(this.#header.style, marginalStyle)
         Object.assign(this.#footer.style, marginalStyle)
-        const heads = makeMarginals(marginalDivisor)
-        const feet = makeMarginals(marginalDivisor)
+        const heads = makeMarginals(marginalDivisor, 'head')
+        const feet = makeMarginals(marginalDivisor, 'foot')
         this.heads = heads.map(el => el.children[0])
         this.feet = feet.map(el => el.children[0])
         this.#header.replaceChildren(...heads)
@@ -657,13 +665,15 @@ export class Paginator {
         if (reason !== 'anchor') this.#anchor = range
 
         const index = this.#index
-        if (this.scrolled)
-            this.onRelocate?.(range, index, this.start / this.viewSize)
+        const detail = { range, index }
+        if (this.scrolled) detail.fraction = this.start / this.viewSize
         else if (this.pages > 0) {
             const { page, pages } = this
             this.#header.style.visibility = page > 0 ? 'visible' : 'hidden'
-            this.onRelocate?.(range, index, page / pages, 1 / pages)
+            detail.fraction = page / pages
+            detail.size = 1 / pages
         }
+        this.dispatchEvent(new CustomEvent('relocate', { detail }))
     }
     async #display(promise) {
         const { index, src, anchor, onLoad, select } = await promise
@@ -678,12 +688,16 @@ export class Paginator {
                     doc.head.append($style)
                     this.#styleMap.set(doc, [$styleBefore, $style])
                 }
-                onLoad?.(doc, index)
+                onLoad?.({ doc, index })
             }
             const beforeRender = this.#beforeRender.bind(this)
             await view.load(src, afterLoad, beforeRender)
-            const overlayer = this.createOverlayer?.(view.document, index)
-            if (overlayer) view.overlayer = overlayer
+            this.dispatchEvent(new CustomEvent('create-overlayer', {
+                detail: {
+                    doc: view.document, index,
+                    attach: overlayer => view.overlayer = overlayer,
+                },
+            }))
             this.#view = view
         }
         this.#anchor = (typeof anchor === 'function'
@@ -732,9 +746,9 @@ export class Paginator {
             if (index === this.#index) await this.#display({ index, anchor, select })
             else {
                 const oldIndex = this.#index
-                const onLoad = (...args) => {
+                const onLoad = detail => {
                     this.sections[oldIndex]?.unload?.()
-                    this.onLoad?.(...args)
+                    this.dispatchEvent(new CustomEvent('load', { detail }))
                 }
                 await this.#display(Promise.resolve(this.sections[index].load())
                     .then(src => ({ index, src, anchor, onLoad, select }))
@@ -801,7 +815,8 @@ export class Paginator {
         sel.removeAllRanges()
     }
     destroy() {
-        this.#observer.unobserve(this.#element)
-        this.#element.remove()
+        this.#observer.unobserve(this)
     }
 }
+
+customElements.define('foliate-paginator', Paginator)

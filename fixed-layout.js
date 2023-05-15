@@ -29,9 +29,11 @@ const getViewport = (doc, viewport) => {
     return { width: 1000, height: 2000 }
 }
 
-class Container {
-    #observer = new ResizeObserver(() => this.render())
-    #element = document.createElement('div')
+export class FixedLayout extends HTMLElement {
+    #root = this.attachShadow({ mode: 'closed' })
+    #observer = new ResizeObserver(() => this.#render())
+    #spreads
+    #index = -1
     defaultViewport
     spread
     #portrait = false
@@ -40,20 +42,19 @@ class Container {
     #center
     #side
     constructor() {
-        Object.assign(this.#element.style, {
-            width: '100%',
-            height: '100%',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-        })
-        this.#observer.observe(this.#element)
-    }
-    get element() {
-        return this.#element
-    }
-    get side() {
-        return this.#side
+        super()
+
+        const sheet = new CSSStyleSheet()
+        this.#root.adoptedStyleSheets = [sheet]
+        sheet.replaceSync(`:host {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }`)
+
+        this.#observer.observe(this)
     }
     async #createFrame({ index, src }) {
         const element = document.createElement('div')
@@ -68,14 +69,14 @@ class Container {
         // https://bugs.webkit.org/show_bug.cgi?id=218086
         iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts')
         iframe.setAttribute('scrolling', 'no')
-        iframe.classList.add('foliate-filter')
-        this.#element.append(element)
+        iframe.setAttribute('part', 'filter')
+        this.#root.append(element)
         if (!src) return { blank: true, element, iframe }
         return new Promise(resolve => {
             const onload = () => {
                 iframe.removeEventListener('load', onload)
                 const doc = iframe.contentDocument
-                this.onLoad?.(doc, index)
+                this.dispatchEvent(new CustomEvent('load', { detail: { doc, index } }))
                 const { width, height } = getViewport(doc, this.defaultViewport)
                 resolve({
                     element, iframe,
@@ -87,12 +88,12 @@ class Container {
             iframe.src = src
         })
     }
-    render(side = this.#side) {
+    #render(side = this.#side) {
         if (!side) return
         const left = this.#left ?? {}
         const right = this.#center ?? this.#right
         const target = side === 'left' ? left : right
-        const { width, height } = this.#element.getBoundingClientRect()
+        const { width, height } = this.getBoundingClientRect()
         const portrait = this.spread !== 'both' && this.spread !== 'portrait'
             && height > width
         this.#portrait = portrait
@@ -135,23 +136,23 @@ class Container {
             transform(right)
         }
     }
-    async showSpread({ left, right, center, side }) {
-        this.#element.replaceChildren()
+    async #showSpread({ left, right, center, side }) {
+        this.#root.replaceChildren()
         this.#left = null
         this.#right = null
         this.#center = null
         if (center) {
             this.#center = await this.#createFrame(center)
             this.#side = 'center'
-            this.render()
+            this.#render()
         } else {
             this.#left = await this.#createFrame(left)
             this.#right = await this.#createFrame(right)
             this.#side = side
-            this.render()
+            this.#render()
         }
     }
-    goLeft() {
+    #goLeft() {
         if (this.#center) return
         if (this.#left?.blank) return true
         if (this.#portrait && this.#left?.element?.style?.display === 'none') {
@@ -161,7 +162,7 @@ class Container {
             return true
         }
     }
-    goRight() {
+    #goRight() {
         if (this.#center) return
         if (this.#right?.blank) return true
         if (this.#portrait && this.#right?.element?.style?.display === 'none') {
@@ -171,24 +172,11 @@ class Container {
             return true
         }
     }
-    destroy() {
-        this.#observer.unobserve(this.#element)
-        this.#element.remove()
-    }
-}
-
-export class FixedLayout {
-    #spreads
-    #index = -1
-    #container = new Container()
-    constructor({ book, onLoad, onRelocate }) {
+    open(book) {
         this.book = book
-        this.#container.onLoad = onLoad
-        this.onRelocate = onRelocate
-
         const { rendition } = book
-        this.#container.spread = rendition?.spread
-        this.#container.defaultViewport = rendition?.viewport
+        this.spread = rendition?.spread
+        this.defaultViewport = rendition?.viewport
 
         const rtl = book.dir === 'rtl'
         const ltr = !rtl
@@ -227,14 +215,15 @@ export class FixedLayout {
             return arr
         }, [{}])
     }
-    get element() {
-        return this.#container.element
-    }
     get index() {
         const spread = this.#spreads[this.#index]
-        const section = spread?.center ?? (this.#container.side === 'left'
+        const section = spread?.center ?? (this.side === 'left'
             ? spread.left ?? spread.right : spread.right ?? spread.left)
         return this.book.sections.indexOf(section)
+    }
+    #reportLocation() {
+        this.dispatchEvent(new CustomEvent('relocate', { detail:
+            { range: null, index: this.index, fraction: 0, size: 1 } }))
     }
     getSpreadOf(section) {
         const spreads = this.#spreads
@@ -248,7 +237,7 @@ export class FixedLayout {
     async goToSpread(index, side) {
         if (index < 0 || index > this.#spreads.length - 1) return
         if (index === this.#index) {
-            this.#container.render(side)
+            this.#render(side)
             return
         }
         this.#index = index
@@ -256,7 +245,7 @@ export class FixedLayout {
         if (spread.center) {
             const index = this.book.sections.indexOf(spread.center)
             const src = await spread.center?.load?.()
-            await this.#container.showSpread({ center: { index, src } })
+            await this.#showSpread({ center: { index, src } })
         } else {
             const indexL = this.book.sections.indexOf(spread.left)
             const indexR = this.book.sections.indexOf(spread.right)
@@ -264,9 +253,9 @@ export class FixedLayout {
             const srcR = await spread.right?.load?.()
             const left = { index: indexL, src: srcL }
             const right = { index: indexR, src: srcR }
-            await this.#container.showSpread({ left, right, side })
+            await this.#showSpread({ left, right, side })
         }
-        this.onRelocate?.(null, this.index, 0, 1)
+        this.#reportLocation()
     }
     async select(target) {
         await this.goTo(target)
@@ -281,20 +270,22 @@ export class FixedLayout {
         await this.goToSpread(index, side)
     }
     async next() {
-        const s = this.rtl ? this.#container.goLeft() : this.#container.goRight()
-        if (s) this.onRelocate?.(null, this.index, 0, 1)
+        const s = this.rtl ? this.#goLeft() : this.#goRight()
+        if (s) this.#reportLocation()
         else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left')
     }
     async prev() {
-        const s = this.rtl ? this.#container.goRight() : this.#container.goLeft()
-        if (s) this.onRelocate?.(null, this.index, 0, 1)
+        const s = this.rtl ? this.#goRight() : this.#goLeft()
+        if (s) this.#reportLocation()
         else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right')
     }
     deselect() {
-        for (const frame of this.#container.element.querySelectorAll('iframe'))
+        for (const frame of this.#root.querySelectorAll('iframe'))
             frame.contentWindow.getSelection().removeAllRanges()
     }
     destroy() {
-        this.#container.destroy()
+        this.#observer.unobserve(this)
     }
 }
+
+customElements.define('foliate-fxl', FixedLayout)

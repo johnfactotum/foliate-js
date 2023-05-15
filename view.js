@@ -41,6 +41,7 @@ const languageInfo = lang => {
 }
 
 export class View extends HTMLElement {
+    #root = this.attachShadow({ mode: 'closed' })
     #sectionProgress
     #tocProgress
     #pageProgress
@@ -61,21 +62,21 @@ export class View extends HTMLElement {
                 toc: book.pageList ?? [], ids, splitHref, getFragment })
         }
 
-        const opts = {
-            book: this.book,
-            onLoad: this.#onLoad.bind(this),
-            onRelocate: this.#onRelocate.bind(this),
-            createOverlayer: this.#createOverlayer.bind(this),
-        }
         this.isFixedLayout = this.book.rendition?.layout === 'pre-paginated'
         if (this.isFixedLayout) {
-            const { FixedLayout } = await import('./fixed-layout.js')
-            this.renderer = new FixedLayout(opts)
+            await import('./fixed-layout.js')
+            this.renderer = document.createElement('foliate-fxl')
         } else {
-            const { Paginator } = await import('./paginator.js')
-            this.renderer = new Paginator(opts)
+            await import('./paginator.js')
+            this.renderer = document.createElement('foliate-paginator')
         }
-        this.append(this.renderer.element)
+        this.renderer.setAttribute('exportparts', 'head,foot,filter')
+        this.renderer.addEventListener('load', e => this.#onLoad(e.detail))
+        this.renderer.addEventListener('relocate', e => this.#onRelocate(e.detail))
+        this.renderer.addEventListener('create-overlayer', e =>
+            e.detail.attach(this.#createOverlayer(e.detail)))
+        this.renderer.open(book)
+        this.#root.append(this.renderer)
     }
     async init({ lastLocation }) {
         if (lastLocation) {
@@ -87,7 +88,7 @@ export class View extends HTMLElement {
     #emit(name, detail, cancelable) {
         return this.dispatchEvent(new CustomEvent(name, { detail, cancelable }))
     }
-    #onRelocate(range, index, fraction, size) {
+    #onRelocate({ range, index, fraction, size }) {
         if (!this.#sectionProgress) return
         const progress = this.#sectionProgress.getProgress(index, fraction, size)
         const tocItem = this.#tocProgress.getProgress(index, range)
@@ -95,7 +96,7 @@ export class View extends HTMLElement {
         const cfi = this.getCFI(index, range)
         this.#emit('relocate', { ...progress, tocItem, pageItem, cfi, range })
     }
-    #onLoad(doc, index) {
+    #onLoad({ doc, index }) {
         // set language and dir if not already set
         doc.documentElement.lang ||= this.language.canonical ?? ''
         if (!this.language.isCJK)
@@ -146,7 +147,7 @@ export class View extends HTMLElement {
         const obj = this.renderer.getOverlayer()
         if (obj.index === index) return obj
     }
-    #createOverlayer(doc, index) {
+    #createOverlayer({ doc, index }) {
         const overlayer = new Overlayer()
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
@@ -278,3 +279,5 @@ export class View extends HTMLElement {
         this.renderer?.destroy?.()
     }
 }
+
+customElements.define('foliate-view', View)
