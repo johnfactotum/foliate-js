@@ -381,7 +381,6 @@ export class Paginator extends HTMLElement {
             right: 0;
             display: grid;
             margin: auto;
-            z-index: 1;
         }
         :is(#header, #footer) > * {
             display: flex;
@@ -400,10 +399,10 @@ export class Paginator extends HTMLElement {
         </style>
         <div id="background" part="filter"></div>
         <div id="max-width">
-            <div id="header"></div>
             <div id="max-height">
                 <div id="container"></div>
             </div>
+            <div id="header"></div>
             <div id="footer"></div>
         </div>
         `
