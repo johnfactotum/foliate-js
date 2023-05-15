@@ -181,10 +181,10 @@ export class FixedLayout {
     #spreads
     #index = -1
     #container = new Container()
-    constructor({ book, onLoad, onRelocated }) {
+    constructor({ book, onLoad, onRelocate }) {
         this.book = book
         this.#container.onLoad = onLoad
-        this.onRelocated = onRelocated
+        this.onRelocate = onRelocate
 
         const { rendition } = book
         this.#container.spread = rendition?.spread
@@ -266,7 +266,7 @@ export class FixedLayout {
             const right = { index: indexR, src: srcR }
             await this.#container.showSpread({ left, right, side })
         }
-        this.onRelocated?.(null, this.index, 0, 1)
+        this.onRelocate?.(null, this.index, 0, 1)
     }
     async select(target) {
         await this.goTo(target)
@@ -282,12 +282,12 @@ export class FixedLayout {
     }
     async next() {
         const s = this.rtl ? this.#container.goLeft() : this.#container.goRight()
-        if (s) this.onRelocated?.(null, this.index, 0, 1)
+        if (s) this.onRelocate?.(null, this.index, 0, 1)
         else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left')
     }
     async prev() {
         const s = this.rtl ? this.#container.goRight() : this.#container.goLeft()
-        if (s) this.onRelocated?.(null, this.index, 0, 1)
+        if (s) this.onRelocate?.(null, this.index, 0, 1)
         else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right')
     }
     deselect() {

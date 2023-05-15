@@ -26,29 +26,29 @@ const textWalker = function* (doc, func) {
     for (const match of func(strs, makeRange)) yield match
 }
 
-export class View {
+const languageInfo = lang => {
+    if (!lang) return {}
+    try {
+        const canonical = Intl.getCanonicalLocales(lang)[0]
+        const locale = new Intl.Locale(canonical)
+        const isCJK = ['zh', 'ja', 'kr'].includes(locale.language)
+        const direction = (locale.getTextInfo?.() ?? locale.textInfo)?.direction
+        return { canonical, locale, isCJK, direction }
+    } catch (e) {
+        console.warn(e)
+        return {}
+    }
+}
+
+export class View extends HTMLElement {
     #sectionProgress
     #tocProgress
     #pageProgress
     #css
-    language = 'en'
-    textDirection = ''
-    isCJK = false
     isFixedLayout = false
-    constructor(book, emit) {
+    async open(book) {
         this.book = book
-        this.emit = emit
-
-        if (book.metadata?.language) try {
-            const language = book.metadata.language
-            book.metadata.language = Intl.getCanonicalLocales(language)[0]
-            const tag = typeof language === 'string' ? language : language[0]
-            const locale = new Intl.Locale(tag)
-            this.isCJK = ['zh', 'ja', 'kr'].includes(locale.language)
-            this.textDirection = (locale.getTextInfo?.() ?? locale.textInfo)?.direction
-        } catch(e) {
-            console.warn(e)
-        }
+        this.language = languageInfo(book.metadata?.language)
 
         if (book.splitTOCHref && book.getTOCFragment) {
             const ids = book.sections.map(s => s.id)
@@ -60,12 +60,11 @@ export class View {
             this.#pageProgress = new TOCProgress({
                 toc: book.pageList ?? [], ids, splitHref, getFragment })
         }
-    }
-    async display() {
+
         const opts = {
             book: this.book,
             onLoad: this.#onLoad.bind(this),
-            onRelocated: this.#onRelocated.bind(this),
+            onRelocate: this.#onRelocate.bind(this),
             createOverlayer: this.#createOverlayer.bind(this),
         }
         this.isFixedLayout = this.book.rendition?.layout === 'pre-paginated'
@@ -76,7 +75,7 @@ export class View {
             const { Paginator } = await import('./paginator.js')
             this.renderer = new Paginator(opts)
         }
-        return this.renderer.element
+        this.append(this.renderer.element)
     }
     async init({ lastLocation }) {
         if (lastLocation) {
@@ -85,25 +84,29 @@ export class View {
             else await this.renderer.next()
         } else await this.renderer.next()
     }
-    #onRelocated(range, index, fraction, size) {
+    #emit(name, detail, cancelable) {
+        return this.dispatchEvent(new CustomEvent(name, { detail, cancelable }))
+    }
+    #onRelocate(range, index, fraction, size) {
         if (!this.#sectionProgress) return
         const progress = this.#sectionProgress.getProgress(index, fraction, size)
         const tocItem = this.#tocProgress.getProgress(index, range)
         const pageItem = this.#pageProgress.getProgress(index, range)
         const cfi = this.getCFI(index, range)
-        this.emit?.({ type: 'relocated', ...progress, tocItem, pageItem, cfi, range })
+        this.#emit('relocate', { ...progress, tocItem, pageItem, cfi, range })
     }
     #onLoad(doc, index) {
         // set language and dir if not already set
-        doc.documentElement.lang ||= this.language
-        doc.documentElement.dir ||= this.isCJK ? '' : this.textDirection
+        doc.documentElement.lang ||= this.language.canonical ?? ''
+        if (!this.language.isCJK)
+            doc.documentElement.dir ||= this.language.direction ?? ''
 
         this.renderer.setStyle?.(this.#css)
-        this.handleLinks(doc, index, this.emit)
+        this.#handleLinks(doc, index)
 
-        this.emit?.({ type: 'loaded', doc, index })
+        this.#emit('load', { doc, index })
     }
-    handleLinks(doc, index, emit) {
+    #handleLinks(doc, index) {
         const { book } = this
         const section = book.sections[index]
         for (const a of doc.querySelectorAll('a[href]'))
@@ -112,11 +115,11 @@ export class View {
                 const href_ = a.getAttribute('href')
                 const href = section?.resolveHref?.(href_) ?? href_
                 if (book?.isExternal?.(href))
-                    Promise.resolve(emit?.({ type: 'external-link', a, href }))
-                        .then(x => x ? null : window.open(href, '_blank'))
+                    Promise.resolve(this.#emit('external-link', { a, href }, true))
+                        .then(x => x ? globalThis.open(href, '_blank') : null)
                         .catch(e => console.error(e))
-                else Promise.resolve(emit?.({ type: 'link', a, href }))
-                    .then(x => x ? null : this.goTo(href))
+                else Promise.resolve(this.#emit('link', { a, href }, true))
+                    .then(x => x ? this.goTo(href) : null)
                     .catch(e => console.error(e))
             })
     }
@@ -129,9 +132,8 @@ export class View {
             overlayer.remove(value)
             if (!remove) {
                 const range = doc ? anchor(doc) : anchor
-                const [func, opts] = this
-                    .emit({ type: 'draw-annotation', annotation, doc, range })
-                overlayer.add(value, range, func, opts)
+                const draw = (func, opts) => overlayer.add(value, range, func, opts)
+                this.#emit('draw-annotation', { draw, annotation, doc, range })
             }
         }
         const label = this.#tocProgress.getProgress(index)?.label ?? ''
@@ -149,10 +151,10 @@ export class View {
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
             if (value) {
-                this.emit?.({ type: 'show-annotation', value, range })
+                this.#emit('show-annotation', { value, range })
             }
         }, false)
-        this.emit?.({ type: 'create-overlay', index })
+        this.#emit('create-overlay', { index })
         return overlayer
     }
     async showAnnotation(annotation) {
@@ -160,7 +162,7 @@ export class View {
         const { index, anchor } = await this.goTo(value)
         const { doc } =  this.#getOverlayer(index)
         const range = anchor(doc)
-        this.emit?.({ type: 'show-annotation', value, range })
+        this.#emit('show-annotation', { value, range })
     }
     getCFI(index, range) {
         const baseCFI = this.book.sections[index].cfi ?? CFI.fake.fromIndex(index)

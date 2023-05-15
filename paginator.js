@@ -351,11 +351,11 @@ export class Paginator {
         gap: 0.05,
         maxColumnWidth: 700,
     }
-    constructor({ book, onLoad, onRelocated, createOverlayer }) {
+    constructor({ book, onLoad, onRelocate, createOverlayer }) {
         this.bookDir = book.dir
         this.sections = book.sections
         this.onLoad = onLoad
-        this.onRelocated = onRelocated
+        this.onRelocate = onRelocate
         this.createOverlayer = createOverlayer
         Object.assign(this.#element.style, {
             boxSizing: 'border-box',
@@ -658,11 +658,11 @@ export class Paginator {
 
         const index = this.#index
         if (this.scrolled)
-            this.onRelocated?.(range, index, this.start / this.viewSize)
+            this.onRelocate?.(range, index, this.start / this.viewSize)
         else if (this.pages > 0) {
             const { page, pages } = this
             this.#header.style.visibility = page > 0 ? 'visible' : 'hidden'
-            this.onRelocated?.(range, index, page / pages, 1 / pages)
+            this.onRelocate?.(range, index, page / pages, 1 / pages)
         }
     }
     async #display(promise) {

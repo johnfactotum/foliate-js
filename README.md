@@ -44,13 +44,28 @@ There are mainly three kinds of modules:
     - `progress.js`, for getting reading progress
     - `search.js`, for searching
 
-The modules are designed to be modular. In general, they don't directly depend on each other. Instead they depend on certain interfaces, detailed below. The exception is `view.js`. It is the higher level renderer that strings most of the things together, and you can think of it as the main entry point of the library. Its basic usage is as follows:
-
-- The `View` constructor takes two arguments: `book`, an object that implements the "book" interface, and `emit`, which is a callback that you can use to handle various events. Note that for simplicity, unlike Epub.js or other libraries, there's no event or pub/sub system.
-- To render the book, you must first call `.display()`, which is an async function that returns an Element, which you must then append to the DOM yourself, e.g. `document.body.append(await view.display())`.
-- To actually display the page, you must then either call `.renderer.next()`, which will display the first linear page of the book, or use `.goTo()` to go to a specific location.
+The modules are designed to be modular. In general, they don't directly depend on each other. Instead they depend on certain interfaces, detailed below. The exception is `view.js`. It is the higher level renderer that strings most of the things together, and you can think of it as the main entry point of the library. See "Basic Usage" below.
 
 The repo also includes a still higher level reader, though strictly speaking, `reader.html` (along with `reader.js` and its associated files in `ui/` and `vendor/`) is not considered part of the library itself. It's akin to [Epub.js Reader](https://github.com/futurepress/epubjs-reader). You are expected to modify it or replace it with your own code.
+
+### Basic Usage
+
+```js
+import { View } from './view.js'
+customElements.define('foliate-view', View)
+
+const view = document.createElement('foliate-view')
+document.body.append(view)
+
+view.addEventListener('relocate', e => {
+    console.log('location changed')
+    console.log(e.detail)
+})
+
+const book = /* an object implementing the "book" interface */
+await view.open(book)
+await view.goTo(/* path, section index, or CFI */)
+```
 
 ### Security
 

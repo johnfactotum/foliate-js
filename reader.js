@@ -2,6 +2,8 @@ import { View } from './view.js'
 import { createTOCView } from './ui/tree.js'
 import { createMenu } from './ui/menu.js'
 
+customElements.define('foliate-view', View)
+
 const isZip = async file => {
     const arr = new Uint8Array(await file.slice(0, 4).arrayBuffer())
     return arr[0] === 0x50 && arr[1] === 0x4b && arr[2] === 0x03 && arr[3] === 0x04
@@ -55,7 +57,7 @@ const isFBZ = ({ name, type }) =>
     type === 'application/x-zip-compressed-fb2'
     || name.endsWith('.fb2.zip') || name.endsWith('.fbz')
 
-const getView = async (file, emit) => {
+const getView = async file => {
     let book
     if (file.isDirectory) {
         const loader = await makeDirectoryLoader(file)
@@ -89,9 +91,9 @@ const getView = async (file, emit) => {
         }
     }
     if (!book) throw new Error('File type not supported')
-    const view = new View(book, emit)
-    const element = await view.display()
-    document.body.append(element)
+    const view = document.createElement('foliate-view')
+    document.body.append(view)
+    await view.open(book)
     return view
 }
 
@@ -186,7 +188,10 @@ class Reader {
         menu.groups.layout.select('paginated')
     }
     async open(file) {
-        this.view = await getView(file, this.#handleEvent.bind(this))
+        this.view = await getView(file)
+        this.view.addEventListener('load', this.#onLoad.bind(this))
+        this.view.addEventListener('relocate', this.#onRelocate.bind(this))
+
         const { book } = this.view
         this.setAppearance()
         this.view.renderer.next()
@@ -240,23 +245,16 @@ class Reader {
         const scrolled = this.layout.flow === 'scrolled'
         document.documentElement.classList.toggle('scrolled', scrolled)
     }
-    #handleEvent(obj) {
-        console.debug(obj)
-        switch (obj.type) {
-            case 'loaded': this.#onLoaded(obj); break
-            case 'relocated': this.#onRelocated(obj); break
-        }
-    }
     #handleKeydown(event) {
         const k = event.key
         if (k === 'ArrowLeft' || k === 'h') this.view.goLeft()
         else if(k === 'ArrowRight' || k === 'l') this.view.goRight()
     }
-    #onLoaded({ doc }) {
+    #onLoad({ detail: { doc } }) {
         doc.addEventListener('keydown', this.#handleKeydown.bind(this))
     }
-    #onRelocated(obj) {
-        const { fraction, location, tocItem, pageItem } = obj
+    #onRelocate({ detail }) {
+        const { fraction, location, tocItem, pageItem } = detail
         const percent = percentFormat.format(fraction)
         const loc = pageItem
             ? `Page ${pageItem.label}`
