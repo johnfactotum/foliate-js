@@ -157,6 +157,9 @@ class View {
             overflow: 'hidden',
             flex: '0 0 auto',
             width: '100%', height: '100%',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
         })
         Object.assign(this.#iframe.style, {
             overflow: 'hidden',
@@ -288,13 +291,15 @@ class View {
             const expandedSize = pageCount * this.#size
             this.#element.style.padding = '0'
             this.#iframe.style[side] = `${expandedSize}px`
-            this.#element.style[side] = `${expandedSize}px`
+            this.#element.style[side] = `${expandedSize + this.#size * 2}px`
             this.#iframe.style[otherSide] = '100%'
             this.#element.style[otherSide] = '100%'
             if (this.document)
                 this.document.documentElement.style[side] = `${this.#size}px`
             if (this.#overlayer) {
                 this.#overlayer.element.style.margin = '0'
+                this.#overlayer.element.style.left = this.#vertical ? '0' : this.#size
+                this.#overlayer.element.style.top = this.#vertical ? this.#size : '0'
                 this.#overlayer.element.style[side] = `${expandedSize}px`
                 this.#overlayer.redraw()
             }
@@ -313,6 +318,8 @@ class View {
             this.#element.style[otherSide] = '100%'
             if (this.#overlayer) {
                 this.#overlayer.element.style.margin = padding
+                this.#overlayer.element.style.left = '0'
+                this.#overlayer.element.style.top = '0'
                 this.#overlayer.element.style[side] = `${expandedSize}px`
                 this.#overlayer.redraw()
             }
@@ -347,6 +354,7 @@ export class Paginator extends HTMLElement {
     #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
     #locked = false // while true, prevent any further navigation
     #styleMap = new WeakMap()
+    pageAnimation = true
     layout = {
         margin: 48,
         gap: 0.05,
@@ -587,9 +595,9 @@ export class Paginator extends HTMLElement {
         }
         const offset = this.#getRectMapper()(rect).left
             + this.layout.margin / 2
-        return this.#scrollToPage(Math.floor(offset / this.size), reason)
+        return this.#scrollToPage(Math.floor(offset / this.size) + 1, reason)
     }
-    async #scrollTo(offset, reason) {
+    async #scrollTo(offset, reason, smooth) {
         const element = this.#container
         const { scrollProp } = this
         if (element[scrollProp] === offset) {
@@ -598,30 +606,29 @@ export class Paginator extends HTMLElement {
         }
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
-        element[scrollProp] = offset
-        this.#afterScroll(reason)
-        /*return new Promise((resolve, reject) => {
+        if (smooth && this.pageAnimation) return new Promise((resolve, reject) => {
             try {
                 const onScroll = () => {
-                    if (element[scrollProp] - offset > 2) return
+                    if (Math.abs(element[scrollProp] - offset) > 2) return
                     element.removeEventListener('scroll', onScroll)
                     resolve()
                     this.#afterScroll(reason)
                 }
                 element.addEventListener('scroll', onScroll)
-                if (this.scrolled) {
-                    const coord = scrollProp === 'scrollLeft' ? 'left' : 'top'
-                    element.scrollTo({ [coord]: offset, behavior: 'smooth' })
-                }
-                element[scrollProp] = offset
+                const coord = scrollProp === 'scrollLeft' ? 'left' : 'top'
+                element.scrollTo({ [coord]: offset, behavior: 'smooth' })
             } catch (e) {
                 reject(e)
             }
-        })*/
+        })
+        else {
+            element[scrollProp] = offset
+            this.#afterScroll(reason)
+        }
     }
-    async #scrollToPage(page, reason) {
+    async #scrollToPage(page, reason, smooth) {
         const offset = this.size * (this.#rtl ? -page : page)
-        return this.#scrollTo(offset, reason)
+        return this.#scrollTo(offset, reason, smooth)
     }
     async #scrollToAnchor(select) {
         const rects = uncollapse(this.#anchor)?.getClientRects?.()
@@ -643,8 +650,9 @@ export class Paginator extends HTMLElement {
         }
         const { pages } = this
         if (!pages) return
-        const newPage = Math.round(this.#anchor * (pages - 1))
-        await this.#scrollToPage(newPage, 'anchor')
+        const textPages = pages - 2
+        const newPage = Math.round(this.#anchor * (textPages - 1))
+        await this.#scrollToPage(newPage + 1, 'anchor')
     }
     #selectAnchor() {
         const { defaultView } = this.#view.document
@@ -668,9 +676,9 @@ export class Paginator extends HTMLElement {
         if (this.scrolled) detail.fraction = this.start / this.viewSize
         else if (this.pages > 0) {
             const { page, pages } = this
-            this.#header.style.visibility = page > 0 ? 'visible' : 'hidden'
-            detail.fraction = page / pages
-            detail.size = 1 / pages
+            this.#header.style.visibility = page > 1 ? 'visible' : 'hidden'
+            detail.fraction = (page - 1) / (pages - 2)
+            detail.size = 1 / (pages - 2)
         }
         this.dispatchEvent(new CustomEvent('relocate', { detail }))
     }
@@ -703,30 +711,25 @@ export class Paginator extends HTMLElement {
             ? anchor(this.#view.document) : anchor) ?? 0
         await this.#scrollToAnchor(select)
     }
-    #canScrollToPage(page) {
-        return page > -1 && page < this.pages
-    }
     scrollPrev() {
         if (!this.#view) return null
         if (this.scrolled) {
             if (this.start > 0)
-                return this.#scrollTo(Math.max(0, this.start - this.size))
+                return [true, this.#scrollTo(Math.max(0, this.start - this.size), '', true)]
             else return null
         }
         const page = this.page - 1
-        if (this.#canScrollToPage(page)) return this.#scrollToPage(page)
-        return null
+        return [page > 0, this.#scrollToPage(page, '', true)]
     }
     scrollNext() {
         if (!this.#view) return null
         if (this.scrolled) {
             if (this.viewSize - this.end > 2)
-                return this.#scrollTo(Math.min(this.viewSize, this.end))
+                return [true, this.#scrollTo(Math.min(this.viewSize, this.end), '', true)]
             else return null
         }
         const page = this.page + 1
-        if (this.#canScrollToPage(page)) return this.#scrollToPage(page)
-        return null
+        return [page < this.pages - 1, this.#scrollToPage(page, '', true)]
     }
     #canGoToIndex(index) {
         return index >= 0 && index <= this.sections.length - 1
@@ -735,8 +738,9 @@ export class Paginator extends HTMLElement {
         if (this.#locked) return
         if (lock) this.#locked = true
         const scroll = tryScroll?.()
-        if (scroll) await scroll
-        else {
+        const shouldGo = !scroll?.[0]
+        if (scroll) await scroll[1]
+        if (shouldGo) {
             const { index, anchor, select } = await target
             if (!this.#canGoToIndex(index)) {
                 this.#locked = false
