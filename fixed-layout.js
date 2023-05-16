@@ -279,9 +279,11 @@ export class FixedLayout extends HTMLElement {
         if (s) this.#reportLocation()
         else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right')
     }
-    deselect() {
-        for (const frame of this.#root.querySelectorAll('iframe'))
-            frame.contentWindow.getSelection().removeAllRanges()
+    getContents() {
+        return Array.from(this.#root.querySelectorAll('iframe'), frame => ({
+            doc: frame.contentDocument,
+            // TODO: index, overlayer
+        }))
     }
     destroy() {
         this.#observer.unobserve(this)

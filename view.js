@@ -148,8 +148,8 @@ export class View extends HTMLElement {
         return this.addAnnotation(annotation, true)
     }
     #getOverlayer(index) {
-        const obj = this.renderer.getOverlayer()
-        if (obj.index === index) return obj
+        return this.renderer.getContents()
+            .find(x => x.index === index && x.overlayer)
     }
     #createOverlayer({ doc, index }) {
         const overlayer = new Overlayer()
@@ -218,7 +218,8 @@ export class View extends HTMLElement {
         }
     }
     deselect() {
-        return this.renderer.deselect?.()
+        for (const { doc } of this.renderer.getContents())
+            doc.defaultView.getSelection().removeAllRanges()
     }
     async getTOCItemOf(target) {
         try {

@@ -792,12 +792,13 @@ export class Paginator extends HTMLElement {
         const index = this.sections.findLastIndex(section => section.linear !== 'no')
         return this.goTo({ index })
     }
-    getOverlayer() {
-        if (this.#view) return {
+    getContents() {
+        if (this.#view) return [{
             index: this.#index,
             overlayer: this.#view.overlayer,
             doc: this.#view.document,
-        }
+        }]
+        return []
     }
     setStyle(styles) {
         const $$styles = this.#styleMap.get(this.#view?.document)
@@ -808,10 +809,6 @@ export class Paginator extends HTMLElement {
             $beforeStyle.textContent = beforeStyle
             $style.textContent = style
         } else $style.textContent = styles
-    }
-    deselect() {
-        const sel = this.#view.document.defaultView.getSelection()
-        sel.removeAllRanges()
     }
     destroy() {
         this.#observer.unobserve(this)
