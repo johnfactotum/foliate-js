@@ -446,7 +446,7 @@ export class Paginator extends HTMLElement {
             // FIXME: vertical-rl only, not -lr
             this.setAttribute('dir', vertical ? 'rtl' : 'ltr')
             this.style.padding = '0'
-            this.#container.style.overflow ='scroll'
+            this.#container.style.overflow ='auto'
             this.#maxWidthContainer.style.maxWidth = 'none'
             this.#maxHeightContainer.style.maxHeight = 'none'
             const columnWidth = this.layout.maxColumnWidth
