@@ -78,12 +78,16 @@ export class View extends HTMLElement {
         this.renderer.open(book)
         this.#root.append(this.renderer)
     }
-    async init({ lastLocation }) {
-        if (lastLocation) {
-            const resolved = this.resolveNavigation(lastLocation)
-            if (resolved) await this.renderer.goTo(resolved)
-            else await this.renderer.next()
-        } else await this.renderer.next()
+    goToTextStart() {
+        return this.goTo(this.book.landmarks
+            ?.find(m => m.type.includes('bodymatter') || m.type.includes('text'))
+            ?.href ?? this.book.sections.findIndex(s => s.linear !== 'no'))
+    }
+    async init({ lastLocation, showTextStart }) {
+        const resolved = lastLocation ? this.resolveNavigation(lastLocation) : null
+        if (resolved) await this.renderer.goTo(resolved)
+        else if (showTextStart) await this.goToTextStart()
+        else await this.renderer.next()
     }
     #emit(name, detail, cancelable) {
         return this.dispatchEvent(new CustomEvent(name, { detail, cancelable }))
