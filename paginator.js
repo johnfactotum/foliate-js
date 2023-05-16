@@ -393,7 +393,7 @@ export class Paginator extends HTMLElement {
         :is(#header, #footer) > * {
             display: flex;
             align-items: center;
-            minWidth: 0;
+            min-width: 0;
         }
         :is(#header, #footer) > * > * {
             width: 100%;
