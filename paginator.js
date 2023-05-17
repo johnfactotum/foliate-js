@@ -714,76 +714,74 @@ export class Paginator extends HTMLElement {
             ? anchor(this.#view.document) : anchor) ?? 0
         await this.#scrollToAnchor(select)
     }
-    scrollPrev() {
-        if (!this.#view) return null
-        if (this.scrolled) {
-            if (this.start > 0)
-                return [true, this.#scrollTo(Math.max(0, this.start - this.size), '', true)]
-            else return null
-        }
-        const page = this.page - 1
-        return [page > 0, this.#scrollToPage(page, '', true)]
-    }
-    scrollNext() {
-        if (!this.#view) return null
-        if (this.scrolled) {
-            if (this.viewSize - this.end > 2)
-                return [true, this.#scrollTo(Math.min(this.viewSize, this.end), '', true)]
-            else return null
-        }
-        const page = this.page + 1
-        return [page < this.pages - 1, this.#scrollToPage(page, '', true)]
-    }
     #canGoToIndex(index) {
         return index >= 0 && index <= this.sections.length - 1
     }
-    async #goTo(tryScroll, target, lock) {
-        if (this.#locked) return
-        if (lock) this.#locked = true
-        const scroll = tryScroll?.()
-        const shouldGo = !scroll?.[0]
-        if (scroll) await scroll[1]
-        if (shouldGo) {
-            const { index, anchor, select } = await target
-            if (!this.#canGoToIndex(index)) {
-                this.#locked = false
-                return null
+    async #goTo({ index, anchor, select}) {
+        if (index === this.#index) await this.#display({ index, anchor, select })
+        else {
+            const oldIndex = this.#index
+            const onLoad = detail => {
+                this.sections[oldIndex]?.unload?.()
+                this.dispatchEvent(new CustomEvent('load', { detail }))
             }
-            if (index === this.#index) await this.#display({ index, anchor, select })
-            else {
-                const oldIndex = this.#index
-                const onLoad = detail => {
-                    this.sections[oldIndex]?.unload?.()
-                    this.dispatchEvent(new CustomEvent('load', { detail }))
-                }
-                await this.#display(Promise.resolve(this.sections[index].load())
-                    .then(src => ({ index, src, anchor, onLoad, select }))
-                    .catch(e => {
-                        console.warn(e)
-                        console.warn(new Error(`Failed to load section ${index}`))
-                        return {}
-                    }))
-            }
-        }
-        if (lock) {
-            await wait(100) // throttle by 100ms
-            this.#locked = false
+            await this.#display(Promise.resolve(this.sections[index].load())
+                .then(src => ({ index, src, anchor, onLoad, select }))
+                .catch(e => {
+                    console.warn(e)
+                    console.warn(new Error(`Failed to load section ${index}`))
+                    return {}
+                }))
         }
     }
     async goTo(target) {
-        return this.#goTo(null, target)
+        if (this.#locked) return
+        const resolved = await target
+        if (this.#canGoToIndex(resolved.index)) return this.#goTo(resolved)
+    }
+    #scrollPrev() {
+        if (!this.#view) return
+        if (this.scrolled) {
+            if (this.start > 0)
+                return this.#scrollTo(Math.max(0, this.start - this.size), null, true)
+            return true
+        }
+        const page = this.page - 1
+        if (this.#index <= 0 && page <= 0) return
+        return this.#scrollToPage(page, null, true).then(() => page <= 0)
+    }
+    #scrollNext() {
+        if (!this.#view) return
+        if (this.scrolled) {
+            if (this.viewSize - this.end > 2)
+                return this.#scrollTo(Math.min(this.viewSize, this.end), null, true)
+            return true
+        }
+        const page = this.page + 1
+        const pages = this.pages
+        if (this.#index >= this.sections.length - 1 && page >= pages - 1) return
+        return this.#scrollToPage(page, null, true).then(() => page >= pages - 1)
     }
     #adjacentIndex(dir) {
         for (let index = this.#index + dir; this.#canGoToIndex(index); index += dir)
             if (this.sections[index]?.linear !== 'no') return index
     }
+    async #turnPage(dir) {
+        this.#locked = true
+        const prev = dir === -1
+        const shouldGo = await (prev ? this.#scrollPrev() : this.#scrollNext())
+        if (shouldGo) await this.#goTo({
+            index: this.#adjacentIndex(dir),
+            anchor: prev ? () => 1 : () => 0,
+        })
+        if (shouldGo || !this.pageAnimation) await wait(100)
+        this.#locked = false
+    }
     prev() {
-        const index = this.#adjacentIndex(-1)
-        return this.#goTo(() => this.scrollPrev(), { index, anchor: () => 1 }, true)
+        return this.#turnPage(-1)
     }
     next() {
-        const index = this.#adjacentIndex(1)
-        return this.#goTo(() => this.scrollNext(), { index }, true)
+        return this.#turnPage(1)
     }
     prevSection() {
         return this.goTo({ index: this.#adjacentIndex(-1) })
