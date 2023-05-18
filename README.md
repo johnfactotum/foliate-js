@@ -130,17 +130,18 @@ Note that KF8 files can contain fonts that are zlib-compressed. They need to be 
 
 ### The Renderers
 
-It has two renderers, one for paginating reflowable books, and one for fixed-layout. The constructor of a renderer takes a single object with the following properties:
-- `.book`: the book object that will be rendered.
-- `.onLoad(doc, index)`: callback when a section is loaded. Takes a `Document` object and the index of the section.
-- `.onRelocated(range, index, fraction)`: callback when locations changes. `range` is a `Range` object containing the current visible area. `fraction` is a number between 0 and 1, representing the reading progress within the section.
-- `.createOverlayer(doc, index)`: callback for adding an overlay to the page. It should return an overlayer object (see the description for `overlayer.js` below).
+It has two renderers, one for paginating reflowable books, and one for fixed-layout. They are custom elements (web components).
 
 A renderer's interface is currently mainly:
-- `.element`: the DOM element of the renderer. It needs to be manually appended to the document by the consumer of the renderer.
+- `.open(book)`: open a book object.
 - `.goTo({ index, anchor })`: navigate to a destination. The argument has the same type as the one returned by `.resolveHref()` in the book object.
 - `.prev()`: go to previous page.
 - `.next()`: go to next page.
+
+It has the following custom events:
+- `load`, when a section is loaded. Its `event.detail` has two properties, `doc`, the `Document` object, and `index`, the index of the section.
+- `relocate`, when the location changes. Its `event.detail` has the properties `range`, `index`, and `fraction`, where `range` is a `Range` object containing the current visible area, and `fraction` is a number between 0 and 1, representing the reading progress within the section.
+- `create-overlayer`, which allows adding an overlay to the page. The `event.detail` has the properties `doc`, `index`, and a function `attach(overlay)`, which should be called with an overlayer object (see the description for `overlayer.js` below).
 
 The paginator uses the same pagination strategy as [Epub.js](https://github.com/futurepress/epub.js): it uses CSS multi-column. As such it shares much of the same limitations (it's slow, some CSS styles do not work as expected, and other bugs). There are a few differences:
 - It is a totally standalone module. You can use it to paginate any content.
@@ -164,6 +165,8 @@ foliate-view::part(filter) {
 The filter only applies to the book itself, leaving overlaid elements such as highlights unaffected.
 
 ### The Paginator
+
+There is a basic page transition effect that can be disabled by setting `.pageAnimation` to false.
 
 The layout can be configured from the `.layout` object, which has the following properties:
 - `.flow`: either `'paginated'` or `'scrolled'`.
