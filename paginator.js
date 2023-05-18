@@ -740,7 +740,7 @@ export class Paginator extends HTMLElement {
         if (this.#canGoToIndex(resolved.index)) return this.#goTo(resolved)
     }
     #scrollPrev() {
-        if (!this.#view) return
+        if (!this.#view) return true
         if (this.scrolled) {
             if (this.start > 0)
                 return this.#scrollTo(Math.max(0, this.start - this.size), null, true)
@@ -751,7 +751,7 @@ export class Paginator extends HTMLElement {
         return this.#scrollToPage(page, null, true).then(() => page <= 0)
     }
     #scrollNext() {
-        if (!this.#view) return
+        if (!this.#view) return true
         if (this.scrolled) {
             if (this.viewSize - this.end > 2)
                 return this.#scrollTo(Math.min(this.viewSize, this.end), null, true)
