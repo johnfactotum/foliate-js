@@ -123,9 +123,15 @@ export class View extends HTMLElement {
     }
     async init({ lastLocation, showTextStart }) {
         const resolved = lastLocation ? this.resolveNavigation(lastLocation) : null
-        if (resolved) await this.renderer.goTo(resolved)
+        if (resolved) {
+            await this.renderer.goTo(resolved)
+            this.history.pushState(lastLocation)
+        }
         else if (showTextStart) await this.goToTextStart()
-        else await this.renderer.next()
+        else {
+            this.history.pushState(0)
+            await this.next()
+        }
     }
     #emit(name, detail, cancelable) {
         return this.dispatchEvent(new CustomEvent(name, { detail, cancelable }))
