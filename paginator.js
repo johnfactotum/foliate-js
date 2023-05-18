@@ -607,19 +607,27 @@ export class Paginator extends HTMLElement {
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
         if (smooth && this.pageAnimation) return new Promise((resolve, reject) => {
-            try {
-                const onScroll = () => {
-                    if (Math.abs(element[scrollProp] - offset) > 2) return
-                    element.removeEventListener('scroll', onScroll)
-                    resolve()
-                    this.#afterScroll(reason)
+            // `requestAnimationFrame` fixes the whole page getting "stuck" when
+            // transitioning chapters in Foliate (the GTK 4 app).
+            // It happens often but not always, and resolves itself after
+            // interacting with the page (e.g. clicking on it).
+            // IDK what causes it and I can't reproduce it in any other browser
+            // or even with a WebKitGTK WebView, but this trick seems to fix it
+            requestAnimationFrame(() => {
+                try {
+                    const onScroll = () => {
+                        if (Math.abs(element[scrollProp] - offset) > 2) return
+                        element.removeEventListener('scroll', onScroll)
+                        resolve()
+                        this.#afterScroll(reason)
+                    }
+                    element.addEventListener('scroll', onScroll)
+                    const coord = scrollProp === 'scrollLeft' ? 'left' : 'top'
+                    element.scrollTo({ [coord]: offset, behavior: 'smooth' })
+                } catch (e) {
+                    reject(e)
                 }
-                element.addEventListener('scroll', onScroll)
-                const coord = scrollProp === 'scrollLeft' ? 'left' : 'top'
-                element.scrollTo({ [coord]: offset, behavior: 'smooth' })
-            } catch (e) {
-                reject(e)
-            }
+            })
         })
         else {
             element[scrollProp] = offset
