@@ -2,6 +2,35 @@ import * as CFI from './epubcfi.js'
 import { TOCProgress, SectionProgress } from './progress.js'
 import { Overlayer } from './overlayer.js'
 
+class History extends EventTarget {
+    #arr = []
+    #index = -1
+    pushState(x) {
+        const last = this.#arr[this.#index]
+        if (last === x || last?.fraction && last.fraction === x.fraction) return
+        this.#arr[++this.#index] = x
+        this.#arr.length = this.#index + 1
+    }
+    replaceState(x) {
+        const index = this.#index
+        this.#arr[index] = x
+    }
+    back() {
+        const index = this.#index
+        if (index <= 0) return
+        const detail = { state: this.#arr[index - 1] }
+        this.#index = index - 1
+        this.dispatchEvent(new CustomEvent('popstate', { detail }))
+    }
+    forward() {
+        const index = this.#index
+        if (index >= this.#arr.length - 1) return
+        const detail = { state: this.#arr[index + 1] }
+        this.#index = index + 1
+        this.dispatchEvent(new CustomEvent('popstate', { detail }))
+    }
+}
+
 const textWalker = function* (doc, func) {
     const filter = NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT
         | NodeFilter.SHOW_CDATA_SECTION
@@ -47,6 +76,15 @@ export class View extends HTMLElement {
     #pageProgress
     #css
     isFixedLayout = false
+    lastLocation
+    history = new History()
+    constructor() {
+        super()
+        this.history.addEventListener('popstate', ({ detail }) => {
+            const resolved = this.resolveNavigation(detail.state)
+            this.renderer.goTo(resolved)
+        })
+    }
     async open(book) {
         this.book = book
         this.language = languageInfo(book.metadata?.language)
@@ -98,6 +136,7 @@ export class View extends HTMLElement {
         const tocItem = this.#tocProgress.getProgress(index, range)
         const pageItem = this.#pageProgress.getProgress(index, range)
         const cfi = this.getCFI(index, range)
+        this.lastLocation = cfi
         this.#emit('relocate', { ...progress, tocItem, pageItem, cfi, range })
     }
     #onLoad({ doc, index }) {
@@ -187,6 +226,10 @@ export class View extends HTMLElement {
     resolveNavigation(target) {
         try {
             if (typeof target === 'number') return { index: target }
+            if (typeof target.fraction === 'number') {
+                const [index, anchor] = this.#sectionProgress.getSection(target.fraction)
+                return { index, anchor }
+            }
             if (CFI.isCFI.test(target)) return this.resolveCFI(target)
             return this.book.resolveHref(target)
         } catch (e) {
@@ -198,7 +241,7 @@ export class View extends HTMLElement {
         const resolved = this.resolveNavigation(target)
         try {
             await this.renderer.goTo(resolved)
-            return resolved
+            this.history.pushState(target)
         } catch(e) {
             console.error(e)
             console.error(`Could not go to ${target}`)
@@ -206,12 +249,14 @@ export class View extends HTMLElement {
     }
     async goToFraction(frac) {
         const [index, anchor] = this.#sectionProgress.getSection(frac)
-        return this.renderer.goTo({ index, anchor })
+        await this.renderer.goTo({ index, anchor })
+        this.history.pushState({ fraction: frac })
     }
     async select(target) {
         try {
             const obj = await this.resolveNavigation(target)
             await this.renderer.goTo({ ...obj, select: true })
+            this.history.pushState(target)
         } catch(e) {
             console.error(e)
             console.error(`Could not go to ${target}`)
@@ -235,11 +280,19 @@ export class View extends HTMLElement {
             console.error(`Could not get ${target}`)
         }
     }
+    async prev() {
+        await this.renderer.prev()
+        this.history.replaceState(this.lastLocation)
+    }
+    async next() {
+        await this.renderer.next()
+        this.history.replaceState(this.lastLocation)
+    }
     goLeft() {
-        return this.book.dir === 'rtl' ? this.renderer.next() : this.renderer.prev()
+        return this.book.dir === 'rtl' ? this.next() : this.prev()
     }
     goRight() {
-        return this.book.dir === 'rtl' ? this.renderer.prev() : this.renderer.next()
+        return this.book.dir === 'rtl' ? this.prev() : this.next()
     }
     setAppearance({ layout, css }) {
         if (this.isFixedLayout) return
