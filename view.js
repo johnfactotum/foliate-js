@@ -10,6 +10,7 @@ class History extends EventTarget {
         if (last === x || last?.fraction && last.fraction === x.fraction) return
         this.#arr[++this.#index] = x
         this.#arr.length = this.#index + 1
+        this.dispatchEvent(new Event('index-change'))
     }
     replaceState(x) {
         const index = this.#index
@@ -21,6 +22,7 @@ class History extends EventTarget {
         const detail = { state: this.#arr[index - 1] }
         this.#index = index - 1
         this.dispatchEvent(new CustomEvent('popstate', { detail }))
+        this.dispatchEvent(new Event('index-change'))
     }
     forward() {
         const index = this.#index
@@ -28,6 +30,13 @@ class History extends EventTarget {
         const detail = { state: this.#arr[index + 1] }
         this.#index = index + 1
         this.dispatchEvent(new CustomEvent('popstate', { detail }))
+        this.dispatchEvent(new Event('index-change'))
+    }
+    get canGoBack() {
+        return this.#index > 0
+    }
+    get canGoForward() {
+        return this.#index < this.#arr.length - 1
     }
 }
 
