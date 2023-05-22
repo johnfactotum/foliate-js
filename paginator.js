@@ -354,6 +354,8 @@ export class Paginator extends HTMLElement {
     #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
     #locked = false // while true, prevent any further navigation
     #styleMap = new WeakMap()
+    #scrollBounds
+    #touchState
     pageAnimation = true
     layout = {
         margin: 48,
@@ -426,6 +428,16 @@ export class Paginator extends HTMLElement {
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) this.#afterScroll('scroll')
         }, 250))
+
+        const opts = { passive: false }
+        this.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
+        this.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
+        this.addEventListener('touchend', this.#onTouchEnd.bind(this))
+        this.addEventListener('load', ({ detail: { doc } }) => {
+            doc.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
+            doc.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
+            doc.addEventListener('touchend', this.#onTouchEnd.bind(this))
+        })
     }
     open(book) {
         this.bookDir = book.dir
@@ -570,6 +582,60 @@ export class Paginator extends HTMLElement {
     get pages() {
         return Math.round(this.viewSize / this.size)
     }
+    scrollBy(delta) {
+        const element = this.#container
+        const { scrollProp } = this
+        const [offset, a, b] = this.#scrollBounds
+        const rtl = this.#rtl
+        const min = rtl ? offset - b : offset - a
+        const max = rtl ? offset + a : offset + b
+        element[scrollProp] = Math.max(min, Math.min(max,
+            element[scrollProp] + delta))
+    }
+    snap(velocity) {
+        const [offset, a, b] = this.#scrollBounds
+        const { start, end, pages, size } = this
+        const min = Math.abs(offset) - a
+        const max = Math.abs(offset) + b
+        const d = velocity * (this.#rtl ? -size : size)
+        const page = Math.floor(
+            Math.max(min, Math.min(max, (start + end) / 2
+                + (isNaN(d) ? 0 : d))) / size)
+        // TODO: ideally should snap by continuing the same velocity
+        this.#scrollToPage(page, 'snap').then(() => {
+            const dir = page <= 0 ? -1 : page >= pages - 1 ? 1 : null
+            if (dir) return this.#goTo({
+                index: this.#adjacentIndex(dir),
+                anchor: dir < 0 ? () => 1 : () => 0,
+            })
+        })
+    }
+    #onTouchStart(e) {
+        const touch = e.changedTouches[0]
+        this.#touchState = {
+            x: this.#vertical ? touch?.screenY : touch?.screenX,
+            t: e.timeStamp,
+            v: 0,
+        }
+    }
+    #onTouchMove(e) {
+        if (this.scrolled) return
+        e.preventDefault()
+        if (e.touches.length > 1) return
+        const state = this.#touchState
+        const touch = e.changedTouches[0]
+        const x = this.#vertical ? touch.screenY : touch.screenX
+        const deltaX = state.x - x
+        const deltaT = e.timeStamp - state.t
+        state.x = x
+        state.t = e.timeStamp
+        state.v = deltaX / deltaT
+        this.scrollBy(deltaX)
+    }
+    #onTouchEnd() {
+        if (this.scrolled) return
+        this.snap(this.#touchState.v)
+    }
     // allows one to process rects as if they were LTR and horizontal
     #getRectMapper() {
         if (this.scrolled) {
@@ -599,14 +665,16 @@ export class Paginator extends HTMLElement {
     }
     async #scrollTo(offset, reason, smooth) {
         const element = this.#container
-        const { scrollProp } = this
+        const { scrollProp, size } = this
         if (element[scrollProp] === offset) {
+            this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
             return
         }
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
-        if (smooth && this.pageAnimation) return new Promise((resolve, reject) => {
+        if (reason === 'snap'
+        || smooth && this.pageAnimation) return new Promise((resolve, reject) => {
             // `requestAnimationFrame` fixes the whole page getting "stuck" when
             // transitioning chapters in Foliate (the GTK 4 app).
             // It happens often but not always, and resolves itself after
@@ -619,6 +687,8 @@ export class Paginator extends HTMLElement {
                         if (Math.abs(element[scrollProp] - offset) > 2) return
                         element.removeEventListener('scroll', onScroll)
                         resolve()
+                        this.#scrollBounds = [offset,
+                            this.atStart ? 0 : size, this.atEnd ? 0 : size]
                         this.#afterScroll(reason)
                     }
                     element.addEventListener('scroll', onScroll)
@@ -631,6 +701,7 @@ export class Paginator extends HTMLElement {
         })
         else {
             element[scrollProp] = offset
+            this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
         }
     }
@@ -754,8 +825,8 @@ export class Paginator extends HTMLElement {
                 return this.#scrollTo(Math.max(0, this.start - this.size), null, true)
             return true
         }
+        if (this.atStart) return
         const page = this.page - 1
-        if (this.#index <= 0 && page <= 0) return
         return this.#scrollToPage(page, null, true).then(() => page <= 0)
     }
     #scrollNext() {
@@ -765,10 +836,16 @@ export class Paginator extends HTMLElement {
                 return this.#scrollTo(Math.min(this.viewSize, this.end), null, true)
             return true
         }
+        if (this.atEnd) return
         const page = this.page + 1
         const pages = this.pages
-        if (this.#index >= this.sections.length - 1 && page >= pages - 1) return
         return this.#scrollToPage(page, null, true).then(() => page >= pages - 1)
+    }
+    get atStart() {
+        return this.#adjacentIndex(-1) == null && this.page <= 1
+    }
+    get atEnd() {
+        return this.#adjacentIndex(1) == null && this.page >= this.pages - 2
     }
     #adjacentIndex(dir) {
         for (let index = this.#index + dir; this.#canGoToIndex(index); index += dir)
