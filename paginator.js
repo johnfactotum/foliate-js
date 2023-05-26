@@ -596,7 +596,8 @@ export class Paginator extends HTMLElement {
     get pages() {
         return Math.round(this.viewSize / this.size)
     }
-    scrollBy(delta) {
+    scrollBy(dx, dy) {
+        const delta = this.#vertical ? dy : dx
         const element = this.#container
         const { scrollProp } = this
         const [offset, a, b] = this.#scrollBounds
@@ -606,7 +607,8 @@ export class Paginator extends HTMLElement {
         element[scrollProp] = Math.max(min, Math.min(max,
             element[scrollProp] + delta))
     }
-    snap(velocity) {
+    snap(vx, vy) {
+        const velocity = this.#vertical ? vy : vx
         const [offset, a, b] = this.#scrollBounds
         const { start, end, pages, size } = this
         const min = Math.abs(offset) - a
@@ -627,9 +629,9 @@ export class Paginator extends HTMLElement {
     #onTouchStart(e) {
         const touch = e.changedTouches[0]
         this.#touchState = {
-            x: this.#vertical ? touch?.screenY : touch?.screenX,
+            x: touch?.screenX, y: touch?.screenY,
             t: e.timeStamp,
-            v: 0,
+            vx: 0, xy: 0,
         }
     }
     #onTouchMove(e) {
@@ -638,17 +640,18 @@ export class Paginator extends HTMLElement {
         if (e.touches.length > 1) return
         const state = this.#touchState
         const touch = e.changedTouches[0]
-        const x = this.#vertical ? touch.screenY : touch.screenX
-        const deltaX = state.x - x
-        const deltaT = e.timeStamp - state.t
+        const x = touch.screenX, y = touch.screenY
+        const dx = state.x - x, dy = state.y - y
+        const dt = e.timeStamp - state.t
         state.x = x
         state.t = e.timeStamp
-        state.v = deltaX / deltaT
-        this.scrollBy(deltaX)
+        state.vx = dx / dt
+        state.vy = dy / dt
+        this.scrollBy(dx, dy)
     }
     #onTouchEnd() {
         if (this.scrolled) return
-        this.snap(this.#touchState.v)
+        this.snap(this.#touchState.vx, this.#touchState.vy)
     }
     // allows one to process rects as if they were LTR and horizontal
     #getRectMapper() {
