@@ -608,7 +608,7 @@ export class Paginator extends HTMLElement {
                 index: this.#adjacentIndex(dir),
                 anchor: dir < 0 ? () => 1 : () => 0,
             })
-        })
+        }).then(() => this.dispatchEvent(new Event('snapend')))
     }
     #onTouchStart(e) {
         const touch = e.changedTouches[0]
