@@ -14,6 +14,20 @@ const debounce = (f, wait, immediate) => {
     }
 }
 
+const lerp = (min, max, x) => x * (max - min) + min
+const easeOutQuad = x => 1 - (1 - x) * (1 - x)
+const animate = (a, b, duration, ease, render) => new Promise(resolve => {
+    let start
+    const step = now => {
+        start ??= now
+        const fraction = Math.min(1, (now - start) / duration)
+        render(lerp(a, b, ease(fraction)))
+        if (fraction < 1) requestAnimationFrame(step)
+        else resolve()
+    }
+    requestAnimationFrame(step)
+})
+
 // collapsed range doesn't return client rects sometimes (or always?)
 // try make get a non-collapsed range or element
 const uncollapse = range => {
@@ -601,7 +615,7 @@ export class Paginator extends HTMLElement {
         const page = Math.floor(
             Math.max(min, Math.min(max, (start + end) / 2
                 + (isNaN(d) ? 0 : d))) / size)
-        // TODO: ideally should snap by continuing the same velocity
+
         this.#scrollToPage(page, 'snap').then(() => {
             const dir = page <= 0 ? -1 : page >= pages - 1 ? 1 : null
             if (dir) return this.#goTo({
@@ -673,31 +687,12 @@ export class Paginator extends HTMLElement {
         }
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
-        if (reason === 'snap'
-        || smooth && this.pageAnimation) return new Promise((resolve, reject) => {
-            // `requestAnimationFrame` fixes the whole page getting "stuck" when
-            // transitioning chapters in Foliate (the GTK 4 app).
-            // It happens often but not always, and resolves itself after
-            // interacting with the page (e.g. clicking on it).
-            // IDK what causes it and I can't reproduce it in any other browser
-            // or even with a WebKitGTK WebView, but this trick seems to fix it
-            requestAnimationFrame(() => {
-                try {
-                    const onScroll = () => {
-                        if (Math.abs(element[scrollProp] - offset) > 2) return
-                        element.removeEventListener('scroll', onScroll)
-                        resolve()
-                        this.#scrollBounds = [offset,
-                            this.atStart ? 0 : size, this.atEnd ? 0 : size]
-                        this.#afterScroll(reason)
-                    }
-                    element.addEventListener('scroll', onScroll)
-                    const coord = scrollProp === 'scrollLeft' ? 'left' : 'top'
-                    element.scrollTo({ [coord]: offset, behavior: 'smooth' })
-                } catch (e) {
-                    reject(e)
-                }
-            })
+        if (reason === 'snap' || smooth && this.pageAnimation) return animate(
+            element[scrollProp], offset, 300, easeOutQuad,
+            x => element[scrollProp] = x,
+        ).then(() => {
+            this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
+            this.#afterScroll(reason)
         })
         else {
             element[scrollProp] = offset
