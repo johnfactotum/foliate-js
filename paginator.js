@@ -678,7 +678,7 @@ export class Paginator extends HTMLElement {
         }
         const offset = this.#getRectMapper()(rect).left
             + this.layout.margin / 2
-        return this.#scrollToPage(Math.floor(offset / this.size) + 1, reason)
+        return this.#scrollToPage(Math.floor(offset / this.size) + (this.#rtl ? -1 : 1), reason)
     }
     async #scrollTo(offset, reason, smooth) {
         const element = this.#container
@@ -742,7 +742,7 @@ export class Paginator extends HTMLElement {
     #getVisibleRange() {
         if (this.scrolled) return getVisibleRange(this.#view.document,
             this.start, this.end, this.#getRectMapper())
-        const { size } = this
+        const size = this.#rtl ? -this.size : this.size
         return getVisibleRange(this.#view.document,
             this.start - size, this.end - size, this.#getRectMapper())
     }
