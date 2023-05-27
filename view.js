@@ -220,10 +220,13 @@ export class View extends HTMLElement {
     }
     async showAnnotation(annotation) {
         const { value } = annotation
-        const { index, anchor } = await this.goTo(value)
-        const { doc } =  this.#getOverlayer(index)
-        const range = anchor(doc)
-        this.#emit('show-annotation', { value, range })
+        const resolved = await this.goTo(value)
+        if (resolved) {
+            const { index, anchor } = resolved
+            const { doc } =  this.#getOverlayer(index)
+            const range = anchor(doc)
+            this.#emit('show-annotation', { value, range })
+        }
     }
     getCFI(index, range) {
         const baseCFI = this.book.sections[index].cfi ?? CFI.fake.fromIndex(index)
@@ -259,6 +262,7 @@ export class View extends HTMLElement {
         try {
             await this.renderer.goTo(resolved)
             this.history.pushState(target)
+            return resolved
         } catch(e) {
             console.error(e)
             console.error(`Could not go to ${target}`)
