@@ -320,3 +320,16 @@ export const fake = {
     fromIndex: index => `/6/${(index + 1) * 2}`,
     toIndex: parts => parts?.at(-1).index / 2 - 1,
 }
+
+// get CFI from Calibre bookmarks
+// see https://github.com/johnfactotum/foliate/issues/849
+export const fromCalibrePos = pos => {
+    const [parts] = parse(pos)
+    const item = parts.shift()
+    parts.shift()
+    return toString([[{ index: 6 }, item], parts])
+}
+export const fromCalibreHighlight = ({ spine_index, start_cfi, end_cfi }) => {
+    const pre = fake.fromIndex(spine_index) + '!'
+    return buildRange(pre + start_cfi.slice(2), pre + end_cfi.slice(2))
+}
