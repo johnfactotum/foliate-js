@@ -312,8 +312,8 @@ class View {
                 this.document.documentElement.style[side] = `${this.#size}px`
             if (this.#overlayer) {
                 this.#overlayer.element.style.margin = '0'
-                this.#overlayer.element.style.left = this.#vertical ? '0' : this.#size
-                this.#overlayer.element.style.top = this.#vertical ? this.#size : '0'
+                this.#overlayer.element.style.left = this.#vertical ? '0' : `${this.#size}px`
+                this.#overlayer.element.style.top = this.#vertical ? `${this.#size}px` : '0'
                 this.#overlayer.element.style[side] = `${expandedSize}px`
                 this.#overlayer.redraw()
             }
