@@ -644,6 +644,7 @@ export class Paginator extends HTMLElement {
         const dx = state.x - x, dy = state.y - y
         const dt = e.timeStamp - state.t
         state.x = x
+        state.y = y
         state.t = e.timeStamp
         state.vx = dx / dt
         state.vy = dy / dt
