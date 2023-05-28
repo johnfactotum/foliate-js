@@ -2,6 +2,8 @@ import * as CFI from './epubcfi.js'
 import { TOCProgress, SectionProgress } from './progress.js'
 import { Overlayer } from './overlayer.js'
 
+const SEARCH_PREFIX = 'foliate-search:'
+
 class History extends EventTarget {
     #arr = []
     #index = -1
@@ -83,6 +85,7 @@ export class View extends HTMLElement {
     #sectionProgress
     #tocProgress
     #pageProgress
+    #searchResults = new Map()
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -184,6 +187,21 @@ export class View extends HTMLElement {
     }
     async addAnnotation(annotation, remove) {
         const { value } = annotation
+        if (value.startsWith(SEARCH_PREFIX)) {
+            const cfi = value.replace(SEARCH_PREFIX, '')
+            const { index, anchor } = await this.resolveNavigation(cfi)
+            const obj = this.#getOverlayer(index)
+            if (obj) {
+                const { overlayer, doc } = obj
+                if (remove) {
+                    overlayer.remove(value)
+                    return
+                }
+                const range = doc ? anchor(doc) : anchor
+                overlayer.add(value, range, Overlayer.outline)
+            }
+            return
+        }
         const { index, anchor } = await this.resolveNavigation(value)
         const obj = this.#getOverlayer(index)
         if (obj) {
@@ -209,10 +227,14 @@ export class View extends HTMLElement {
         const overlayer = new Overlayer()
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
-            if (value) {
+            if (value && !value.startsWith(SEARCH_PREFIX)) {
                 this.#emit('show-annotation', { value, range })
             }
         }, false)
+
+        const list = this.#searchResults.get(index)
+        if (list) for (const item of list) this.addAnnotation(item)
+
         this.#emit('create-overlay', { index })
         return overlayer
     }
@@ -331,6 +353,7 @@ export class View extends HTMLElement {
         }
     }
     async * search(opts) {
+        this.clearSearch()
         const { searchMatcher } = await import('./search.js')
         const { query, index } = opts
         const matcher = searchMatcher(textWalker,
@@ -338,11 +361,36 @@ export class View extends HTMLElement {
         const iter = index != null
             ? this.#searchSection(matcher, query, index)
             : this.#searchBook(matcher, query)
-        for await (const result of iter) yield 'subitems' in result ? {
-            label: this.#tocProgress.getProgress(result.index)?.label ?? '',
-            subitems: result.subitems,
-        } : result
+
+        const list = []
+        this.#searchResults.set(index, list)
+
+        for await (const result of iter) {
+            if (result.subitems){
+                const list = result.subitems
+                    .map(({ cfi }) => ({ value: SEARCH_PREFIX + cfi }))
+                this.#searchResults.set(result.index, list)
+                for (const item of list) this.addAnnotation(item)
+                yield {
+                    label: this.#tocProgress.getProgress(result.index)?.label ?? '',
+                    subitems: result.subitems,
+                }
+            }
+            else {
+                if (result.cfi) {
+                    const item = { value: SEARCH_PREFIX + result.cfi }
+                    list.push(item)
+                    this.addAnnotation(item)
+                }
+                yield result
+            }
+        }
         yield 'done'
+    }
+    clearSearch() {
+        for (const list of this.#searchResults.values())
+            for (const item of list) this.deleteAnnotation(item)
+        this.#searchResults.clear()
     }
     destroy() {
         this.book.destroy?.()

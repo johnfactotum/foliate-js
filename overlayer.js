@@ -138,6 +138,23 @@ export class Overlayer {
         }
         return g
     }
+    static outline(rects, options = {}) {
+        const { color = 'red', width: strokeWidth = 3, radius = 3 } = options
+        const g = createSVGElement('g')
+        g.setAttribute('fill', 'none')
+        g.setAttribute('stroke', color)
+        g.setAttribute('stroke-width', strokeWidth)
+        for (const { left, top, height, width } of rects) {
+            const el = createSVGElement('rect')
+            el.setAttribute('x', left)
+            el.setAttribute('y', top)
+            el.setAttribute('height', height)
+            el.setAttribute('width', width)
+            el.setAttribute('rx', radius)
+            g.append(el)
+        }
+        return g
+    }
     // make an exact copy of an image in the overlay
     // one can then apply filters to the entire element, without affecting them;
     // it's a bit silly and probably better to just invert images twice
