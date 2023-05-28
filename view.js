@@ -83,7 +83,6 @@ export class View extends HTMLElement {
     #sectionProgress
     #tocProgress
     #pageProgress
-    #css
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -162,7 +161,6 @@ export class View extends HTMLElement {
         if (!this.language.isCJK)
             doc.documentElement.dir ||= this.language.direction ?? ''
 
-        this.renderer.setStyle?.(this.#css)
         this.#handleLinks(doc, index)
 
         this.#emit('load', { doc, index })
@@ -314,13 +312,6 @@ export class View extends HTMLElement {
     }
     goRight() {
         return this.book.dir === 'rtl' ? this.prev() : this.next()
-    }
-    setAppearance({ layout, css }) {
-        if (this.isFixedLayout) return
-        Object.assign(this.renderer.layout, layout)
-        this.#css = css
-        this.renderer.setStyle(css)
-        this.renderer.render()
     }
     async * #searchSection(matcher, query, index) {
         const doc = await this.book.sections[index].createDocument()

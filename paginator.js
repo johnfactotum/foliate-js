@@ -351,60 +351,92 @@ class View {
 
 // NOTE: everything here assumes the so-called "negative scroll type" for RTL
 export class Paginator extends HTMLElement {
+    static observedAttributes = [
+        'flow', 'gap', 'margin',
+        'max-inline-size', 'max-block-size', 'max-column-count',
+    ]
     #root = this.attachShadow({ mode: 'closed' })
-    #gap = 0
-    #shouldUpdateGap = true
     #observer = new ResizeObserver(() => this.render())
     #background
-    #maxWidthContainer
-    #maxHeightContainer
     #container
     #header
     #footer
     #view
     #vertical = false
     #rtl = false
+    #margin = 0
     #index = -1
     #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
     #locked = false // while true, prevent any further navigation
+    #styles
     #styleMap = new WeakMap()
     #scrollBounds
     #touchState
     pageAnimation = true
-    layout = {
-        margin: 48,
-        gap: 0.05,
-        maxColumnWidth: 700,
-    }
     constructor() {
         super()
         this.#root.innerHTML = `<style>
         :host {
+            --_gap: 7%;
+            --_margin: 48px;
+            --_max-inline-size: 720px;
+            --_max-block-size: 1440px;
+            --_max-column-count: 2;
+            --_vertical: 0;
+            --_half-gap: calc(var(--_gap) / 2);
+            --_max-width: calc(
+                var(--_vertical) * var(--_max-block-size)
+                + (1 - var(--_vertical)) * var(--_max-inline-size) * var(--_max-column-count)
+            );
+            --_max-height: calc(
+                var(--_vertical) * var(--_max-inline-size) * var(--_max-column-count)
+                + (1 - var(--_vertical)) * var(--_max-block-size)
+            );
+            display: grid;
+            grid-template-columns:
+                minmax(var(--_half-gap), 1fr)
+                minmax(0, var(--_max-width))
+                minmax(var(--_half-gap), 1fr);
+            grid-template-rows:
+                minmax(var(--_margin), 1fr)
+                minmax(0, var(--_max-height))
+                minmax(var(--_margin), 1fr);
             box-sizing: border-box;
             position: relative;
             overflow: hidden;
-            display: flex;
-        }
-        #background {
-            position: absolute;
-            top: 0;
-            left: 0;
-        }
-        #max-width {
-            position: relative;
-            display: flex;
-        }
-        :host, #background, #max-width, #max-height, #container {
             width: 100%;
             height: 100%;
-            margin: auto;
+        }
+        #background {
+            grid-column-start: 1;
+            grid-column-end: 4;
+            grid-row-start: 1;
+            grid-row-end: 4;
+        }
+        #container {
+            grid-column-start: 2;
+            grid-row-start: 2;
+            overflow: hidden;
+        }
+        :host([flow="scrolled"]) #container {
+            grid-column-start: 1;
+            grid-column-end: 4;
+            grid-row-start: 1;
+            grid-row-end: 4;
+            overflow: auto;
+        }
+        #header {
+            grid-column-start: 2;
+            grid-row-start: 1;
+        }
+        #footer {
+            grid-column-start: 2;
+            grid-row-start: 3;
+            align-self: end;
         }
         #header, #footer {
-            position: absolute;
-            left: 0;
-            right: 0;
             display: grid;
-            margin: auto;
+            height: var(--_margin);
         }
         :is(#header, #footer) > * {
             display: flex;
@@ -422,23 +454,17 @@ export class Paginator extends HTMLElement {
         }
         </style>
         <div id="background" part="filter"></div>
-        <div id="max-width">
-            <div id="max-height">
-                <div id="container"></div>
-            </div>
-            <div id="header"></div>
-            <div id="footer"></div>
-        </div>
+        <div id="header"></div>
+        <div id="container"></div>
+        <div id="footer"></div>
         `
 
         this.#background = this.#root.getElementById('background')
-        this.#maxWidthContainer = this.#root.getElementById('max-width')
-        this.#maxHeightContainer = this.#root.getElementById('max-height')
         this.#container = this.#root.getElementById('container')
         this.#header = this.#root.getElementById('header')
         this.#footer = this.#root.getElementById('footer')
 
-        this.#observer.observe(this)
+        this.#observer.observe(this.#container)
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) this.#afterScroll('scroll')
         }, 250))
@@ -452,6 +478,24 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
             doc.addEventListener('touchend', this.#onTouchEnd.bind(this))
         })
+    }
+    attributeChangedCallback(name, _, value) {
+        switch (name) {
+            case 'flow':
+                this.render()
+                break
+            case 'gap':
+            case 'margin':
+            case 'max-block-size':
+            case 'max-column-count':
+                this.style.setProperty('--_' + name, value)
+                break
+            case 'max-inline-size':
+                // needs explicit `render()` as it doesn't necessarily resize
+                this.style.setProperty('--_' + name, value)
+                this.render()
+                break
+        }
     }
     open(book) {
         this.bookDir = book.dir
@@ -469,25 +513,46 @@ export class Paginator extends HTMLElement {
     #beforeRender({ vertical, rtl, background }) {
         this.#vertical = vertical
         this.#rtl = rtl
+        this.style.setProperty('--_vertical', vertical ? 1 : 0)
 
         // set background to `doc` background
         // this is needed because the iframe does not fill the whole element
         this.#background.style.background = background
 
-        const { flow, margin, gap: gape, maxColumnWidth, maxColumns } = this.layout
+        const { width, height } = this.#container.getBoundingClientRect()
+        const size = vertical ? height : width
 
+        const style = getComputedStyle(this)
+        const maxInlineSize = parseFloat(style.getPropertyValue('--_max-inline-size'))
+        const margin = parseFloat(style.getPropertyValue('--_margin'))
+        this.#margin = margin
+
+        const g = parseFloat(style.getPropertyValue('--_gap')) / 100
+        // The gap will be a percentage of the #container, not the whole view.
+        // This means the outer padding will be bigger than the column gap. Let
+        // `a` be the gap percentage. The actual percentage for the column gap
+        // will be (1 - a) * a. Let us call this `b`.
+        //
+        // To make them the same, we start by shrinking the outer padding
+        // setting to `b`, but keep the column gap setting the same at `a`. Then
+        // the actual size for the column gap will be (1 - b) * a. Repeating the
+        // process again and again, we get the sequence
+        //     x₁ = (1 - b) * a
+        //     x₂ = (1 - x₁) * a
+        //     ...
+        // which converges to x = (1 - x) * a. Solving for x, x = a / (1 + a).
+        // So to make the spacing even, we must shrink the outer padding with
+        //     f(x) = x / (1 + x).
+        // But we want to keep the outer padding, and make the inner gap bigger.
+        // So we apply the inverse, f⁻¹ = -x / (x - 1) to the column gap.
+        const gap = -g / (g - 1) * size
+
+        const flow = this.getAttribute('flow')
         if (flow === 'scrolled') {
             // FIXME: vertical-rl only, not -lr
             this.setAttribute('dir', vertical ? 'rtl' : 'ltr')
             this.style.padding = '0'
-            this.#container.style.overflow ='auto'
-            this.#maxWidthContainer.style.maxWidth = 'none'
-            this.#maxHeightContainer.style.maxHeight = 'none'
-            const columnWidth = this.layout.maxColumnWidth
-
-            const { width, height } = this.#container.getBoundingClientRect()
-            const size = vertical ? height : width
-            const gap = Math.trunc(gape * size)
+            const columnWidth = maxInlineSize
 
             this.heads = null
             this.feet = null
@@ -497,50 +562,14 @@ export class Paginator extends HTMLElement {
             return { flow, margin, gap, columnWidth }
         }
 
-        const maxSize = `${maxColumns * maxColumnWidth}px`
-        this.#maxWidthContainer.style.maxWidth = vertical ? 'none' : maxSize
-        this.#maxHeightContainer.style.maxHeight = vertical ? maxSize : 'none'
-
-        if (this.#shouldUpdateGap) {
-            this.#shouldUpdateGap = false
-            const { width, height } = this.#container.getBoundingClientRect()
-            const size = vertical ? height : width
-            const gap = Math.trunc(gape * size)
-
-            const paddingH = `${vertical
-                ? Math.min(margin, Math.trunc(gape * width))
-                : gap / 2}px`
-            const paddingV = `${vertical
-                ? Math.max(margin - gap /  2, gap / 2)
-                : margin}px`
-            this.#gap = gap
-            this.style.padding = `${paddingV} ${paddingH}`
-            this.#header.style.top = `-${paddingV}`
-            this.#footer.style.bottom = `-${paddingV}`
-
-            const newRect = this.#container.getBoundingClientRect()
-            const newSize = vertical ? newRect.height : newRect.width
-            // if the size is different, don't do anything
-            // as the resize observer would fire in that case
-            if (newSize !== size) return
-        }
-
-        this.#shouldUpdateGap = true
-        const gap = this.#gap
-
-        const { width, height } = this.#container.getBoundingClientRect()
-        const size = vertical ? height : width
-        const divisor = Math.ceil(size / maxColumnWidth)
+        const divisor = Math.ceil(size / maxInlineSize)
         const columnWidth = (size / divisor) - gap
         this.setAttribute('dir', rtl ? 'rtl' : 'ltr')
-        this.#container.style.overflow ='hidden'
 
         const marginalDivisor = vertical
-            ? Math.min(2, Math.ceil(width / maxColumnWidth))
+            ? Math.min(2, Math.ceil(width / maxInlineSize))
             : divisor
         const marginalStyle = {
-            maxWidth: vertical ? 'none' : maxSize,
-            height: `${margin}px`,
             gridTemplateColumns: `repeat(${marginalDivisor}, 1fr)`,
             gap: `${gap}px`,
             padding: vertical ? '0' : `0 ${gap / 2}px`,
@@ -566,7 +595,7 @@ export class Paginator extends HTMLElement {
         this.#scrollToAnchor()
     }
     get scrolled() {
-        return this.layout.flow === 'scrolled'
+        return this.getAttribute('flow') === 'scrolled'
     }
     get scrollProp() {
         const { scrolled } = this
@@ -658,7 +687,7 @@ export class Paginator extends HTMLElement {
     #getRectMapper() {
         if (this.scrolled) {
             const size = this.viewSize
-            const margin = this.layout.margin
+            const margin = this.#margin
             return this.#vertical
                 ? ({ left, right }) =>
                     ({ left: size - right - margin, right: size - left - margin })
@@ -674,11 +703,11 @@ export class Paginator extends HTMLElement {
     }
     async #scrollToRect(rect, reason) {
         if (this.scrolled) {
-            const offset = this.#getRectMapper()(rect).left - this.layout.margin
+            const offset = this.#getRectMapper()(rect).left - this.#margin
             return this.#scrollTo(offset, reason)
         }
         const offset = this.#getRectMapper()(rect).left
-            + this.layout.margin / 2
+            + this.#margin / 2
         return this.#scrollToPage(Math.floor(offset / this.size) + (this.#rtl ? -1 : 1), reason)
     }
     async #scrollTo(offset, reason, smooth) {
@@ -801,6 +830,7 @@ export class Paginator extends HTMLElement {
             const oldIndex = this.#index
             const onLoad = detail => {
                 this.sections[oldIndex]?.unload?.()
+                this.setStyles(this.#styles)
                 this.dispatchEvent(new CustomEvent('load', { detail }))
             }
             await this.#display(Promise.resolve(this.sections[index].load())
@@ -890,7 +920,8 @@ export class Paginator extends HTMLElement {
         }]
         return []
     }
-    setStyle(styles) {
+    setStyles(styles) {
+        this.#styles = styles
         const $$styles = this.#styleMap.get(this.#view?.document)
         if (!$$styles) return
         const [$beforeStyle, $style] = $$styles

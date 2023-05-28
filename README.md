@@ -168,12 +168,15 @@ The filter only applies to the book itself, leaving overlaid elements such as hi
 
 There is a basic page transition effect that can be disabled by setting `.pageAnimation` to false.
 
-The layout can be configured from the `.layout` object, which has the following properties:
-- `.flow`: either `'paginated'` or `'scrolled'`.
-- `.margin`: number, in pixels. The height of the header and footer.
-- `.gap`: number between 0 and 1. The size of the space between columns, relative to page size.
-- `.maxColumnWidth`: number, in pixels. The maximum width of the text in each column.
-- `.maxColumns`: integer. The maximum number of columns. Has no effect in scrolled mode.
+The layout can be configured by setting the following attributes:
+- `flow`: either `paginated` or `scrolled`.
+- `margin`: a CSS `<length>`. The unit must be `px`. The height of the header and footer.
+- `gap`: a CSS `<percentage>`. The size of the space between columns, relative to page size.
+- `max-inline-size`: a CSS `<length>`. The unit must be `px`. The maximum inline size of the text (column width in paginated mode).
+- `max-block-size`: same as above, but for the size in the block direction.
+- `max-column-count`: integer. The maximum number of columns. Has no effect in scrolled mode.
+
+(Note: there's no JS property API. You must use `.setAttribute()`.)
 
 It has built-in header and footer regions accessible via the `.heads` and `.feet` properties of the paginator instance. These can be used to display running heads and reading progress. They are only available in paginated mode, and there will be one element for each column. They are styleable with `::part(head)` and `::part(foot)`. E.g., to add a border under the running heads,
 

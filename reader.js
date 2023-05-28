@@ -147,12 +147,6 @@ class Reader {
         justify: true,
         hyphenate: true,
     }
-    layout = {
-        margin: 48,
-        gap: 0.05,
-        maxColumns: 2,
-        maxColumnWidth: 720,
-    }
     annotations = new Map()
     annotationsByValue = new Map()
     closeSideBar() {
@@ -176,8 +170,7 @@ class Reader {
                     ['Scrolled', 'scrolled'],
                 ],
                 onclick: value => {
-                    this.layout.flow = value
-                    this.setAppearance()
+                    this.view?.renderer.setAttribute('flow', value)
                 },
             },
         ])
@@ -194,7 +187,7 @@ class Reader {
         this.view.addEventListener('relocate', this.#onRelocate.bind(this))
 
         const { book } = this.view
-        this.setAppearance()
+        this.view.renderer.setStyles?.(getCSS(this.style))
         this.view.renderer.next()
 
         $('#header-bar').style.visibility = 'visible'
@@ -273,11 +266,6 @@ class Reader {
                 if (annotation.note) alert(annotation.note)
             })
         }
-    }
-    setAppearance = () => {
-        this.view?.setAppearance({ css: getCSS(this.style), layout: this.layout })
-        const scrolled = this.layout.flow === 'scrolled'
-        document.documentElement.classList.toggle('scrolled', scrolled)
     }
     #handleKeydown(event) {
         const k = event.key
