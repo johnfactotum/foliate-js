@@ -214,6 +214,11 @@ class View {
                 this.render(layout)
                 new ResizeObserver(() => this.expand()).observe(doc.body)
 
+                // the resize observer above doesn't work in Firefox
+                // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
+                // until the bug is fixed we can at least account for font load
+                doc.fonts.ready.then(() => this.expand())
+
                 resolve()
             }, { once: true })
             this.#iframe.src = src
@@ -930,6 +935,9 @@ export class Paginator extends HTMLElement {
             $beforeStyle.textContent = beforeStyle
             $style.textContent = style
         } else $style.textContent = styles
+
+        // needed because the resize observer doesn't work in Firefox
+        this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
     }
     destroy() {
         this.#observer.unobserve(this)
