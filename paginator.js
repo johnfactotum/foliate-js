@@ -151,6 +151,7 @@ const makeMarginals = (length, part) => Array.from({ length }, () => {
 })
 
 class View {
+    #observer = new ResizeObserver(() => this.expand())
     #element = document.createElement('div')
     #iframe = document.createElement('iframe')
     #contentRange = document.createRange()
@@ -212,7 +213,7 @@ class View {
                 const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
                 this.render(layout)
-                new ResizeObserver(() => this.expand()).observe(doc.body)
+                this.#observer.observe(doc.body)
 
                 // the resize observer above doesn't work in Firefox
                 // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
@@ -351,6 +352,9 @@ class View {
     }
     get overlayer() {
         return this.#overlayer
+    }
+    destroy() {
+        if (this.document) this.#observer.unobserve(this.document.body)
     }
 }
 
@@ -941,6 +945,9 @@ export class Paginator extends HTMLElement {
     }
     destroy() {
         this.#observer.unobserve(this)
+        this.#view.destroy()
+        this.#view = null
+        this.sections[this.#index]?.unload?.()
     }
 }
 

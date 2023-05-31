@@ -129,6 +129,15 @@ export class View extends HTMLElement {
         this.renderer.open(book)
         this.#root.append(this.renderer)
     }
+    close() {
+        this.renderer?.destroy?.()
+        this.#sectionProgress = null
+        this.#tocProgress = null
+        this.#pageProgress = null
+        this.#searchResults = new Map()
+        this.lastLocation = null
+        this.history = new History()
+    }
     goToTextStart() {
         return this.goTo(this.book.landmarks
             ?.find(m => m.type.includes('bodymatter') || m.type.includes('text'))
@@ -391,10 +400,6 @@ export class View extends HTMLElement {
         for (const list of this.#searchResults.values())
             for (const item of list) this.deleteAnnotation(item)
         this.#searchResults.clear()
-    }
-    destroy() {
-        this.book.destroy?.()
-        this.renderer?.destroy?.()
     }
 }
 
