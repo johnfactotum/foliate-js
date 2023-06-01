@@ -533,6 +533,7 @@ export class Paginator extends HTMLElement {
 
         const style = getComputedStyle(this)
         const maxInlineSize = parseFloat(style.getPropertyValue('--_max-inline-size'))
+        const maxColumnCount = parseInt(style.getPropertyValue('--_max-column-count'))
         const margin = parseFloat(style.getPropertyValue('--_margin'))
         this.#margin = margin
 
@@ -571,7 +572,7 @@ export class Paginator extends HTMLElement {
             return { flow, margin, gap, columnWidth }
         }
 
-        const divisor = Math.ceil(size / maxInlineSize)
+        const divisor = Math.min(maxColumnCount, Math.ceil(size / maxInlineSize))
         const columnWidth = (size / divisor) - gap
         this.setAttribute('dir', rtl ? 'rtl' : 'ltr')
 
