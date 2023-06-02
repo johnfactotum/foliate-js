@@ -381,6 +381,7 @@ export class Paginator extends HTMLElement {
     #styleMap = new WeakMap()
     #scrollBounds
     #touchState
+    #touchScrolled
     pageAnimation = true
     constructor() {
         super()
@@ -674,10 +675,15 @@ export class Paginator extends HTMLElement {
         }
     }
     #onTouchMove(e) {
-        if (this.scrolled) return
-        e.preventDefault()
-        if (e.touches.length > 1) return
         const state = this.#touchState
+        if (state.pinched) return
+        state.pinched = globalThis.visualViewport.scale > 1
+        if (this.scrolled || state.pinched) return
+        if (e.touches.length > 1) {
+            if (this.#touchScrolled) e.preventDefault()
+            return
+        }
+        e.preventDefault()
         const touch = e.changedTouches[0]
         const x = touch.screenX, y = touch.screenY
         const dx = state.x - x, dy = state.y - y
@@ -687,11 +693,20 @@ export class Paginator extends HTMLElement {
         state.t = e.timeStamp
         state.vx = dx / dt
         state.vy = dy / dt
+        this.#touchScrolled = true
         this.scrollBy(dx, dy)
     }
     #onTouchEnd() {
+        this.#touchScrolled = false
         if (this.scrolled) return
-        this.snap(this.#touchState.vx, this.#touchState.vy)
+
+        // XXX: Firefox seems to report scale as 1... sometimes...?
+        // at this point I'm basically throwing `requestAnimationFrame` at
+        // anything that doesn't work
+        requestAnimationFrame(() => {
+            if (globalThis.visualViewport.scale === 1)
+                this.snap(this.#touchState.vx, this.#touchState.vy)
+        })
     }
     // allows one to process rects as if they were LTR and horizontal
     #getRectMapper() {
