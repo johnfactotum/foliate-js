@@ -123,7 +123,7 @@ export class View extends HTMLElement {
         this.renderer.addEventListener('load', e => this.#onLoad(e.detail))
         this.renderer.addEventListener('relocate', e => this.#onRelocate(e.detail))
         this.renderer.addEventListener('snapend', () =>
-            this.history.replaceState(this.lastLocation))
+            this.history.replaceState(this.lastLocation.cfi))
         this.renderer.addEventListener('create-overlayer', e =>
             e.detail.attach(this.#createOverlayer(e.detail)))
         this.renderer.open(book)
@@ -164,8 +164,8 @@ export class View extends HTMLElement {
         const tocItem = this.#tocProgress.getProgress(index, range)
         const pageItem = this.#pageProgress.getProgress(index, range)
         const cfi = this.getCFI(index, range)
-        this.lastLocation = cfi
-        this.#emit('relocate', { ...progress, tocItem, pageItem, cfi, range })
+        this.lastLocation = { ...progress, tocItem, pageItem, cfi, range }
+        this.#emit('relocate', this.lastLocation)
     }
     #onLoad({ doc, index }) {
         // set language and dir if not already set
@@ -332,11 +332,11 @@ export class View extends HTMLElement {
     }
     async prev() {
         await this.renderer.prev()
-        this.history.replaceState(this.lastLocation)
+        this.history.replaceState(this.lastLocation.cfi)
     }
     async next() {
         await this.renderer.next()
-        this.history.replaceState(this.lastLocation)
+        this.history.replaceState(this.lastLocation.cfi)
     }
     goLeft() {
         return this.book.dir === 'rtl' ? this.next() : this.prev()
