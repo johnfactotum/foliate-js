@@ -40,6 +40,10 @@ class History extends EventTarget {
     get canGoForward() {
         return this.#index < this.#arr.length - 1
     }
+    clear() {
+        this.#arr = []
+        this.#index = -1
+    }
 }
 
 const textWalker = function* (doc, func) {
@@ -88,17 +92,15 @@ export class View extends HTMLElement {
     #searchResults = new Map()
     isFixedLayout = false
     lastLocation
-    history
+    history = new History()
     constructor() {
         super()
-    }
-    async open(book) {
-        this.history = new History()
         this.history.addEventListener('popstate', ({ detail }) => {
             const resolved = this.resolveNavigation(detail.state)
             this.renderer.goTo(resolved)
         })
-
+    }
+    async open(book) {
         this.book = book
         this.language = languageInfo(book.metadata?.language)
 
@@ -139,7 +141,7 @@ export class View extends HTMLElement {
         this.#pageProgress = null
         this.#searchResults = new Map()
         this.lastLocation = null
-        this.history = null
+        this.history.clear()
     }
     goToTextStart() {
         return this.goTo(this.book.landmarks
