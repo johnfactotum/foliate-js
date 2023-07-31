@@ -88,15 +88,17 @@ export class View extends HTMLElement {
     #searchResults = new Map()
     isFixedLayout = false
     lastLocation
-    history = new History()
+    history
     constructor() {
         super()
+    }
+    async open(book) {
+        this.history = new History()
         this.history.addEventListener('popstate', ({ detail }) => {
             const resolved = this.resolveNavigation(detail.state)
             this.renderer.goTo(resolved)
         })
-    }
-    async open(book) {
+
         this.book = book
         this.language = languageInfo(book.metadata?.language)
 
@@ -130,13 +132,14 @@ export class View extends HTMLElement {
         this.#root.append(this.renderer)
     }
     close() {
-        this.renderer?.destroy?.()
+        this.renderer?.destroy()
+        this.renderer?.remove()
         this.#sectionProgress = null
         this.#tocProgress = null
         this.#pageProgress = null
         this.#searchResults = new Map()
         this.lastLocation = null
-        this.history = new History()
+        this.history = null
     }
     goToTextStart() {
         return this.goTo(this.book.landmarks
