@@ -639,11 +639,14 @@ export class EPUB {
         this.getSize = getSize
         this.#encryption = new Encryption(deobfuscators(sha1))
     }
-    #parseXML(str) {
-        return str ? this.parser.parseFromString(str, MIME.XML) : null
-    }
     async #loadXML(uri) {
-        return this.#parseXML(await this.loadText(uri))
+        const str = await this.loadText(uri)
+        if (!str) return null
+        const doc = this.parser.parseFromString(str, MIME.XML)
+        if (doc.querySelector('parsererror'))
+            throw new Error(`XML parsing error: ${uri}
+${doc.querySelector('parsererror').innerText}`)
+        return doc
     }
     async init() {
         const $container = await this.#loadXML('META-INF/container.xml')
