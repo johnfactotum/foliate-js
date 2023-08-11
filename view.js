@@ -335,12 +335,12 @@ export class View extends HTMLElement {
             console.error(`Could not get ${target}`)
         }
     }
-    async prev() {
-        await this.renderer.prev()
+    async prev(distance) {
+        await this.renderer.prev(distance)
         this.history.replaceState(this.lastLocation.cfi)
     }
-    async next() {
-        await this.renderer.next()
+    async next(distance) {
+        await this.renderer.next(distance)
         this.history.replaceState(this.lastLocation.cfi)
     }
     goLeft() {

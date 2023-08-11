@@ -872,22 +872,22 @@ export class Paginator extends HTMLElement {
         const resolved = await target
         if (this.#canGoToIndex(resolved.index)) return this.#goTo(resolved)
     }
-    #scrollPrev() {
+    #scrollPrev(distance) {
         if (!this.#view) return true
         if (this.scrolled) {
-            if (this.start > 0)
-                return this.#scrollTo(Math.max(0, this.start - this.size), null, true)
+            if (this.start > 0) return this.#scrollTo(
+                Math.max(0, this.start - (distance ?? this.size)), null, true)
             return true
         }
         if (this.atStart) return
         const page = this.page - 1
         return this.#scrollToPage(page, null, true).then(() => page <= 0)
     }
-    #scrollNext() {
+    #scrollNext(distance) {
         if (!this.#view) return true
         if (this.scrolled) {
-            if (this.viewSize - this.end > 2)
-                return this.#scrollTo(Math.min(this.viewSize, this.end), null, true)
+            if (this.viewSize - this.end > 2) return this.#scrollTo(
+                Math.min(this.viewSize, distance ? this.start + distance : this.end), null, true)
             return true
         }
         if (this.atEnd) return
@@ -905,11 +905,11 @@ export class Paginator extends HTMLElement {
         for (let index = this.#index + dir; this.#canGoToIndex(index); index += dir)
             if (this.sections[index]?.linear !== 'no') return index
     }
-    async #turnPage(dir) {
+    async #turnPage(dir, distance) {
         if (this.#locked) return
         this.#locked = true
         const prev = dir === -1
-        const shouldGo = await (prev ? this.#scrollPrev() : this.#scrollNext())
+        const shouldGo = await (prev ? this.#scrollPrev(distance) : this.#scrollNext(distance))
         if (shouldGo) await this.#goTo({
             index: this.#adjacentIndex(dir),
             anchor: prev ? () => 1 : () => 0,
@@ -917,11 +917,11 @@ export class Paginator extends HTMLElement {
         if (shouldGo || !this.pageAnimation) await wait(100)
         this.#locked = false
     }
-    prev() {
-        return this.#turnPage(-1)
+    prev(distance) {
+        return this.#turnPage(-1, distance)
     }
-    next() {
-        return this.#turnPage(1)
+    next(distance) {
+        return this.#turnPage(1, distance)
     }
     prevSection() {
         return this.goTo({ index: this.#adjacentIndex(-1) })
