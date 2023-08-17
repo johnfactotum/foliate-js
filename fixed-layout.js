@@ -221,9 +221,9 @@ export class FixedLayout extends HTMLElement {
             ? spread.left ?? spread.right : spread.right ?? spread.left)
         return this.book.sections.indexOf(section)
     }
-    #reportLocation() {
+    #reportLocation(reason) {
         this.dispatchEvent(new CustomEvent('relocate', { detail:
-            { range: null, index: this.index, fraction: 0, size: 1 } }))
+            { reason, range: null, index: this.index, fraction: 0, size: 1 } }))
     }
     getSpreadOf(section) {
         const spreads = this.#spreads
@@ -234,7 +234,7 @@ export class FixedLayout extends HTMLElement {
             if (center === section) return { index, side: 'center' }
         }
     }
-    async goToSpread(index, side) {
+    async goToSpread(index, side, reason) {
         if (index < 0 || index > this.#spreads.length - 1) return
         if (index === this.#index) {
             this.#render(side)
@@ -255,7 +255,7 @@ export class FixedLayout extends HTMLElement {
             const right = { index: indexR, src: srcR }
             await this.#showSpread({ left, right, side })
         }
-        this.#reportLocation()
+        this.#reportLocation(reason)
     }
     async select(target) {
         await this.goTo(target)
@@ -271,13 +271,13 @@ export class FixedLayout extends HTMLElement {
     }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
-        if (s) this.#reportLocation()
-        else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left')
+        if (s) this.#reportLocation('page')
+        else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
     }
     async prev() {
         const s = this.rtl ? this.#goRight() : this.#goLeft()
-        if (s) this.#reportLocation()
-        else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right')
+        if (s) this.#reportLocation('page')
+        else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
     }
     getContents() {
         return Array.from(this.#root.querySelectorAll('iframe'), frame => ({

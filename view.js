@@ -126,8 +126,6 @@ export class View extends HTMLElement {
         this.renderer.setAttribute('exportparts', 'head,foot,filter')
         this.renderer.addEventListener('load', e => this.#onLoad(e.detail))
         this.renderer.addEventListener('relocate', e => this.#onRelocate(e.detail))
-        this.renderer.addEventListener('snapend', () =>
-            this.history.replaceState(this.lastLocation.cfi))
         this.renderer.addEventListener('create-overlayer', e =>
             e.detail.attach(this.#createOverlayer(e.detail)))
         this.renderer.open(book)
@@ -163,13 +161,14 @@ export class View extends HTMLElement {
     #emit(name, detail, cancelable) {
         return this.dispatchEvent(new CustomEvent(name, { detail, cancelable }))
     }
-    #onRelocate({ range, index, fraction, size }) {
-        if (!this.#sectionProgress) return
-        const progress = this.#sectionProgress.getProgress(index, fraction, size)
-        const tocItem = this.#tocProgress.getProgress(index, range)
-        const pageItem = this.#pageProgress.getProgress(index, range)
+    #onRelocate({ reason, range, index, fraction, size }) {
+        const progress = this.#sectionProgress?.getProgress(index, fraction, size) ?? {}
+        const tocItem = this.#tocProgress?.getProgress(index, range)
+        const pageItem = this.#pageProgress?.getProgress(index, range)
         const cfi = this.getCFI(index, range)
         this.lastLocation = { ...progress, tocItem, pageItem, cfi, range }
+        if (reason === 'snap' || reason === 'page' || reason === 'scroll')
+            this.history.replaceState(cfi)
         this.#emit('relocate', this.lastLocation)
     }
     #onLoad({ doc, index }) {
@@ -337,11 +336,9 @@ export class View extends HTMLElement {
     }
     async prev(distance) {
         await this.renderer.prev(distance)
-        this.history.replaceState(this.lastLocation.cfi)
     }
     async next(distance) {
         await this.renderer.next(distance)
-        this.history.replaceState(this.lastLocation.cfi)
     }
     goLeft() {
         return this.book.dir === 'rtl' ? this.next() : this.prev()

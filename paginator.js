@@ -664,7 +664,7 @@ export class Paginator extends HTMLElement {
                 index: this.#adjacentIndex(dir),
                 anchor: dir < 0 ? () => 1 : () => 0,
             })
-        }).then(() => this.dispatchEvent(new Event('snapend')))
+        })
     }
     #onTouchStart(e) {
         const touch = e.changedTouches[0]
@@ -807,7 +807,7 @@ export class Paginator extends HTMLElement {
         if (reason !== 'anchor') this.#anchor = range
 
         const index = this.#index
-        const detail = { range, index }
+        const detail = { reason, range, index }
         if (this.scrolled) detail.fraction = this.start / this.viewSize
         else if (this.pages > 0) {
             const { page, pages } = this
@@ -881,7 +881,7 @@ export class Paginator extends HTMLElement {
         }
         if (this.atStart) return
         const page = this.page - 1
-        return this.#scrollToPage(page, null, true).then(() => page <= 0)
+        return this.#scrollToPage(page, 'page', true).then(() => page <= 0)
     }
     #scrollNext(distance) {
         if (!this.#view) return true
@@ -893,7 +893,7 @@ export class Paginator extends HTMLElement {
         if (this.atEnd) return
         const page = this.page + 1
         const pages = this.pages
-        return this.#scrollToPage(page, null, true).then(() => page >= pages - 1)
+        return this.#scrollToPage(page, 'page', true).then(() => page >= pages - 1)
     }
     get atStart() {
         return this.#adjacentIndex(-1) == null && this.page <= 1
