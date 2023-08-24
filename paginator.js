@@ -489,7 +489,6 @@ export class Paginator extends HTMLElement {
         this.#footer = this.#root.getElementById('footer')
 
         this.#resizeObserver.observe(this.#container)
-        this.#mutationObserver.observe(this.#container, { childList: true, subtree: true })
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) {
                 this.#afterScroll('scroll')
@@ -989,7 +988,6 @@ export class Paginator extends HTMLElement {
     }
     destroy() {
         this.#resizeObserver.unobserve(this)
-        this.#mutationObserver.unobserve(this)
         this.#view.destroy()
         this.#view = null
         this.sections[this.#index]?.unload?.()
