@@ -31,8 +31,18 @@ const getViewport = (doc, viewport) => {
 
 export class FixedLayout extends HTMLElement {
     #root = this.attachShadow({ mode: 'closed' })
+    #wait = ms => new Promise(resolve => setTimeout(resolve, ms))
     #resizeObserver = new ResizeObserver(() => this.#render())
-    #mutationObserver = new MutationObserver(() => this.#render())
+//    #mutationObserver = new MutationObserver(async () => {
+//        console.log("befre...")
+//        await this.#wait(100)
+//        requestAnimationFrame(() => {
+//        console.log("in...")
+//            this.render()
+//        })
+////        await this.#wait(100)
+////        this.#render()
+//    })
     #spreads
     #index = -1
     defaultViewport
@@ -56,7 +66,7 @@ export class FixedLayout extends HTMLElement {
         }`)
 
         this.#resizeObserver.observe(this)
-        this.#mutationObserver.observe(this, { childList: true, subtree: true })
+//        this.#mutationObserver.observe(this.#root, { childList: true, subtree: true, attributes: true })
     }
     async #createFrame({ index, src }) {
         const element = document.createElement('div')
@@ -289,7 +299,7 @@ export class FixedLayout extends HTMLElement {
     }
     destroy() {
         this.#resizeObserver.unobserve(this)
-        this.#mutationObserver.unobserve(this)
+//        this.#mutationObserver.unobserve(this.#root)
     }
 }
 
