@@ -151,7 +151,8 @@ const makeMarginals = (length, part) => Array.from({ length }, () => {
 })
 
 class View {
-    #observer = new ResizeObserver(() => this.expand())
+    #resizeObserver = new ResizeObserver(() => this.expand())
+    #mutationObserver = new MutationObserver(() => this.expand())
     #element = document.createElement('div')
     #iframe = document.createElement('iframe')
     #contentRange = document.createRange()
@@ -213,7 +214,8 @@ class View {
                 const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
                 this.render(layout)
-                this.#observer.observe(doc.body)
+                this.#resizeObserver.observe(doc.body)
+                this.#mutationObserver.observe(doc.body, { childList: true, subtree: true })
 
                 // the resize observer above doesn't work in Firefox
                 // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
@@ -354,7 +356,8 @@ class View {
         return this.#overlayer
     }
     destroy() {
-        if (this.document) this.#observer.unobserve(this.document.body)
+        if (this.document) this.#resizeObserver.unobserve(this.document.body)
+        if (this.document) this.#mutationObserver.unobserve(this.document.body)
     }
 }
 
@@ -365,7 +368,8 @@ export class Paginator extends HTMLElement {
         'max-inline-size', 'max-block-size', 'max-column-count',
     ]
     #root = this.attachShadow({ mode: 'closed' })
-    #observer = new ResizeObserver(() => this.render())
+    #resizeObserver = new ResizeObserver(() => this.render())
+    #mutationObserver = new MutationObserver(() => this.render())
     #background
     #container
     #header
@@ -474,7 +478,8 @@ export class Paginator extends HTMLElement {
         this.#header = this.#root.getElementById('header')
         this.#footer = this.#root.getElementById('footer')
 
-        this.#observer.observe(this.#container)
+        this.#resizeObserver.observe(this.#container)
+        this.#mutationObserver.observe(this.#container, { childList: true, subtree: true })
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) this.#afterScroll('scroll')
         }, 250))
@@ -960,7 +965,8 @@ export class Paginator extends HTMLElement {
         this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
     }
     destroy() {
-        this.#observer.unobserve(this)
+        this.#resizeObserver.unobserve(this)
+        this.#mutationObserver.unobserve(this)
         this.#view.destroy()
         this.#view = null
         this.sections[this.#index]?.unload?.()

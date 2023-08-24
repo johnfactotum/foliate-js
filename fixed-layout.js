@@ -31,7 +31,8 @@ const getViewport = (doc, viewport) => {
 
 export class FixedLayout extends HTMLElement {
     #root = this.attachShadow({ mode: 'closed' })
-    #observer = new ResizeObserver(() => this.#render())
+    #resizeObserver = new ResizeObserver(() => this.#render())
+    #mutationObserver = new MutationObserver(() => this.#render())
     #spreads
     #index = -1
     defaultViewport
@@ -54,7 +55,8 @@ export class FixedLayout extends HTMLElement {
             align-items: center;
         }`)
 
-        this.#observer.observe(this)
+        this.#resizeObserver.observe(this)
+        this.#mutationObserver.observe(this, { childList: true, subtree: true })
     }
     async #createFrame({ index, src }) {
         const element = document.createElement('div')
@@ -286,7 +288,8 @@ export class FixedLayout extends HTMLElement {
         }))
     }
     destroy() {
-        this.#observer.unobserve(this)
+        this.#resizeObserver.unobserve(this)
+        this.#mutationObserver.unobserve(this)
     }
 }
 
