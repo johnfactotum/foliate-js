@@ -376,6 +376,7 @@ export class Paginator extends HTMLElement {
     #margin = 0
     #index = -1
     #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
+    #justAnchored = false
     #locked = false // while true, prevent any further navigation
     #styles
     #styleMap = new WeakMap()
@@ -476,7 +477,10 @@ export class Paginator extends HTMLElement {
 
         this.#observer.observe(this.#container)
         this.#container.addEventListener('scroll', debounce(() => {
-            if (this.scrolled) this.#afterScroll('scroll')
+            if (this.scrolled) {
+                if (this.#justAnchored) this.#justAnchored = false
+                else this.#afterScroll('scroll')
+            }
         }, 250))
 
         const opts = { passive: false }
@@ -805,6 +809,7 @@ export class Paginator extends HTMLElement {
         const range = this.#getVisibleRange()
         // don't set new anchor if relocation was to scroll to anchor
         if (reason !== 'anchor') this.#anchor = range
+        else this.#justAnchored = true
 
         const index = this.#index
         const detail = { reason, range, index }
