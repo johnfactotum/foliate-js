@@ -156,7 +156,9 @@ class View {
         this.expand()
     })
     #mutationObserver = new MutationObserver(async () => {
-        this.needsRenderForMutation = true
+        if (this.#column) {
+            this.needsRenderForMutation = true
+        }
     })
     needsRenderForMutation = false
     #element = document.createElement('div')
