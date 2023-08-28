@@ -223,7 +223,7 @@ class View {
                 this.#iframe.style.display = 'block'
                 this.render(layout)
                 this.#resizeObserver.observe(doc.body)
-                this.#mutationObserver.observe(doc.body, { childList: true, subtree: true, attributes: true })
+                this.#mutationObserver.observe(doc.body, { childList: true, subtree: true, attributes: false })
 
                 // the resize observer above doesn't work in Firefox
                 // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
@@ -392,13 +392,14 @@ export class Paginator extends HTMLElement {
     #margin = 0
     #index = -1
     #anchor = 0 // anchor view to a fraction (0-1), Range, or Element
+    #justAnchored = false
     #locked = false // while true, prevent any further navigation
     #styles
     #styleMap = new WeakMap()
     #scrollBounds
     #touchState
     #touchScrolled
-    pageAnimation = true
+    pageAnimation = false
     constructor() {
         super()
         this.#root.innerHTML = `<style>
@@ -493,9 +494,13 @@ export class Paginator extends HTMLElement {
         this.#resizeObserver.observe(this.#container)
         this.#container.addEventListener('scroll', debounce(() => {
             if (this.scrolled) {
-                this.#afterScroll('scroll')
+                if (this.#justAnchored) {
+                    this.#justAnchored = false
+                } else {
+                    this.#afterScroll('scroll')
+                }
             }
-        }, 250))
+        }, 1))
 
         const opts = { passive: false }
         this.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
@@ -546,6 +551,7 @@ export class Paginator extends HTMLElement {
                 vertical: this.#vertical,
                 rtl: this.#rtl,
             }))
+            await this.#scrollToAnchor();
             this.#view.needsRenderForMutation = false
         }
     }
@@ -833,7 +839,11 @@ export class Paginator extends HTMLElement {
     #afterScroll(reason) {
         const range = this.#getVisibleRange()
         // don't set new anchor if relocation was to scroll to anchor
-        if (reason !== 'anchor') this.#anchor = range
+        if (reason !== 'anchor') {
+            this.#anchor = range
+        } else {
+            this.#justAnchored = true
+        }
 
         const index = this.#index
         const detail = { reason, range, index }
@@ -879,8 +889,9 @@ export class Paginator extends HTMLElement {
         return index >= 0 && index <= this.sections.length - 1
     }
     async #goTo({ index, anchor, select}) {
-        if (index === this.#index) await this.#display({ index, anchor, select })
-        else {
+        if (index === this.#index) {
+            await this.#display({ index, anchor, select })
+        } else {
             const oldIndex = this.#index
             const onLoad = detail => {
                 this.sections[oldIndex]?.unload?.()

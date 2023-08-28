@@ -427,11 +427,12 @@ class Loader {
     #children = new Map()
     #refCount = new Map()
     allowScript = false
-    constructor({ loadText, loadBlob, resources }) {
+    constructor({ loadText, loadBlob, resources, replaceText }) {
         this.loadText = loadText
         this.loadBlob = loadBlob
         this.manifest = resources.manifest
         this.assets = resources.manifest
+        this.replaceText = replaceText
         // needed only when replacing in (X)HTML w/o parsing (see below)
         //.filter(({ mediaType }) => ![MIME.XHTML, MIME.HTML].includes(mediaType))
     }
@@ -556,8 +557,12 @@ class Loader {
                 el.setAttribute('style',
                     await this.replaceCSS(el.getAttribute('style'), href, parents))
             // TODO: replace inline scripts? probably not worth the trouble
-            const result = new XMLSerializer().serializeToString(doc)
-            return this.createURL(href, result, item.mediaType, parent)
+            const textResult = new XMLSerializer().serializeToString(doc)
+            if (this.replaceText) {
+                const replacedText = await this.replaceText(textResult, mediaType)
+                return this.createURL(href, replacedText, item.mediaType, parent)
+            }
+            return this.createURL(href, textResult, item.mediaType, parent)
         }
 
         const result = mediaType === MIME.CSS
@@ -633,10 +638,11 @@ export class EPUB {
     parser = new DOMParser()
     #loader
     #encryption
-    constructor({ loadText, loadBlob, getSize, sha1 }) {
+    constructor({ loadText, loadBlob, getSize, replaceText, sha1 }) {
         this.loadText = loadText
         this.loadBlob = loadBlob
         this.getSize = getSize
+        this.replaceText = replaceText
         this.#encryption = new Encryption(deobfuscators(sha1))
     }
     async #loadXML(uri) {
@@ -674,6 +680,7 @@ ${doc.querySelector('parsererror').innerText}`)
             loadBlob: uri => Promise.resolve(this.loadBlob(uri))
                 .then(this.#encryption.getDecoder(uri)),
             resources: this.resources,
+            replaceText: this.replaceText,
         })
         this.sections = this.resources.spine.map((spineItem, index) => {
             const { idref, linear, properties = [] } = spineItem
