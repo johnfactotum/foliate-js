@@ -148,13 +148,13 @@ export class FixedLayout extends HTMLElement {
         } else {
             this.#left = await this.#createFrame(left)
             this.#right = await this.#createFrame(right)
-            this.#side = side
+            this.#side = this.#left.blank ? 'right'
+                : this.#right.blank ? 'left' : side
             this.#render()
         }
     }
     #goLeft() {
-        if (this.#center) return
-        if (this.#left?.blank) return true
+        if (this.#center || this.#left?.blank) return
         if (this.#portrait && this.#left?.element?.style?.display === 'none') {
             this.#right.element.style.display = 'none'
             this.#left.element.style.display = 'block'
@@ -163,8 +163,7 @@ export class FixedLayout extends HTMLElement {
         }
     }
     #goRight() {
-        if (this.#center) return
-        if (this.#right?.blank) return true
+        if (this.#center || this.#right?.blank) return
         if (this.#portrait && this.#right?.element?.style?.display === 'none') {
             this.#left.element.style.display = 'none'
             this.#right.element.style.display = 'block'
