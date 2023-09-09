@@ -111,13 +111,13 @@ export class FixedLayout extends HTMLElement {
                     right.height ?? blankHeight))
 
         const transform = frame => {
-            const { element, iframe, width, height } = frame
+            const { element, iframe, width, height, blank } = frame
             Object.assign(iframe.style, {
                 width: `${width}px`,
                 height: `${height}px`,
                 transform: `scale(${scale})`,
                 transformOrigin: 'top left',
-                display: 'block',
+                display: blank ? 'none' : 'block',
             })
             Object.assign(element.style, {
                 width: `${(width ?? blankWidth) * scale}px`,
