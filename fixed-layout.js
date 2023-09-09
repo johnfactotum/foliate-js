@@ -100,7 +100,7 @@ export class FixedLayout extends HTMLElement {
         const blankWidth = left.width ?? right.width
         const blankHeight = left.height ?? right.height
 
-        const scale = portrait
+        const scale = portrait || this.#center
             ? Math.min(
                 width / (target.width ?? blankWidth),
                 height / (target.height ?? blankHeight))
