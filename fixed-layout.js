@@ -193,7 +193,10 @@ export class FixedLayout extends HTMLElement {
                 arr.push(spread)
                 return spread
             }
-            if (pageSpread === 'center') newSpread().center = section
+            if (pageSpread === 'center') {
+                const spread = last.left || last.right ? newSpread() : last
+                spread.center = section
+            }
             else if (pageSpread === 'left') {
                 const spread = last.center || last.left || ltr ? newSpread() : last
                 spread.left = section
