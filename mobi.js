@@ -884,6 +884,7 @@ const replaceSeries = async (str, regex, f) => {
 
 class KF8 {
     parser = new DOMParser()
+    serializer = new XMLSerializer()
     #cache = new Map()
     #fragmentOffsets = new Map()
     #fragmentSelectors = new Map()
@@ -894,8 +895,8 @@ class KF8 {
     #rawTail = new Uint8Array()
     #lastLoadedHead = -1
     #lastLoadedTail = -1
-    #checkType = true
     #type = MIME.XHTML
+    #inlineMap = new Map()
     constructor(mobi) {
         this.mobi = mobi
     }
@@ -1029,12 +1030,18 @@ class KF8 {
             : await this.mobi.loadResource(id - 1)
         const result = [MIME.XHTML, MIME.HTML, MIME.CSS, MIME.SVG].includes(type)
             ? await this.replaceResources(this.mobi.decode(raw)) : raw
-        return new Blob([result], { type })
+        const doc = type === MIME.SVG ? this.parser.parseFromString(result, type) : null
+        return [new Blob([result], { type }),
+            // SVG wrappers need to be inlined
+            // as browsers don't allow external resources when loading SVG as an image
+            doc?.getElementsByTagNameNS('http://www.w3.org/2000/svg', 'image')?.length
+                ? doc.documentElement : null]
     }
     async loadResource(str) {
         if (this.#cache.has(str)) return this.#cache.get(str)
-        const blob = await this.loadResourceBlob(str)
-        const url = URL.createObjectURL(blob)
+        const [blob, inline] = await this.loadResourceBlob(str)
+        const url = inline ? str : URL.createObjectURL(blob)
+        if (inline) this.#inlineMap.set(url, inline)
         this.#cache.set(str, url)
         return url
     }
@@ -1102,16 +1109,20 @@ class KF8 {
     async loadSection(section) {
         if (this.#cache.has(section)) return this.#cache.get(section)
         const str = await this.loadText(section)
+        const replaced = await this.replaceResources(str)
 
         // by default, type is XHTML; change to HTML if it's not valid XHTML
-        if (this.#checkType && this.parser
-            .parseFromString(str, this.#type)
-            .querySelector('parsererror')) this.#type = MIME.HTML
-        // let's just check it once for now
-        if (this.#checkType) this.#checkType = false
-
-        const replaced = await this.replaceResources(str)
-        const url = URL.createObjectURL(new Blob([replaced], { type: this.#type }))
+        let doc = this.parser.parseFromString(replaced, this.#type)
+        if (doc.querySelector('parsererror')) {
+            this.#type = MIME.HTML
+            doc = this.parser.parseFromString(replaced, this.#type)
+        }
+        for (const [url, node] of this.#inlineMap) {
+            for (const el of doc.querySelectorAll(`img[src="${url}"]`))
+                el.replaceWith(node)
+        }
+        const url = URL.createObjectURL(
+            new Blob([this.serializer.serializeToString(doc)], { type: this.#type }))
         this.#cache.set(section, url)
         return url
     }
