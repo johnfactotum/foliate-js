@@ -882,6 +882,16 @@ const replaceSeries = async (str, regex, f) => {
     return str.replace(regex, () => results.shift())
 }
 
+const getPageSpread = properties => {
+    for (const p of properties) {
+        if (p === 'page-spread-left' || p === 'rendition:page-spread-left')
+            return 'left'
+        if (p === 'page-spread-right' || p === 'rendition:page-spread-right')
+            return 'right'
+        if (p === 'rendition:page-spread-center') return 'center'
+    }
+}
+
 class KF8 {
     parser = new DOMParser()
     serializer = new XMLSerializer()
@@ -944,8 +954,8 @@ class KF8 {
             return arr.concat({ skel, frags, fragEnd, length, totalLength })
         }, [])
 
-        /*
         const resources = await this.getResourcesByMagic(['RESC', 'PAGE'])
+        const pageSpreads = new Map()
         if (resources.RESC) {
             const buf = await this.mobi.loadRecord(resources.RESC)
             const str = this.mobi.decode(buf.slice(16)).replace(/\0/g, '')
@@ -954,7 +964,12 @@ class KF8 {
             const index = str.search(/\?>/)
             const xmlStr = `<package>${str.slice(index)}</package>`
             const opf = this.parser.parseFromString(xmlStr, MIME.XML)
-        }*/
+            for (const $itemref of opf.querySelectorAll('spine > itemref')) {
+                const i = parseInt($itemref.getAttribute('skelid'))
+                pageSpreads.set(i, getPageSpread(
+                    $itemref.getAttribute('properties')?.split(' ') ?? []))
+            }
+        }
 
         // insert cover page for CFI compatibility with KindleUnpack,
         // which will pretty much always insert a cover page;
@@ -967,6 +982,7 @@ class KF8 {
                 load: () => this.loadSection(section),
                 createDocument: () => this.createDocument(section),
                 size: section.length,
+                pageSpread: pageSpreads.get(index - 1),
             }) : ({ linear: 'no' }))
 
         try {
