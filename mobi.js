@@ -971,18 +971,13 @@ class KF8 {
             }
         }
 
-        // insert cover page for CFI compatibility with KindleUnpack,
-        // which will pretty much always insert a cover page;
-        // it will not be accessible in any way, so just insert a dummy section
-        this.#sections.unshift({ frags: [] })
-
         this.sections = this.#sections.map((section, index) =>
             section.frags.length ? ({
                 id: index,
                 load: () => this.loadSection(section),
                 createDocument: () => this.createDocument(section),
                 size: section.length,
-                pageSpread: pageSpreads.get(index - 1),
+                pageSpread: pageSpreads.get(index),
             }) : ({ linear: 'no' }))
 
         try {
