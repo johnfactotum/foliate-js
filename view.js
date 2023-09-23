@@ -241,7 +241,7 @@ export class View extends HTMLElement {
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
             if (value && !value.startsWith(SEARCH_PREFIX)) {
-                this.#emit('show-annotation', { value, range })
+                this.#emit('show-annotation', { value, index, range })
             }
         }, false)
 
@@ -258,7 +258,7 @@ export class View extends HTMLElement {
             const { index, anchor } = resolved
             const { doc } =  this.#getOverlayer(index)
             const range = anchor(doc)
-            this.#emit('show-annotation', { value, range })
+            this.#emit('show-annotation', { value, index, range })
         }
     }
     getCFI(index, range) {
@@ -319,6 +319,11 @@ export class View extends HTMLElement {
     deselect() {
         for (const { doc } of this.renderer.getContents())
             doc.defaultView.getSelection().removeAllRanges()
+    }
+    getProgressOf(index, range) {
+        const tocItem = this.#tocProgress?.getProgress(index, range)
+        const pageItem = this.#pageProgress?.getProgress(index, range)
+        return { tocItem, pageItem }
     }
     async getTOCItemOf(target) {
         try {
