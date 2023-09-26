@@ -90,6 +90,7 @@ export class View extends HTMLElement {
     #tocProgress
     #pageProgress
     #searchResults = new Map()
+    #speechRanges
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -407,6 +408,19 @@ export class View extends HTMLElement {
         for (const list of this.#searchResults.values())
             for (const item of list) this.deleteAnnotation(item)
         this.#searchResults.clear()
+    }
+    async speak(granularity) {
+        const { insertMarks, toSSML } = await import('./tts.js')
+        const doc = this.renderer.getContents()[0].doc
+        const { doc: markedDoc, ranges } = insertMarks(textWalker, doc, granularity)
+        this.#speechRanges = new Map(ranges)
+        const ssml = toSSML(markedDoc)
+        return new XMLSerializer().serializeToString(ssml)
+    }
+    hightlightSpeechMark(name) {
+        const range = this.#speechRanges.get(name)
+        if (range) this.renderer.scrollToAnchor(range, true)
+        else console.warn('Mark not found')
     }
 }
 
