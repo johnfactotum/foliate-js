@@ -519,7 +519,7 @@ export class Paginator extends HTMLElement {
         if (this.#view) this.#container.removeChild(this.#view.element)
         this.#view = new View({
             container: this,
-            onExpand: this.#scrollToAnchor.bind(this),
+            onExpand: () => this.scrollToAnchor(this.#anchor),
         })
         this.#container.append(this.#view.element)
         return this.#view
@@ -607,7 +607,7 @@ export class Paginator extends HTMLElement {
             vertical: this.#vertical,
             rtl: this.#rtl,
         }))
-        this.#scrollToAnchor()
+        this.scrollToAnchor(this.#anchor)
     }
     get scrolled() {
         return this.getAttribute('flow') === 'scrolled'
@@ -766,8 +766,9 @@ export class Paginator extends HTMLElement {
         const offset = this.size * (this.#rtl ? -page : page)
         return this.#scrollTo(offset, reason, smooth)
     }
-    async #scrollToAnchor(select) {
-        const rects = uncollapse(this.#anchor)?.getClientRects?.()
+    async scrollToAnchor(anchor, select) {
+        this.#anchor = anchor
+        const rects = uncollapse(anchor)?.getClientRects?.()
         // if anchor is an element or a range
         if (rects) {
             // when the start of the range is immediately after a hyphen in the
@@ -781,13 +782,13 @@ export class Paginator extends HTMLElement {
         }
         // if anchor is a fraction
         if (this.scrolled) {
-            await this.#scrollTo(this.#anchor * this.viewSize, 'anchor')
+            await this.#scrollTo(anchor * this.viewSize, 'anchor')
             return
         }
         const { pages } = this
         if (!pages) return
         const textPages = pages - 2
-        const newPage = Math.round(this.#anchor * (textPages - 1))
+        const newPage = Math.round(anchor * (textPages - 1))
         await this.#scrollToPage(newPage + 1, 'anchor')
     }
     #selectAnchor() {
@@ -847,9 +848,8 @@ export class Paginator extends HTMLElement {
             }))
             this.#view = view
         }
-        this.#anchor = (typeof anchor === 'function'
-            ? anchor(this.#view.document) : anchor) ?? 0
-        await this.#scrollToAnchor(select)
+        await this.scrollToAnchor((typeof anchor === 'function'
+            ? anchor(this.#view.document) : anchor) ?? 0, select)
     }
     #canGoToIndex(index) {
         return index >= 0 && index <= this.sections.length - 1
