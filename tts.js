@@ -64,6 +64,8 @@ export const toSSML = doc => {
             el.setAttribute('name', node.dataset.name)
         }
         else if (ps.includes(nodeName)) el = ssml.createElementNS(NS.SSML, 'p')
+        else if (nodeName === 'br')
+            el = ssml.createElementNS(NS.SSML, 'break')
         else if (nodeName === 'em' || nodeName === 'strong')
             el = ssml.createElementNS(NS.SSML, 'emphasis')
 
@@ -93,5 +95,7 @@ export const toSSML = doc => {
         }
         return el
     }
-    return convert(doc.body, ssml.documentElement)
+    convert(doc.body, ssml.documentElement,
+        doc.documentElement.getAttributeNS(NS.SSML, 'alphabet'))
+    return ssml
 }

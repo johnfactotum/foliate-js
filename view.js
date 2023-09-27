@@ -90,7 +90,11 @@ export class View extends HTMLElement {
     #tocProgress
     #pageProgress
     #searchResults = new Map()
+    #ssml
+    #speechDoc
     #speechRanges
+    #speechGranularity
+    #lastSpeechRange
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -409,17 +413,43 @@ export class View extends HTMLElement {
             for (const item of list) this.deleteAnnotation(item)
         this.#searchResults.clear()
     }
-    async speak(granularity) {
-        const { insertMarks, toSSML } = await import('./tts.js')
+    async initSpeech(granularity) {
         const doc = this.renderer.getContents()[0].doc
+        if (this.#speechDoc === doc && this.#speechGranularity === granularity)
+            return this.#ssml
+        const { insertMarks, toSSML } = await import('./tts.js')
         const { doc: markedDoc, ranges } = insertMarks(textWalker, doc, granularity)
         this.#speechRanges = new Map(ranges)
-        const ssml = toSSML(markedDoc)
+        this.#speechDoc = doc
+        this.#speechGranularity = granularity
+        this.#ssml = toSSML(markedDoc)
+        return this.#ssml
+    }
+    speak(mark) {
+        if (!mark) return new XMLSerializer().serializeToString(this.#ssml)
+        const ssml = document.implementation.createDocument(
+            'http://www.w3.org/2001/10/synthesis', 'speak')
+        ssml.documentElement.replaceWith(ssml.importNode(this.#ssml.documentElement, true))
+        let node = ssml.querySelector(`mark[name="${CSS.escape(mark)}"`)?.previousSibling
+        while (node) {
+            const next = node.previousSibling ?? node.parentNode?.previousSibling
+            node.parentNode.removeChild(node)
+            node = next
+        }
         return new XMLSerializer().serializeToString(ssml)
+    }
+    getSpeechMarkBefore(range) {
+        if (range) for (const [name, range_] of this.#speechRanges.entries())
+            if (range.compareBoundaryPoints(Range.START_TO_START, range_) <= 0)
+                return name
+    }
+    resumeSpeech() {
+        return this.speak(this.getSpeechMarkBefore(this.#lastSpeechRange))
     }
     hightlightSpeechMark(name) {
         const range = this.#speechRanges.get(name)
-        if (range) this.renderer.scrollToAnchor(range, true)
+        this.#lastSpeechRange = range
+        if (range) this.renderer.scrollToAnchor(range.cloneRange(), true)
         else console.warn('Mark not found')
     }
 }
