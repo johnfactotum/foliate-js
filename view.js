@@ -427,6 +427,7 @@ export class View extends HTMLElement {
         return this.#ssml
     }
     #getSpeechMarkElement(ssml, mark) {
+        if (!mark) return null
         return ssml.querySelector(`mark[name="${CSS.escape(mark)}"`)
     }
     #speakFromNode(getNode) {
@@ -448,16 +449,28 @@ export class View extends HTMLElement {
         return this.#speakFromNode(mark ? ssml =>
             this.#getSpeechMarkElement(ssml, mark) : null)
     }
+    static #seekSpeechNode(ssml, from, dir) {
+        const walker = ssml.createTreeWalker(ssml.documentElement,
+            NodeFilter.SHOW_ELEMENT, { acceptNode: node => node.localName === 'p'
+                ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT })
+        if (from) walker.currentNode = from
+        return dir < 1
+            ? (walker.previousNode(), walker.previousNode())
+            : walker.nextNode()
+    }
     seekSpeech(dir) {
         return this.#speakFromNode(ssml => {
-            const walker = ssml.createTreeWalker(ssml.documentElement,
-                NodeFilter.SHOW_ELEMENT, { acceptNode: node => node.localName === 'p'
-                    ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT })
-            walker.currentNode = this.#getSpeechMarkElement(ssml, this.#lastSpeechMark)
-            return dir < 1
-                ? (walker.previousNode(), walker.previousNode())
-                : walker.nextNode()
+            const from = this.#getSpeechMarkElement(ssml, this.#lastSpeechMark)
+            return View.#seekSpeechNode(ssml, from, dir)
         })
+    }
+    seekSpeechPaused(dir) {
+        const ssml = this.#ssml
+        const from = this.#getSpeechMarkElement(ssml, this.#lastSpeechMark)
+        const node = View.#seekSpeechNode(ssml, from, dir)
+        const mark = node?.querySelector('mark')
+        const name = mark?.getAttribute('name')
+        this.hightlightSpeechMark(name || '0')
     }
     getSpeechMarkBefore(range) {
         if (range) for (const [name, range_] of this.#speechRanges.entries())
