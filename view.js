@@ -94,7 +94,7 @@ export class View extends HTMLElement {
     #speechDoc
     #speechRanges
     #speechGranularity
-    #lastSpeechRange
+    #lastSpeechMark
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -422,15 +422,21 @@ export class View extends HTMLElement {
         this.#speechRanges = new Map(ranges)
         this.#speechDoc = doc
         this.#speechGranularity = granularity
+        this.#lastSpeechMark = null
         this.#ssml = toSSML(markedDoc)
         return this.#ssml
     }
-    speak(mark) {
-        if (!mark) return new XMLSerializer().serializeToString(this.#ssml)
+    #getSpeechMarkElement(ssml, mark) {
+        return ssml.querySelector(`mark[name="${CSS.escape(mark)}"`)
+    }
+    #speakFromNode(getNode) {
+        if (!getNode) return new XMLSerializer().serializeToString(this.#ssml)
+        // clone document
         const ssml = document.implementation.createDocument(
             'http://www.w3.org/2001/10/synthesis', 'speak')
         ssml.documentElement.replaceWith(ssml.importNode(this.#ssml.documentElement, true))
-        let node = ssml.querySelector(`mark[name="${CSS.escape(mark)}"`)?.previousSibling
+        // remove everything before the node
+        let node = getNode(ssml)?.previousSibling
         while (node) {
             const next = node.previousSibling ?? node.parentNode?.previousSibling
             node.parentNode.removeChild(node)
@@ -438,17 +444,33 @@ export class View extends HTMLElement {
         }
         return new XMLSerializer().serializeToString(ssml)
     }
+    startSpeech(mark) {
+        return this.#speakFromNode(mark ? ssml =>
+            this.#getSpeechMarkElement(ssml, mark) : null)
+    }
+    seekSpeech(dir) {
+        return this.#speakFromNode(ssml => {
+            const walker = ssml.createTreeWalker(ssml.documentElement,
+                NodeFilter.SHOW_ELEMENT, { acceptNode: node => node.localName === 'p'
+                    ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT })
+            walker.currentNode = this.#getSpeechMarkElement(ssml, this.#lastSpeechMark)
+            return dir < 1
+                ? (walker.previousNode(), walker.previousNode())
+                : walker.nextNode()
+        })
+    }
     getSpeechMarkBefore(range) {
         if (range) for (const [name, range_] of this.#speechRanges.entries())
             if (range.compareBoundaryPoints(Range.START_TO_START, range_) <= 0)
                 return name
     }
     resumeSpeech() {
-        return this.speak(this.getSpeechMarkBefore(this.#lastSpeechRange))
+        return this.startSpeech(this.getSpeechMarkBefore(
+            this.#speechRanges.get(this.#lastSpeechMark)))
     }
     hightlightSpeechMark(name) {
         const range = this.#speechRanges.get(name)
-        this.#lastSpeechRange = range
+        this.#lastSpeechMark = name
         if (range) this.renderer.scrollToAnchor(range.cloneRange(), true)
         else console.warn('Mark not found')
     }
