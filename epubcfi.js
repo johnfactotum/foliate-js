@@ -188,15 +188,25 @@ export const compare = (a, b) => {
 const isTextNode = ({ nodeType }) => nodeType === 3 || nodeType === 4
 const isElementNode = ({ nodeType }) => nodeType === 1
 
+const getChildNodes = (node, filter) => {
+    const nodes = Array.from(node.childNodes)
+        // "content other than element and character data is ignored"
+        .filter(node => isTextNode(node) || isElementNode(node))
+    return filter ? nodes.map(node => {
+        const accept = filter(node)
+        if (accept === NodeFilter.FILTER_REJECT) return null
+        else if (accept === NodeFilter.FILTER_SKIP) return getChildNodes(node, filter)
+        else return node
+    }).flat().filter(x => x) : nodes
+}
+
 // child nodes are organized such that the result is always
 //     [element, text, element, text, ..., element],
 // regardless of the actual structure in the document;
 // so multiple text nodes need to be combined, and nonexistent ones counted;
 // see "Step Reference to Child Element or Character Data (/)" in EPUB CFI spec
-const indexChildNodes = node => {
-    const nodes = Array.from(node.childNodes)
-        // "content other than element and character data is ignored"
-        .filter(node => isTextNode(node) || isElementNode(node))
+const indexChildNodes = (node, filter) => {
+    const nodes = getChildNodes(node, filter)
         .reduce((arr, node) => {
             let last = arr[arr.length - 1]
             if (!last) arr.push(node)
@@ -221,16 +231,14 @@ const indexChildNodes = node => {
     return nodes
 }
 
-const getNodeByIndex = (node, index) => node ? indexChildNodes(node)[index] : null
-
-const partsToNode = (node, parts) => {
+const partsToNode = (node, parts, filter) => {
     const { id } = parts[parts.length - 1]
     if (id) {
         const el = node.ownerDocument.getElementById(id)
         if (el) return { node: el, offset: 0 }
     }
     for (const { index } of parts) {
-        const newNode = getNodeByIndex(node, index)
+        const newNode = node ? indexChildNodes(node, filter)[index] : null
         // handle non-existent nodes
         if (newNode === 'first') return { node: node.firstChild ?? node }
         if (newNode === 'last') return { node: node.lastChild ?? node }
@@ -249,9 +257,9 @@ const partsToNode = (node, parts) => {
     }
 }
 
-const nodeToParts = (node, offset) => {
+const nodeToParts = (node, offset, filter) => {
     const { parentNode, id } = node
-    const indexed = indexChildNodes(parentNode)
+    const indexed = indexChildNodes(parentNode, filter)
     const index = indexed.findIndex(x =>
         Array.isArray(x) ? x.some(x => x === node) : x === node)
     // adjust offset as if merging the text nodes in the chunk
@@ -267,25 +275,27 @@ const nodeToParts = (node, offset) => {
         offset = sum
     }
     const part = { id, index, offset }
-    return parentNode !== node.ownerDocument.documentElement
-        ? nodeToParts(parentNode).concat(part) : [part]
+    return (parentNode !== node.ownerDocument.documentElement
+        ? nodeToParts(parentNode, null, filter).concat(part) : [part])
+        // remove ignored nodes
+        .filter(x => x.index !== -1)
 }
 
-export const fromRange = range => {
+export const fromRange = (range, filter) => {
     const { startContainer, startOffset, endContainer, endOffset } = range
-    const start = nodeToParts(startContainer, startOffset)
+    const start = nodeToParts(startContainer, startOffset, filter)
     if (range.collapsed) return toString([start])
-    const end = nodeToParts(endContainer, endOffset)
+    const end = nodeToParts(endContainer, endOffset, filter)
     return buildRange([start], [end])
 }
 
-export const toRange = (doc, parts) => {
+export const toRange = (doc, parts, filter) => {
     const startParts = collapse(parts)
     const endParts = collapse(parts, true)
 
     const root = doc.documentElement
-    const start = partsToNode(root, startParts[0])
-    const end = partsToNode(root, endParts[0])
+    const start = partsToNode(root, startParts[0], filter)
+    const end = partsToNode(root, endParts[0], filter)
 
     const range = doc.createRange()
 

@@ -233,7 +233,19 @@ A range CFI is an object `{ parent, start, end }`, each property being the same 
 
 The parser uses a state machine rather than regex, and should handle assertions that contain escaped characters correctly (see tests for examples of this).
 
-It can parse and stringify spatial and temporal offsets, as well as text location assertions and side bias, but there's no support for employing them when rendering yet. It's also missing the ability to ignore certain nodes (which is needed if you want to inject your own nodes into the document).
+It has the ability ignore nodes, which is needed if you want to inject your own nodes into the document without affecting CFIs. To do this, you need to pass the optional filter function that works similarily to the filter function of [`TreeWalker`s](https://developer.mozilla.org/en-US/docs/Web/API/Document/createTreeWalker):
+
+```js
+const filter = node => node.nodeType !== 1 ? NodeFilter.FILTER_ACCEPT
+    : node.matches('.reject') ? NodeFilter.FILTER_REJECT
+    : node.matches('.skip') ? NodeFilter.FILTER_SKIP
+    : NodeFilter.FILTER_ACCEPT
+
+CFI.toRange(doc, 'epubcfi(...)', filter)
+CFI.fromRange(range, filter)
+```
+
+It can parse and stringify spatial and temporal offsets, as well as text location assertions and side bias, but there's no support for employing them when rendering yet.
 
 ### Highlighting Text
 

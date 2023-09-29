@@ -53,6 +53,15 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
     
 </package>`)
 
+    const a = opf.getElementById('chap01ref')
+    const b = CFI.toElement(opf, CFI.parse('/6/4[chap01ref]')[0])
+    const c = CFI.toElement(opf, CFI.parse('/6/4')[0])
+    console.assert(a === b)
+    console.assert(a === c)
+}
+
+{
+    // example from EPUB CFI spec
     const page = XHTML(`<html xmlns="http://www.w3.org/1999/xhtml">
     <head>
     	<title>…</title>
@@ -72,30 +81,49 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
     </body>
 </html>`)
 
-    // the exact same page with some text nodes removed, CDATA sections added,
+    // the exact same page with some text nodes removed, CDATA & comment added,
     // and characters changed to entities
     const page2 = XHTML(`<html xmlns="http://www.w3.org/1999/xhtml">
     <head>
-    	<title>…</title>
+        <title>…</title>
     </head>
     <body id="body01">
-    	<p>…</p><p>…</p><p>…</p><p>…</p>
-        <p id="para05">xxx<em>yyy</em><![CDATA[0123]]>45<![CDATA[67]]>&#56;&#57;</p>
-    	<p>…</p>
-    	<p>…</p>
-    	<img id="svgimg" src="foo.svg" alt="…"/>
-    	<p>…</p>
-    	<p>…</p>
+        <p>…</p><p>…</p><p>…</p><p>…</p>
+        <p id="para05">xxx<em>yyy</em><![CDATA[]]><!--comment1--><![CDATA[0123]]>4<!--comment2-->5<![CDATA[67]]>&#56;&#57;</p>
+        <p>…</p>
+        <p>…</p>
+        <img id="svgimg" src="foo.svg" alt="…"/>
+        <p>…</p>
+        <p>…</p>
     </body>
 </html>`)
 
-    const a = opf.getElementById('chap01ref')
-    const b = CFI.toElement(opf, CFI.parse('/6/4[chap01ref]')[0])
-    const c = CFI.toElement(opf, CFI.parse('/6/4')[0])
-    console.assert(a === b)
-    console.assert(a === c)
+    // the exact same page with nodes are to be ignored
+    const page3 = XHTML(`<html xmlns="http://www.w3.org/1999/xhtml">
+    <head>
+        <title>…</title>
+    </head>
+    <body id="body01">
+        <h1 class="reject">This is ignored!</h1>
+        <section class="skip">
+            <p class="reject">Also ignored</p>
+            <p>…</p><p>…</p><p>…</p><p>…</p>
+            <p id="para05">xxx<em>yyy</em><span class="reject">Note: we put ignored text in this span but not the other ones because although the CFI library should ignore them, they won't be ignored by DOM Ranges, which will break the tests.</span><span class="skip">0<span class="skip"><span class="reject"><![CDATA[]]></span>123</span></span>45<span class="reject"><img src="icon.svg"/></span>6789</p>
+            <p>…</p>
+            <p>…</p>
+            <img id="svgimg" src="foo.svg" alt="…"/>
+            <p>…</p>
+            <p>…</p>
+        </section>
+    </body>
+</html>`)
 
-    const test = page => {
+    const filter = node => node.nodeType !== 1 ? NodeFilter.FILTER_ACCEPT
+        : node.matches('.reject') ? NodeFilter.FILTER_REJECT
+        : node.matches('.skip') ? NodeFilter.FILTER_SKIP
+        : NodeFilter.FILTER_ACCEPT
+
+    const test = (page, filter) => {
         for (const cfi of [
             '/4[body01]/10[para05]/3:10',
             '/4[body01]/16[svgimg]',
@@ -103,20 +131,24 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
             '/4[body01]/10[para05]/2/1:0',
             '/4[body01]/10[para05]/2/1:3',
         ]) {
-            const range = CFI.toRange(page, CFI.parse(cfi))
-            const a = CFI.fromRange(range)
+            const range = CFI.toRange(page, CFI.parse(cfi), filter)
+            const a = CFI.fromRange(range, filter)
             const b = `epubcfi(${cfi})`
             console.assert(a === b, `expected ${b}, got ${a}`)
         }
         for (let i = 0; i < 10; i++) {
             const cfi = `/4/10,/3:${i},/3:${i+1}`
-            const range = CFI.toRange(page, CFI.parse(cfi))
+            const range = CFI.toRange(page, CFI.parse(cfi), filter)
             const n = `${i}`
             console.assert(range.toString() === n, `expected ${n}, got ${range}`)
         }
     }
     test(page)
     test(page2)
+
+    test(page, filter)
+    test(page2, filter)
+    test(page3, filter)
 }
 
 {
