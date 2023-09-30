@@ -793,7 +793,7 @@ export class Paginator extends HTMLElement {
     }
     #selectAnchor() {
         const { defaultView } = this.#view.document
-        if (this.#anchor instanceof defaultView.Range) {
+        if (this.#anchor.startContainer) {
             const sel = defaultView.getSelection()
             sel.removeAllRanges()
             sel.addRange(this.#anchor)

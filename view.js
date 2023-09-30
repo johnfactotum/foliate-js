@@ -413,79 +413,12 @@ export class View extends HTMLElement {
             for (const item of list) this.deleteAnnotation(item)
         this.#searchResults.clear()
     }
-    async initSpeech(granularity) {
+    async initTTS() {
         const doc = this.renderer.getContents()[0].doc
-        if (this.#speechDoc === doc && this.#speechGranularity === granularity)
-            return this.#ssml
-        const { insertMarks, toSSML } = await import('./tts.js')
-        const { doc: markedDoc, ranges } = insertMarks(textWalker, doc, granularity)
-        this.#speechRanges = new Map(ranges)
-        this.#speechDoc = doc
-        this.#speechGranularity = granularity
-        this.#lastSpeechMark = null
-        this.#ssml = toSSML(markedDoc)
-        return this.#ssml
-    }
-    #getSpeechMarkElement(ssml, mark) {
-        if (!mark) return null
-        return ssml.querySelector(`mark[name="${CSS.escape(mark)}"`)
-    }
-    #speakFromNode(getNode) {
-        if (!getNode) return new XMLSerializer().serializeToString(this.#ssml)
-        // clone document
-        const ssml = document.implementation.createDocument(
-            'http://www.w3.org/2001/10/synthesis', 'speak')
-        ssml.documentElement.replaceWith(ssml.importNode(this.#ssml.documentElement, true))
-        // remove everything before the node
-        let node = getNode(ssml)?.previousSibling
-        while (node) {
-            const next = node.previousSibling ?? node.parentNode?.previousSibling
-            node.parentNode.removeChild(node)
-            node = next
-        }
-        return new XMLSerializer().serializeToString(ssml)
-    }
-    startSpeech(mark) {
-        return this.#speakFromNode(mark ? ssml =>
-            this.#getSpeechMarkElement(ssml, mark) : null)
-    }
-    static #seekSpeechNode(ssml, from, dir) {
-        const walker = ssml.createTreeWalker(ssml.documentElement,
-            NodeFilter.SHOW_ELEMENT, { acceptNode: node => node.localName === 'p'
-                ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT })
-        if (from) walker.currentNode = from
-        return dir < 1
-            ? (walker.previousNode(), walker.previousNode())
-            : walker.nextNode()
-    }
-    seekSpeech(dir) {
-        return this.#speakFromNode(ssml => {
-            const from = this.#getSpeechMarkElement(ssml, this.#lastSpeechMark)
-            return View.#seekSpeechNode(ssml, from, dir)
-        })
-    }
-    seekSpeechPaused(dir) {
-        const ssml = this.#ssml
-        const from = this.#getSpeechMarkElement(ssml, this.#lastSpeechMark)
-        const node = View.#seekSpeechNode(ssml, from, dir)
-        const mark = node?.querySelector('mark')
-        const name = mark?.getAttribute('name')
-        this.hightlightSpeechMark(name || '0')
-    }
-    getSpeechMarkBefore(range) {
-        if (range) for (const [name, range_] of this.#speechRanges.entries())
-            if (range.compareBoundaryPoints(Range.START_TO_START, range_) <= 0)
-                return name
-    }
-    resumeSpeech() {
-        return this.startSpeech(this.getSpeechMarkBefore(
-            this.#speechRanges.get(this.#lastSpeechMark)))
-    }
-    hightlightSpeechMark(name) {
-        const range = this.#speechRanges.get(name)
-        this.#lastSpeechMark = name
-        if (range) this.renderer.scrollToAnchor(range.cloneRange(), true)
-        else console.warn('Mark not found')
+        if (this.tts && this.tts.doc === doc) return
+        const { TTS } = await import('./tts.js')
+        this.tts = new TTS(doc, range =>
+            this.renderer.scrollToAnchor(range, true))
     }
 }
 
