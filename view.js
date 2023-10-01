@@ -1,6 +1,7 @@
 import * as CFI from './epubcfi.js'
 import { TOCProgress, SectionProgress } from './progress.js'
 import { Overlayer } from './overlayer.js'
+import { textWalker } from './text-walker.js'
 
 const SEARCH_PREFIX = 'foliate-search:'
 
@@ -44,30 +45,6 @@ class History extends EventTarget {
         this.#arr = []
         this.#index = -1
     }
-}
-
-const textWalker = function* (doc, func) {
-    const filter = NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT
-        | NodeFilter.SHOW_CDATA_SECTION
-    const { FILTER_ACCEPT, FILTER_REJECT, FILTER_SKIP } = NodeFilter
-    const acceptNode = node => {
-        const name = node.localName?.toLowerCase()
-        if (name === 'script' || name === 'style') return FILTER_REJECT
-        if (node.nodeType === 1) return FILTER_SKIP
-        return FILTER_ACCEPT
-    }
-    const walker = doc.createTreeWalker(doc.body, filter, { acceptNode })
-    const nodes = []
-    for (let node = walker.nextNode(); node; node = walker.nextNode())
-        nodes.push(node)
-    const strs = nodes.map(node => node.nodeValue)
-    const makeRange = (startIndex, startOffset, endIndex, endOffset) => {
-        const range = doc.createRange()
-        range.setStart(nodes[startIndex], startOffset)
-        range.setEnd(nodes[endIndex], endOffset)
-        return range
-    }
-    for (const match of func(strs, makeRange)) yield match
 }
 
 const languageInfo = lang => {
@@ -417,7 +394,7 @@ export class View extends HTMLElement {
         const doc = this.renderer.getContents()[0].doc
         if (this.tts && this.tts.doc === doc) return
         const { TTS } = await import('./tts.js')
-        this.tts = new TTS(doc, range =>
+        this.tts = new TTS(doc, textWalker, range =>
             this.renderer.scrollToAnchor(range, true))
     }
 }

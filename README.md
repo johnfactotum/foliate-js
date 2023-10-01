@@ -257,9 +257,27 @@ An overlayer object implements the following interface for the consumption of re
 - `.element`: the DOM element of the overlayer. This element will be inserted, resized, and positioned automatically by the renderer on top of the page.
 - `.redraw()`: called by the renderer when the overlay needs to be redrawn.
 
+### The Text Walker
+
+Not a particularly descriptive name, but essentially, `text-walker.js` is a small DOM utility that allows you to
+
+1. Gather all text nodes in a `Range`, `Document` or `DocumentFragment` into an array of strings.
+2. Perform splitting or matching on the strings.
+3. Get back the results of these string operations as `Range`s.
+
+E.g. you can join all the text nodes together, use `Intl.Segmenter` to segment the string into words, and get the results in DOM Ranges, so you can mark up those words in the original document.
+
+In foliate-js, this is used for searching and TTS.
+
 ### Searching
 
 It provides a search module, which can in fact be used as a standalone module for searching across any array of strings. There's no limit on the number of strings a match is allowed to span. It's based on `Intl.Collator` and `Intl.Segmenter`, to support ignoring diacritics and matching whole words only. It's extrenely slow, and you'd probably want to load results incrementally.
+
+### Text-to-Speech (TTS)
+
+The TTS module doesn't directly handle speech output. Rather, its methods return SSML documents (as strings), which you can then feed to your speech synthesizer.
+
+The SSML attributes `ssml:ph` and `ssml:alphabet` are supported. There's no support for PLS and CSS Speech.
 
 ### Supported Browsers
 

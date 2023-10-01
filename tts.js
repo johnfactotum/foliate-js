@@ -21,48 +21,6 @@ const getAlphabet = el => {
     return x ? x : el.parentElement ? getAlphabet(el.parentElement) : null
 }
 
-const getWalker = (getRoot, walk) => function* (x, func) {
-    const root = getRoot(x)
-    const filter = NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT
-        | NodeFilter.SHOW_CDATA_SECTION
-    const { FILTER_ACCEPT, FILTER_REJECT, FILTER_SKIP } = NodeFilter
-    const acceptNode = node => {
-        if (node.nodeType === 1) {
-            const name = node.tagName.toLowerCase()
-            if (name === 'script' || name === 'style') return FILTER_REJECT
-            return FILTER_SKIP
-        }
-        return FILTER_ACCEPT
-    }
-    const walker = document.createTreeWalker(root, filter, { acceptNode })
-    const nodes = walk(x, walker)
-    const strs = nodes.map(node => node.nodeValue)
-    const makeRange = (startIndex, startOffset, endIndex, endOffset) => {
-        const range = document.createRange()
-        range.setStart(nodes[startIndex], startOffset)
-        range.setEnd(nodes[endIndex], endOffset)
-        return range
-    }
-    for (const match of func(strs, makeRange)) yield match
-}
-
-const rangeWalker = getWalker(x => x.commonAncestorContainer, (range, walker) => {
-    const nodes = []
-    for (let node = walker.currentNode; node; node = walker.nextNode()) {
-        const compare = range.comparePoint(node, 0)
-        if (compare === 0) nodes.push(node)
-        else if (compare > 0) break
-    }
-    return nodes
-})
-
-const fragmentWalker = getWalker(x => x, (range, walker) => {
-    const nodes = []
-    for (let node = walker.nextNode(); node; node = walker.nextNode())
-        nodes.push(node)
-    return nodes
-})
-
 const getSegmenter = (lang = 'en', granularity = 'word') => {
     const segmenter = new Intl.Segmenter(lang, { granularity })
     const granularityIsWord = granularity === 'word'
@@ -138,7 +96,7 @@ const fragmentToSSML = (fragment, inherited) => {
     return ssml
 }
 
-const getFragmentWithMarks = (range, granularity) => {
+const getFragmentWithMarks = (range, textWalker, granularity) => {
     const lang = getLang(range.commonAncestorContainer)
     const alphabet = getAlphabet(range.commonAncestorContainer)
 
@@ -148,8 +106,8 @@ const getFragmentWithMarks = (range, granularity) => {
     // we need ranges on both the original document (for highlighting)
     // and the document fragment (for inserting marks)
     // so unfortunately need to do it twice, as you can't copy the ranges
-    const entries = [...rangeWalker(range, segmenter)]
-    const fragmentEntries = [...fragmentWalker(fragment, segmenter)]
+    const entries = [...textWalker(range, segmenter)]
+    const fragmentEntries = [...textWalker(fragment, segmenter)]
 
     for (const [name, range] of fragmentEntries) {
         const mark = document.createElement('foliate-mark')
@@ -249,11 +207,11 @@ export class TTS {
     #ranges
     #lastMark
     #serializer = new XMLSerializer()
-    constructor(doc, highlight) {
+    constructor(doc, textWalker, highlight) {
         this.doc = doc
         this.highlight = highlight
         this.#list = new ListIterator(getBlocks(doc), range => {
-            const { entries, ssml } = getFragmentWithMarks(range)
+            const { entries, ssml } = getFragmentWithMarks(range, textWalker)
             this.#ranges = new Map(entries)
             return [ssml, range]
         })
