@@ -112,6 +112,26 @@ export class View extends HTMLElement {
             e.detail.attach(this.#createOverlayer(e.detail)))
         this.renderer.open(book)
         this.#root.append(this.renderer)
+
+        if (book.sections.some(section => section.mediaOverlay)) {
+            const activeClass = book.media['active-class']
+            this.mediaOverlay = book.getMediaOverlay()
+            let lastActive
+            this.mediaOverlay.addEventListener('highlight', e => {
+                const resolved = this.resolveNavigation(e.detail.text)
+                this.renderer.goTo(resolved)
+                    .then(() => {
+                        const { doc } = this.renderer.getContents()
+                            .find(x => x.index = resolved.index)
+                        const el = resolved.anchor(doc)
+                        el.classList.add(activeClass)
+                        lastActive = new WeakRef(el)
+                    })
+            })
+            this.mediaOverlay.addEventListener('unhighlight', () => {
+                lastActive?.deref()?.classList?.remove(activeClass)
+            })
+        }
     }
     close() {
         this.renderer?.destroy()
@@ -122,6 +142,8 @@ export class View extends HTMLElement {
         this.#searchResults = new Map()
         this.lastLocation = null
         this.history.clear()
+        this.tts = null
+        this.mediaOverlay = null
     }
     goToTextStart() {
         return this.goTo(this.book.landmarks
@@ -396,6 +418,10 @@ export class View extends HTMLElement {
         const { TTS } = await import('./tts.js')
         this.tts = new TTS(doc, textWalker, range =>
             this.renderer.scrollToAnchor(range, true))
+    }
+    startMediaOverlay() {
+        const { index } = this.renderer.getContents()[0]
+        return this.mediaOverlay.start(index)
     }
 }
 

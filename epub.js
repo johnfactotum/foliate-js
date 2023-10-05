@@ -254,21 +254,129 @@ const parseClock = str => {
     return n * f
 }
 
-const parseSMIL = (doc, resolve = f => f) => {
-    const { $, $$$ } = childGetter(doc, NS.SMIL)
-    const resolveHref = href => href ? decodeURI(resolve(href)) : null
-    return $$$(doc, 'par').map($par => {
-        const id = $($par, 'text')?.getAttribute('src')?.split('#')?.[1]
-        const $audio = $($par, 'audio')
-        return $audio ? {
-            id,
-            audio: {
-                src: resolveHref($audio.getAttribute('src')),
-                clipBegin: parseClock($audio.getAttribute('clipBegin')),
-                clipEnd: parseClock($audio.getAttribute('clipEnd')),
-            },
-        } : { id }
-    })
+class MediaOverlay extends EventTarget {
+    #entries
+    #lastMediaOverlayItem
+    #sectionIndex
+    #audioIndex
+    #itemIndex
+    #audio
+    #rate = 1
+    constructor(book, loadXML) {
+        super()
+        this.book = book
+        this.loadXML = loadXML
+    }
+    async #loadSMIL(item) {
+        if (this.#lastMediaOverlayItem === item) return
+        const doc = await this.loadXML(item.href)
+        const resolve = href => href ? resolveURL(href, item.href) : null
+        const { $, $$$ } = childGetter(doc, NS.SMIL)
+        this.#audioIndex = -1
+        this.#itemIndex = -1
+        this.#entries = $$$(doc, 'par').reduce((arr, $par) => {
+            const text = resolve($($par, 'text')?.getAttribute('src'))
+            const $audio = $($par, 'audio')
+            if (!text || !$audio) return arr
+            const src = resolve($audio.getAttribute('src'))
+            const begin = parseClock($audio.getAttribute('clipBegin'))
+            const end = parseClock($audio.getAttribute('clipEnd'))
+            const last = arr.at(-1)
+            if (last?.src === src) last.items.push({ $par, text, begin, end })
+            else arr.push({ src, items: [{ $par, text, begin, end }] })
+            return arr
+        }, [])
+        this.#lastMediaOverlayItem = item
+    }
+    get #activeAudio() {
+        return this.#entries[this.#audioIndex]
+    }
+    get #activeItem() {
+        return this.#activeAudio.items[this.#itemIndex]
+    }
+    #error(e) {
+        console.error(e)
+        this.dispatchEvent(new CustomEvent('error', { detail: e }))
+    }
+    #highlight() {
+        this.dispatchEvent(new CustomEvent('highlight', { detail: this.#activeItem }))
+    }
+    #unhighlight() {
+        this.dispatchEvent(new CustomEvent('unhighlight', { detail: this.#activeItem }))
+    }
+    async #play(audioIndex, itemIndex) {
+        if (this.#audio) {
+            this.#audio.pause()
+            URL.revokeObjectURL(this.#audio.src)
+            this.#audio = null
+        }
+        this.#audioIndex = audioIndex
+        this.#itemIndex = itemIndex
+        const src = this.#activeAudio?.src
+        if (!src) return this.start(this.#sectionIndex + 1)
+
+        const url = URL.createObjectURL(await this.book.loadBlob(src))
+        const audio = new Audio(url)
+        this.#audio = audio
+        audio.addEventListener('timeupdate', () => {
+            const t = audio.currentTime
+            const { items } = this.#activeAudio
+            if (t > this.#activeItem?.end) {
+                this.#unhighlight()
+                if (this.#itemIndex === items.length - 1) {
+                    audio.pause()
+                    this.#play(this.#audioIndex + 1, 0).catch(e => this.#error(e))
+                    return
+                }
+            }
+            const oldIndex = this.#itemIndex
+            while (items[this.#itemIndex + 1]?.begin <= t) this.#itemIndex++
+            if (this.#itemIndex !== oldIndex) this.#highlight()
+        })
+        audio.addEventListener('error', () =>
+            this.#error(new Error(`Failed to load ${src}`)))
+        audio.addEventListener('playing', () => this.#highlight())
+        audio.addEventListener('pause', () => this.#unhighlight())
+        audio.addEventListener('ended', () => {
+            this.#unhighlight()
+            URL.revokeObjectURL(url)
+            this.#audio = null
+            this.#play(audioIndex + 1, 0).catch(e => this.#error(e))
+        })
+        audio.addEventListener('canplaythrough', () => {
+            audio.currentTime = this.#activeItem.begin ?? 0
+            audio.playbackRate = this.#rate
+            audio.play().catch(e => this.#error(e))
+        })
+    }
+    async start(sectionIndex) {
+        const section = this.book.sections[sectionIndex]
+        const href = section?.id
+        if (!href) return
+
+        const { mediaOverlay } = section
+        if (!mediaOverlay) return this.start(sectionIndex + 1)
+        this.#sectionIndex = sectionIndex
+        await this.#loadSMIL(mediaOverlay)
+
+        for (let i = 0; i < this.#entries.length; i++) {
+            const { items } = this.#entries[i]
+            for (let j = 0; j < items.length; j++) {
+                if (items[j].text.split('#')[0] === href) return this.#play(i, j)
+                    .catch(e => this.#error(e))
+            }
+        }
+    }
+    pause() {
+        return this.#audio?.pause()
+    }
+    resume() {
+        return this.#audio?.play()
+    }
+    setRate(rate) {
+        this.#rate = rate
+        if (this.#audio) this.#audio.playbackRate = rate
+    }
 }
 
 const isUUID = /([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})/
@@ -579,7 +687,7 @@ class Loader {
         const h = window?.innerHeight ?? 600
         return replacedImports
             // unprefix as most of the props are (only) supported unprefixed
-            .replace(/-epub-/gi, '')
+            .replace(/(?<=[{\s;])-epub-/gi, '')
             // replace vw and vh as they cause problems with layout
             .replace(/(\d*\.?\d+)vw/gi, (_, d) => parseFloat(d) * w / 100 + 'px')
             .replace(/(\d*\.?\d+)vh/gi, (_, d) => parseFloat(d) * h / 100 + 'px')
@@ -683,7 +791,7 @@ ${doc.querySelector('parsererror').innerText}`)
                 return null
             }
             return {
-                id: this.resources.getItemByID(idref)?.href,
+                id: item.href,
                 load: () => this.#loader.loadItem(item),
                 unload: () => this.#loader.unloadItem(item),
                 createDocument: () => this.loadDocument(item),
@@ -692,7 +800,8 @@ ${doc.querySelector('parsererror').innerText}`)
                 linear,
                 pageSpread: getPageSpread(properties),
                 resolveHref: href => resolveURL(href, item.href),
-                loadMediaOverlay: () => this.loadMediaOverlay(item),
+                mediaOverlay: item.mediaOverlay
+                    ? this.resources.getItemByID(item.mediaOverlay) : null,
             }
         }).filter(s => s)
 
@@ -719,7 +828,6 @@ ${doc.querySelector('parsererror').innerText}`)
         const { metadata, rendition, media } = getMetadata(opf)
         this.rendition = rendition
         this.media = media
-        media.duration = parseClock(media.duration)
         this.dir = this.resources.pageProgressionDirection
 
         this.rawMetadata = metadata // useful for debugging, i guess
@@ -769,13 +877,8 @@ ${doc.querySelector('parsererror').innerText}`)
         const str = await this.loadText(item.href)
         return this.parser.parseFromString(str, item.mediaType)
     }
-    async loadMediaOverlay(item) {
-        const id = item.mediaOverlay
-        if (!id) return null
-        const media = this.resources.getItemByID(id)
-        const doc = await this.#loadXML(media.href)
-        const parsed = parseSMIL(doc, url => resolveURL(url, media.href))
-        return parsed
+    getMediaOverlay() {
+        return new MediaOverlay(this, this.#loadXML.bind(this))
     }
     resolveCFI(cfi) {
         return this.resources.resolveCFI(cfi)
