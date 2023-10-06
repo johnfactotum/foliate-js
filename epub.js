@@ -282,8 +282,8 @@ class MediaOverlay extends EventTarget {
             const begin = parseClock($audio.getAttribute('clipBegin'))
             const end = parseClock($audio.getAttribute('clipEnd'))
             const last = arr.at(-1)
-            if (last?.src === src) last.items.push({ $par, text, begin, end })
-            else arr.push({ src, items: [{ $par, text, begin, end }] })
+            if (last?.src === src) last.items.push({ text, begin, end })
+            else arr.push({ src, items: [{ text, begin, end }] })
             return arr
         }, [])
         this.#lastMediaOverlayItem = item
@@ -292,7 +292,7 @@ class MediaOverlay extends EventTarget {
         return this.#entries[this.#audioIndex]
     }
     get #activeItem() {
-        return this.#activeAudio.items[this.#itemIndex]
+        return this.#activeAudio?.items?.[this.#itemIndex]
     }
     #error(e) {
         console.error(e)
@@ -313,18 +313,18 @@ class MediaOverlay extends EventTarget {
         this.#audioIndex = audioIndex
         this.#itemIndex = itemIndex
         const src = this.#activeAudio?.src
-        if (!src) return this.start(this.#sectionIndex + 1)
+        if (!src || !this.#activeItem) return this.start(this.#sectionIndex + 1)
 
         const url = URL.createObjectURL(await this.book.loadBlob(src))
         const audio = new Audio(url)
         this.#audio = audio
         audio.addEventListener('timeupdate', () => {
+            if (audio.paused) return
             const t = audio.currentTime
             const { items } = this.#activeAudio
             if (t > this.#activeItem?.end) {
                 this.#unhighlight()
                 if (this.#itemIndex === items.length - 1) {
-                    audio.pause()
                     this.#play(this.#audioIndex + 1, 0).catch(e => this.#error(e))
                     return
                 }
@@ -349,7 +349,8 @@ class MediaOverlay extends EventTarget {
             audio.play().catch(e => this.#error(e))
         })
     }
-    async start(sectionIndex) {
+    async start(sectionIndex, filter = () => true) {
+        this.#audio?.pause()
         const section = this.book.sections[sectionIndex]
         const href = section?.id
         if (!href) return
@@ -362,16 +363,26 @@ class MediaOverlay extends EventTarget {
         for (let i = 0; i < this.#entries.length; i++) {
             const { items } = this.#entries[i]
             for (let j = 0; j < items.length; j++) {
-                if (items[j].text.split('#')[0] === href) return this.#play(i, j)
-                    .catch(e => this.#error(e))
+                if (items[j].text.split('#')[0] === href && filter(items[j], j, items))
+                    return this.#play(i, j).catch(e => this.#error(e))
             }
         }
     }
     pause() {
-        return this.#audio?.pause()
+        this.#audio?.pause()
     }
     resume() {
-        return this.#audio?.play()
+        this.#audio?.play().catch(e => this.#error(e))
+    }
+    prev() {
+        if (this.#itemIndex > 0) this.#play(this.#audioIndex, this.#itemIndex - 1)
+        else if (this.#audioIndex > 0) this.#play(this.#audioIndex - 1,
+            this.#entries[this.#audioIndex - 1].items.length - 1)
+        else if (this.#sectionIndex > 0)
+            this.start(this.#sectionIndex - 1, (_, i, items) => i === items.length - 1)
+    }
+    next() {
+        this.#play(this.#audioIndex, this.#itemIndex + 1)
     }
     setRate(rate) {
         this.#rate = rate
