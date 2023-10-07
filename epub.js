@@ -165,12 +165,23 @@ const getMetadata = opf => {
             : getValue(obj, arr.find(filter))]
     }))
 
-    const getProperties = prefix => Object.fromEntries($$($metadata, 'meta')
+    const $$meta = $$($metadata, 'meta')
+    const getMetasByPrefix = prefix => $$meta
         .filter(filterAttribute('property', x => x?.startsWith(prefix)))
-        .map(el => [el.getAttribute('property').replace(prefix, ''),
-            getElementText(el)]))
-    const rendition = getProperties('rendition:')
-    const media = getProperties('media:')
+        .map(el => [el.getAttribute('property').replace(prefix, ''), el])
+
+    const rendition = Object.fromEntries(getMetasByPrefix('rendition:')
+        .map(([k, el]) => [k, getElementText(el)]))
+
+    const media = { narrator: [], duration: {} }
+    for (const [k, el] of getMetasByPrefix('media:')) {
+        const v = getElementText(el)
+        if (k === 'duration') media.duration[
+            el.getAttribute('refines')?.split('#')?.[1] ?? ''] = parseClock(v)
+        else if (k === 'active-class') media.activeClass = v
+        else if (k === 'narrator') media.narrator.push(v)
+        else if (k === 'playback-active-class') media.playbackActiveClass = v
+    }
     return { metadata, rendition, media }
 }
 

@@ -114,7 +114,8 @@ export class View extends HTMLElement {
         this.#root.append(this.renderer)
 
         if (book.sections.some(section => section.mediaOverlay)) {
-            const activeClass = book.media['active-class']
+            book.media.activeClass ||= '-epub-media-overlay-active'
+            const activeClass = book.media.activeClass
             this.mediaOverlay = book.getMediaOverlay()
             let lastActive
             this.mediaOverlay.addEventListener('highlight', e => {
