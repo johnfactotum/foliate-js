@@ -91,7 +91,8 @@ export class View extends HTMLElement {
             this.#sectionProgress = new SectionProgress(book.sections, 1500, 1600)
             const splitHref = book.splitTOCHref.bind(book)
             const getFragment = book.getTOCFragment.bind(book)
-            this.#tocProgress = new TOCProgress({
+            this.#tocProgress = new TOCProgress()
+            await this.#tocProgress.init({
                 toc: book.toc ?? [], ids, splitHref, getFragment })
             this.#pageProgress = new TOCProgress({
                 toc: book.pageList ?? [], ids, splitHref, getFragment })

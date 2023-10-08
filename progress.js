@@ -16,12 +16,12 @@ const flatten = items => items
     .flat()
 
 export class TOCProgress {
-    constructor({ toc, ids, splitHref, getFragment }) {
+    async init({ toc, ids, splitHref, getFragment }) {
         assignIDs(toc)
         const items = flatten(toc)
         const grouped = new Map()
         for (const [i, item] of items.entries()) {
-            const [id, fragment] = splitHref(item?.href) ?? []
+            const [id, fragment] = await splitHref(item?.href) ?? []
             const value = { fragment, item }
             if (grouped.has(id)) grouped.get(id).items.push(value)
             else grouped.set(id, { prev: items[i - 1], items: [value] })
@@ -36,6 +36,7 @@ export class TOCProgress {
         this.getFragment = getFragment
     }
     getProgress(index, range) {
+        if (!this.ids) return
         const id = this.ids[index]
         const obj = this.map.get(id)
         if (!obj) return null

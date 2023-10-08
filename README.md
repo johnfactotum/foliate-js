@@ -104,7 +104,7 @@ Processors for each book format return an object that implements the following i
 - `.isExternal(href)`: returns a boolean. If `true`, the link should be opened externally.
 
 The following methods are consumed by `progress.js`, for getting the correct TOC and page list item when navigating:
-- `.splitTOCHref(href)`: given an href string (from the TOC), returns an array, the first element of which is the `id` of the section (see above), and the second element is the fragment identifier (can be any type; see below)
+- `.splitTOCHref(href)`: given an href string (from the TOC), returns an array, the first element of which is the `id` of the section (see above), and the second element is the fragment identifier (can be any type; see below). May be async.
 - `.getTOCFragment(doc, id)`: given a `Document` object and a fragment identifier (the one provided by `.splitTOCHref()`; see above), returns a `Node` representing the target linked by the TOC item
 
 Almost all of the properties and methods are optional. At minimum it needs `.sections` and the `.load()` method for the sections, as otherwise there won't be anything to render.
