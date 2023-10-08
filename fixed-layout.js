@@ -5,7 +5,7 @@ const parseViewport = str => str
 
 const getViewport = (doc, viewport) => {
     // use `viewBox` for SVG
-    if (doc.documentElement.nodeName === 'svg') {
+    if (doc.documentElement.localName === 'svg') {
         const [, , width, height] = doc.documentElement
             .getAttribute('viewBox')?.split(/\s/) ?? []
         return { width, height }
