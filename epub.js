@@ -272,6 +272,7 @@ class MediaOverlay extends EventTarget {
     #audioIndex
     #itemIndex
     #audio
+    #volume = 1
     #rate = 1
     constructor(book, loadXML) {
         super()
@@ -356,6 +357,7 @@ class MediaOverlay extends EventTarget {
         })
         audio.addEventListener('canplaythrough', () => {
             audio.currentTime = this.#activeItem.begin ?? 0
+            audio.volume = this.#volume
             audio.playbackRate = this.#rate
             audio.play().catch(e => this.#error(e))
         })
@@ -394,6 +396,10 @@ class MediaOverlay extends EventTarget {
     }
     next() {
         this.#play(this.#audioIndex, this.#itemIndex + 1)
+    }
+    setVolume(volume) {
+        this.#volume = volume
+        if (this.#audio) this.#audio.volume = volume
     }
     setRate(rate) {
         this.#rate = rate
