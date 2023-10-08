@@ -327,7 +327,7 @@ export const toElement = (doc, parts) =>
 
 // turn indices into standard CFIs when you don't have an actual package document
 export const fake = {
-    fromIndex: index => `/6/${(index + 1) * 2}`,
+    fromIndex: index => wrap(`/6/${(index + 1) * 2}`),
     toIndex: parts => parts?.at(-1).index / 2 - 1,
 }
 
