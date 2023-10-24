@@ -95,7 +95,7 @@ Processors for each book format return an object that implements the following i
     - `.href`: a string representing the destination of the item. Does not have to be a valid URL.
     - `.subitems`: a array that contains TOC items
 - `.pageList`: same as the TOC, but for the [page list](https://www.w3.org/publishing/epub32/epub-packages.html#sec-nav-pagelist).
-- `.metadata`: an object representing the metadata of the book.
+- `.metadata`: an object representing the metadata of the book. Currently, it follows more or less the metadata schema of [Readium's webpub manifest](https://github.com/readium/webpub-manifest).
 - `.rendition`: an object that contains properties that correspond to the [rendition properties](https://www.w3.org/publishing/epub32/epub-packages.html#sec-package-metadata-rendering) in EPUB. If `.layout` is `"pre-paginated"`, the book is rendered with the fixed layout renderer.
 - `.resolveHref(href)`: given an href string, returns an object representing the destination referenced by the href, which has the following properties:
     - `.index`: the index of the referenced section in the `.section` array

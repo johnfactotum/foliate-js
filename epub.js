@@ -134,7 +134,13 @@ const METADATA = [
     { name: 'rights', ...LANGS, props: [ALTS] },
     { name: 'date' },
     { name: 'dcterms:modified', type: 'meta' },
-    { name: 'subject', many: true, ...LANGS, props: ['term', 'authority', ALTS] },
+    {
+        name: 'subject', many: true, ...LANGS, props: ['term', 'authority', ALTS],
+        setLegacyAttrs: (obj, el) => {
+            obj.term ??= el.getAttributeNS(NS.OPF, 'term')
+            obj.authority ??= el.getAttributeNS(NS.OPF, 'authority')
+        },
+    },
     { name: 'source', many: true },
     {
         name: 'belongs-to-collection', type: 'meta', many: true, ...LANGS,
@@ -888,8 +894,9 @@ ${doc.querySelector('parsererror').innerText}`)
             published: metadata?.date,
             modified: metadata?.dctermsModified,
             subject: metadata?.subject
-                ?.filter(({ value, code }) => value || code)
-                ?.map(({ value, code, scheme }) => ({ name: value, code, scheme })),
+                ?.filter(({ value, term }) => value || term)
+                ?.map(({ value, term, authority }) =>
+                    ({ name: value, code: term, scheme: authority })),
             rights: metadata?.rights?.value,
         }
         const relators = {
