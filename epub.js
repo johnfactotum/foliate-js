@@ -103,6 +103,13 @@ const ALTS = { name: 'alternate-script', many: true, ...LANGS, props: ['file-as'
 const CONTRIB = {
     many: true, ...LANGS,
     props: [{ name: 'role', many: true, attrs: ['scheme'] }, 'file-as', ALTS],
+    setLegacyAttrs: (obj, el) => {
+        if (!obj.role?.length) {
+            const value = el.getAttributeNS(NS.OPF, 'role')
+            if (value) obj.role = [{ value }]
+        }
+        obj.fileAs ??= el.getAttributeNS(NS.OPF, 'file-as')
+    },
 }
 const METADATA = [
     {
@@ -112,6 +119,12 @@ const METADATA = [
     {
         name: 'identifier', many: true,
         props: [{ name: 'identifier-type', attrs: ['scheme'] }],
+        setLegacyAttrs: (obj, el) => {
+            if (!obj.identifierType) {
+                const value = el.getAttributeNS(NS.OPF, 'scheme')
+                if (value) obj.identifierType = { value }
+            }
+        },
     },
     { name: 'language', many: true },
     { name: 'creator', ...CONTRIB },
@@ -122,6 +135,7 @@ const METADATA = [
     { name: 'date' },
     { name: 'dcterms:modified', type: 'meta' },
     { name: 'subject', many: true, ...LANGS, props: ['term', 'authority', ALTS] },
+    { name: 'source', many: true },
     {
         name: 'belongs-to-collection', type: 'meta', many: true, ...LANGS,
         props: [
@@ -131,9 +145,6 @@ const METADATA = [
     },
 ]
 
-// NOTE: this only gets properties defined with the `refines` attribute,
-// which is used in EPUB 3.0, deprecated in 3.1, then restored in 3.2;
-// no support for `opf:` attributes of 2.0 and 3.1
 const getMetadata = opf => {
     const { $, $$ } = childGetter(opf, NS.OPF)
     const $metadata = $(opf.documentElement, 'metadata')
@@ -145,7 +156,7 @@ const getMetadata = opf => {
         if (!props.length && !attrs.length) return value
         const id = el.getAttribute('id')
         const refines = id ? els.filter(filterAttribute('refines', '#' + id)) : []
-        return Object.fromEntries([['value', value]]
+        const result = Object.fromEntries([['value', value]]
             .concat(props.map(prop => {
                 const { many, recursive } = prop
                 const name = typeof prop === 'string' ? prop : prop.name
@@ -156,6 +167,8 @@ const getMetadata = opf => {
                     : getValue(subobj, refines.find(filter))]
             }))
             .concat(attrs.map(attr => [camel(attr), el.getAttribute(attr)])))
+        obj.setLegacyAttrs?.(result, el)
+        return result
     }
     const arr = els.filter(filterAttribute('refines', null))
     const metadata = Object.fromEntries(METADATA.map(obj => {
@@ -860,7 +873,7 @@ ${doc.querySelector('parsererror').innerText}`)
         this.media = media
         this.dir = this.resources.pageProgressionDirection
 
-        this.rawMetadata = metadata // useful for debugging, i guess
+        this.parsedMetadata = metadata // for debugging or advanced use cases
         const title = metadata?.title?.[0]
         this.metadata = {
             title: title?.value,
