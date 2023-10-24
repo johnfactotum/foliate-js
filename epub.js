@@ -735,8 +735,10 @@ class Loader {
             .replace(/(\d*\.?\d+)vw/gi, (_, d) => parseFloat(d) * w / 100 + 'px')
             .replace(/(\d*\.?\d+)vh/gi, (_, d) => parseFloat(d) * h / 100 + 'px')
             // `page-break-*` unsupported in columns; replace with `column-break-*`
-            .replace(/page-break-(after|before|inside)/gi, (_, x) =>
-                `-webkit-column-break-${x}`)
+            .replace(/page-break-(after|before|inside)\s*:/gi, (_, x) =>
+                `-webkit-column-break-${x}:`)
+            .replace(/break-(after|before|inside)\s*:\s*(avoid-)?page/gi, (_, x, y) =>
+                `break-${x}: ${y ?? ''}column`)
     }
     // find & replace all possible relative paths for all assets without parsing
     replaceString(str, href, parents = []) {
