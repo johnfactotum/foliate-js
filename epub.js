@@ -899,6 +899,7 @@ ${doc.querySelector('parsererror').innerText}`)
             clr: 'colorist',
             edt: 'editor',
             ill: 'illustrator',
+            nrt: 'narrator',
             trl: 'translator',
             pbl: 'publisher',
         }
