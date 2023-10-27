@@ -380,6 +380,8 @@ export class Paginator extends HTMLElement {
     #locked = false // while true, prevent any further navigation
     #styles
     #styleMap = new WeakMap()
+    #mediaQuery = matchMedia('(prefers-color-scheme: dark)')
+    #mediaQueryListener
     #scrollBounds
     #touchState
     #touchScrolled
@@ -492,6 +494,12 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
             doc.addEventListener('touchend', this.#onTouchEnd.bind(this))
         })
+
+        this.#mediaQueryListener = () => {
+            if (!this.#view) return
+            this.#background.style.background = getBackground(this.#view.document)
+        }
+        this.#mediaQuery.addEventListener('change', this.#mediaQueryListener)
     }
     attributeChangedCallback(name, _, value) {
         switch (name) {
@@ -961,6 +969,8 @@ export class Paginator extends HTMLElement {
             $style.textContent = style
         } else $style.textContent = styles
 
+        this.#background.style.background = getBackground(this.#view.document)
+
         // needed because the resize observer doesn't work in Firefox
         this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
     }
@@ -969,6 +979,7 @@ export class Paginator extends HTMLElement {
         this.#view.destroy()
         this.#view = null
         this.sections[this.#index]?.unload?.()
+        this.#mediaQuery.removeEventListener('change', this.#mediaQueryListener)
     }
 }
 
