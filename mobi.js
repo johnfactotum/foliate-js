@@ -643,6 +643,20 @@ export class MOBI extends PDB {
 const mbpPagebreakRegex = /<\s*(?:mbp:)?pagebreak[^>]*>/gi
 const fileposRegex = /<[^<>]+filepos=['"]{0,1}(\d+)[^<>]*>/gi
 
+const getIndent = el => {
+    let x = 0
+    while (el) {
+        const parent = el.parentElement
+        if (parent) {
+            const tag = parent.tagName.toLowerCase()
+            if (tag === 'p') x += 1.5
+            else if (tag === 'blockquote') x += 2
+        }
+        el = parent
+    }
+    return x
+}
+
 class MOBI6 {
     parser = new DOMParser()
     serializer = new XMLSerializer()
@@ -690,32 +704,47 @@ class MOBI6 {
             size: section.end - section.start,
         }))
 
-        const fileposInNCX = []
         try {
-            const ncx = await this.mobi.getNCX()
-            const map = ({ label, offset, children }) => {
-                const filepos = offset.toString().padStart(10, '0')
-                const href = `filepos:${filepos}`
-                fileposInNCX.push(filepos)
-                label = unescapeHTML(label)
-                return { label, href, subitems: children?.map(map) }
-            }
-            this.toc = ncx?.map(map)
             this.landmarks = await this.getGuide()
-
-            // try to build TOC if there's no NCX
-            if (!this.toc) {
-                const tocHref = this.landmarks
-                    .find(({ type }) => type?.includes('toc'))?.href
-                if (tocHref) {
-                    const { index } = this.resolveHref(tocHref)
-                    const doc = await this.sections[index].createDocument()
-                    this.toc = Array.from(doc.querySelectorAll('a[filepos]'),
-                        a => ({
+            const tocHref = this.landmarks
+                .find(({ type }) => type?.includes('toc'))?.href
+            if (tocHref) {
+                const { index } = this.resolveHref(tocHref)
+                const doc = await this.sections[index].createDocument()
+                let lastItem
+                let lastLevel = 0
+                let lastIndent = 0
+                const lastLevelOfIndent = new Map()
+                const lastParentOfLevel = new Map()
+                this.toc = Array.from(doc.querySelectorAll('a[filepos]'))
+                    .reduce((arr, a) => {
+                        const indent = getIndent(a)
+                        const item = {
                             label: a.innerText?.trim(),
                             href: `filepos:${a.getAttribute('filepos')}`,
-                        }))
-                }
+                        }
+                        const level = indent > lastIndent ? lastLevel + 1
+                            : indent === lastIndent ? lastLevel
+                            : lastLevelOfIndent.get(indent) ?? Math.max(0, lastLevel - 1)
+                        if (level > lastLevel) {
+                            if (lastItem) {
+                                lastItem.subitems ??= []
+                                lastItem.subitems.push(item)
+                                lastParentOfLevel.set(level, lastItem)
+                            }
+                            else arr.push(item)
+                        }
+                        else {
+                            const parent = lastParentOfLevel.get(level)
+                            if (parent) parent.subitems.push(item)
+                            else arr.push(item)
+                        }
+                        lastItem = item
+                        lastLevel = level
+                        lastIndent = indent
+                        lastLevelOfIndent.set(indent, level)
+                        return arr
+                    }, [])
             }
         } catch(e) {
             console.warn(e)
@@ -724,8 +753,8 @@ class MOBI6 {
         // get list of all `filepos` references in the book,
         // which will be used to insert anchor elements
         // because only then can they be referenced in the DOM
-        this.#fileposList = [...new Set(fileposInNCX
-            .concat(Array.from(str.matchAll(fileposRegex), m => m[1])))]
+        this.#fileposList = [...new Set(
+            Array.from(str.matchAll(fileposRegex), m => m[1]))]
             .map(filepos => ({ filepos, number: Number(filepos) }))
             .sort((a, b) => a.number - b.number)
 
