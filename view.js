@@ -327,6 +327,10 @@ export class View extends HTMLElement {
         for (const { doc } of this.renderer.getContents())
             doc.defaultView.getSelection().removeAllRanges()
     }
+    getSectionFractions() {
+        return (this.#sectionProgress?.sectionFractions ?? [])
+            .map(x => x + Number.EPSILON)
+    }
     getProgressOf(index, range) {
         const tocItem = this.#tocProgress?.getProgress(index, range)
         const pageItem = this.#pageProgress?.getProgress(index, range)

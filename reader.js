@@ -211,16 +211,10 @@ class Reader {
         slider.dir = book.dir
         slider.addEventListener('input', e =>
             this.view.goToFraction(parseFloat(e.target.value)))
-        const sizes = book.sections.filter(s => s.linear !== 'no').map(s => s.size)
-        if (sizes.length < 100) {
-            const total = sizes.reduce((a, b) => a + b, 0)
-            let sum = 0
-            for (const size of sizes.slice(0, -1)) {
-                sum += size
-                const option = document.createElement('option')
-                option.value = sum / total
-                $('#tick-marks').append(option)
-            }
+        for (const fraction of this.view.getSectionFractions()) {
+            const option = document.createElement('option')
+            option.value = fraction
+            $('#tick-marks').append(option)
         }
 
         document.addEventListener('keydown', this.#handleKeydown.bind(this))

@@ -57,10 +57,18 @@ export class TOCProgress {
 
 export class SectionProgress {
     constructor(sections, sizePerLoc, sizePerTimeUnit) {
-        this.sizes = sections.map(s => s.linear === 'no' ? 0 : s.size)
+        this.sizes = sections.map(s => s.linear != 'no' && s.size > 0 ? s.size : 0)
         this.sizePerLoc = sizePerLoc
         this.sizePerTimeUnit = sizePerTimeUnit
         this.sizeTotal = this.sizes.reduce((a, b) => a + b, 0)
+        this.sectionFractions = this.#getSectionFractions()
+    }
+    #getSectionFractions() {
+        const { sizeTotal } = this
+        const results = [0]
+        let sum = 0
+        for (const size of this.sizes) results.push((sum += size) / sizeTotal)
+        return results
     }
     // get progress given index of and fractions within a section
     getProgress(index, fractionInSection, pageFraction = 0) {
@@ -91,22 +99,15 @@ export class SectionProgress {
     // the inverse of `getProgress`
     // get index of and fraction in section based on total fraction
     getSection(fraction) {
-        if (fraction === 0) return [0, 0]
-        if (fraction === 1) return [this.sizes.length - 1, 1]
-        const { sizes, sizeTotal } = this
-        const target = fraction * sizeTotal
-        let index = -1
-        let fractionInSection = 0
-        let sum = 0
-        for (const [i, size] of sizes.entries()) {
-            const newSum = sum + size
-            if (newSum > target) {
-                index = i
-                fractionInSection = (target - sum) / size
-                break
-            }
-            sum = newSum
-        }
+        if (fraction <= 0) return [0, 0]
+        if (fraction >= 1) return [this.sizes.length - 1, 1]
+        fraction = fraction + Number.EPSILON
+        const { sizeTotal } = this
+        let index = this.sectionFractions.findIndex(x => x > fraction) - 1
+        if (index < 0) return [0, 0]
+        while (!this.sizes[index]) index++
+        const fractionInSection = (fraction - this.sectionFractions[index])
+            / (this.sizes[index] / sizeTotal)
         return [index, fractionInSection]
     }
 }
