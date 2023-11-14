@@ -150,6 +150,11 @@ const makeMarginals = (length, part) => Array.from({ length }, () => {
     return div
 })
 
+const setStylesImportant = (el, styles) => {
+    const { style } = el
+    for (const [k, v] of Object.entries(styles)) style.setProperty(k, v, 'important')
+}
+
 class View {
     #observer = new ResizeObserver(() => this.expand())
     #element = document.createElement('div')
@@ -235,16 +240,16 @@ class View {
     scrolled({ gap, columnWidth }) {
         const vertical = this.#vertical
         const doc = this.document
-        Object.assign(doc.documentElement.style, {
-            boxSizing: 'border-box',
-            padding: vertical ? `${gap}px 0` : `0 ${gap}px`,
-            columnWidth: 'auto',
-            height: 'auto',
-            width: 'auto',
+        setStylesImportant(doc.documentElement, {
+            'box-sizing': 'border-box',
+            'padding': vertical ? `${gap}px 0` : `0 ${gap}px`,
+            'column-width': 'auto',
+            'height': 'auto',
+            'width': 'auto',
         })
-        Object.assign(doc.body.style, {
-            [vertical ? 'maxHeight' : 'maxWidth']: `${columnWidth}px`,
-            margin: 'auto',
+        setStylesImportant(doc.body, {
+            [vertical ? 'max-height' : 'max-width']: `${columnWidth}px`,
+            'margin': 'auto',
         })
         this.setImageSize()
         this.expand()
@@ -254,29 +259,29 @@ class View {
         this.#size = vertical ? height : width
 
         const doc = this.document
-        Object.assign(doc.documentElement.style, {
-            boxSizing: 'border-box',
-            columnWidth: `${Math.trunc(columnWidth)}px`,
-            columnGap: `${gap}px`,
-            columnFill: 'auto',
+        setStylesImportant(doc.documentElement, {
+            'box-sizing': 'border-box',
+            'column-width': `${Math.trunc(columnWidth)}px`,
+            'column-gap': `${gap}px`,
+            'column-fill': 'auto',
             ...(vertical
-                ? { width: `${width}px` }
-                : { height: `${height}px` }),
-            padding: vertical ? `${gap / 2}px 0` : `0 ${gap / 2}px`,
-            overflow: 'hidden',
+                ? { 'width': `${width}px` }
+                : { 'height': `${height}px` }),
+            'padding': vertical ? `${gap / 2}px 0` : `0 ${gap / 2}px`,
+            'overflow': 'hidden',
             // force wrap long words
-            overflowWrap: 'anywhere',
+            'overflow-wrap': 'anywhere',
             // reset some potentially problematic props
-            position: 'static', border: '0', margin: '0',
-            maxHeight: 'none', maxWidth: 'none',
-            minHeight: 'none', minWidth: 'none',
+            'position': 'static', 'border': '0', 'margin': '0',
+            'max-height': 'none', 'max-width': 'none',
+            'min-height': 'none', 'min-width': 'none',
             // fix glyph clipping in WebKit
-            webkitLineBoxContain: 'block glyphs replaced',
+            '-webkit-line-box-contain': 'block glyphs replaced',
         })
-        Object.assign(doc.body.style, {
-            maxHeight: 'none',
-            maxWidth: 'none',
-            margin: '0',
+        setStylesImportant(doc.body, {
+            'max-height': 'none',
+            'max-width': 'none',
+            'margin': '0',
         })
         this.setImageSize()
         this.expand()
@@ -288,17 +293,17 @@ class View {
         for (const el of doc.body.querySelectorAll('img, svg, video')) {
             // preserve max size if they are already set
             const { maxHeight, maxWidth } = doc.defaultView.getComputedStyle(el)
-            Object.assign(el.style, {
-                maxHeight: vertical
+            setStylesImportant(el, {
+                'max-height': vertical
                     ? (maxHeight !== 'none' && maxHeight !== '0px' ? maxHeight : '100%')
                     : `${height - margin * 2}px`,
-                maxWidth: vertical
+                'max-width': vertical
                     ? `${width - margin * 2}px`
                     : (maxWidth !== 'none' && maxWidth !== '0px' ? maxWidth : '100%'),
-                objectFit: 'contain',
-                pageBreakInside: 'avoid',
-                breakInside: 'avoid',
-                boxSizing: 'border-box',
+                'object-fit': 'contain',
+                'page-break-inside': 'avoid',
+                'break-inside': 'avoid',
+                'box-sizing': 'border-box',
             })
         }
     }
