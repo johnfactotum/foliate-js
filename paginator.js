@@ -390,7 +390,6 @@ export class Paginator extends HTMLElement {
     #scrollBounds
     #touchState
     #touchScrolled
-    pageAnimation = true
     constructor() {
         super()
         this.#root.innerHTML = `<style>
@@ -762,7 +761,7 @@ export class Paginator extends HTMLElement {
         }
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
-        if (reason === 'snap' || smooth && this.pageAnimation) return animate(
+        if ((reason === 'snap' || smooth) && this.hasAttribute('animated')) return animate(
             element[scrollProp], offset, 300, easeOutQuad,
             x => element[scrollProp] = x,
         ).then(() => {
@@ -932,7 +931,7 @@ export class Paginator extends HTMLElement {
             index: this.#adjacentIndex(dir),
             anchor: prev ? () => 1 : () => 0,
         })
-        if (shouldGo || !this.pageAnimation) await wait(100)
+        if (shouldGo || !this.hasAttribute('animated')) await wait(100)
         this.#locked = false
     }
     prev(distance) {

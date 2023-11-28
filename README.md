@@ -172,9 +172,8 @@ The filter only applies to the book itself, leaving overlaid elements such as hi
 
 ### The Paginator
 
-There is a basic page transition effect that can be disabled by setting `.pageAnimation` to false.
-
 The layout can be configured by setting the following attributes:
+- `animated`: a [boolean attribute](https://developer.mozilla.org/en-US/docs/Glossary/Boolean/HTML). If present, adds a sliding transition effect.
 - `flow`: either `paginated` or `scrolled`.
 - `margin`: a CSS `<length>`. The unit must be `px`. The height of the header and footer.
 - `gap`: a CSS `<percentage>`. The size of the space between columns, relative to page size.
