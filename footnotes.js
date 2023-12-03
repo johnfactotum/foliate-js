@@ -1,6 +1,11 @@
 const getTypes = el => new Set(el?.getAttributeNS?.('http://www.idpf.org/2007/ops', 'type')?.split(' '))
 const getRoles = el => new Set(el?.getAttribute?.('role')?.split(' '))
 
+const isSuper = el => {
+    const { verticalAlign } = getComputedStyle(el)
+    return verticalAlign === 'super' || /^\d/.test(verticalAlign)
+}
+
 const refTypes = ['biblioref', 'glossref', 'noteref']
 const refRoles = ['doc-biblioref', 'doc-glossref', 'doc-noteref']
 const isFootnoteReference = a => {
@@ -9,9 +14,8 @@ const isFootnoteReference = a => {
     return {
         yes: refRoles.some(r => roles.has(r)) || refTypes.some(t => types.has(t)),
         maybe: () => !types.has('backlink') && !roles.has('doc-backlink')
-            && (getComputedStyle(a).verticalAlign === 'super'
-            || a.children.length === 1 && getComputedStyle(a.children[0]).verticalAlign === 'super')
-            || getComputedStyle(a.parentElement).verticalAlign === 'super',
+            && (isSuper(a) || a.children.length === 1 && isSuper(a.children[0])
+            || isSuper(a.parentElement)),
     }
 }
 
