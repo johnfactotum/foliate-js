@@ -55,7 +55,7 @@ const childGetter = (doc, ns) => {
         $$: (el, name) => [...el.children].filter(f(el, name)),
         $$$: useNS
             ? (el, name) => [...el.getElementsByTagNameNS(ns, name)]
-            : (el, name) => [...el.getElementsByTagName(ns, name)],
+            : (el, name) => [...el.getElementsByTagName(name)],
     }
 }
 
