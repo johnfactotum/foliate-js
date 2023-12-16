@@ -284,6 +284,33 @@ The TTS module doesn't directly handle speech output. Rather, its methods return
 
 The SSML attributes `ssml:ph` and `ssml:alphabet` are supported. There's no support for PLS and CSS Speech.
 
+### OPDS
+
+The `opds.js` module can be used to implement OPDS clients. It can convert OPDS 1.x documents to OPDS 2.0:
+
+- `getFeed(doc)`: converts an OPDS 1.x feed to OPDS 2.0. The argument must be a DOM Document object. You need to use a `DOMParser` to obtain a Document first if you have a string.
+- `getPublication(entry)`: converts a OPDS 1.x entry in acquisition feeds to an OPDS 2.0 publication. The argument must be a DOM Element object.
+
+It exports the following symbols for properties unsupported by OPDS 2.0:
+- `SYMBOL.SUMMARY`: used on navigation links to represent the summary/content (see https://github.com/opds-community/drafts/issues/51)
+- `SYMBOL.CONTENT`: used on publications to represent the content/description and its type. This is mainly for preserving the type info for XHTML. The value of this property is an object whose properties are:
+    - `.type`: either "text", "html", or "xhtml"
+    - `.value`: the value of the content
+
+There are also two functions that can be used to implement search forms:
+
+- `getOpenSearch(doc)`: for OpenSearch. The argument is a DOM Document object of an OpenSearch search document.
+- `getSearch(link)` for templated search in OPDS 2.0. The argument must be an OPDS 2.0 Link object. Note that this function will import `uri-template.js`.
+
+These two functions return an object that implements the following interface:
+- `.metadata`: an object with the string properties `title` and `description`
+- `.params`: an array, representing the search parameters, whose elements are objects whose properties are
+    - `ns`: a string; the namespace of the parameter
+    - `name`: a string; the name of the parameter
+    - `required`: a boolean, whether the parameter is required
+    - `value`: a string; the default value of the parameter
+- `.search(map)`: a function, whose argument is a `Map` whose values are `Map`s (i.e. a two-dimensional map). The first key is the namespace of the search parameter. For non-namespaced parameters, the first key must be `null`. The second key is the parameter's name. Returns a string representing the URL of the search results.
+
 ### Supported Browsers
 
 The main use of the library is for use in [Foliate](https://github.com/johnfactotum/foliate), which uses WebKitGTK. As such it's the only engine that has been tested extensively. But it should also work in Chromium and Firefox.
