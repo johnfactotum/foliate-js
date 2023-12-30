@@ -16,7 +16,7 @@ export const makeComicBook = ({ entries, loadBlob, getSize }, file) => {
         cache.delete(name)
     }
 
-    const exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+    const exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.jxl']
     const files = entries
         .map(entry => entry.filename)
         .filter(name => exts.some(ext => name.endsWith(ext)))
