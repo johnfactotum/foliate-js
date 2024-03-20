@@ -311,7 +311,13 @@ class View {
         if (this.#column) {
             const side = this.#vertical ? 'height' : 'width'
             const otherSide = this.#vertical ? 'width' : 'height'
-            const contentSize = this.#contentRange.getBoundingClientRect()[side]
+            const contentRect = this.#contentRange.getBoundingClientRect()
+            const rootRect = this.document.documentElement.getBoundingClientRect()
+            // offset caused by column break at the start of the page
+            // which seem to be supported only by WebKit and only for horizontal writing
+            const contentStart = this.#vertical ? 0
+                : this.#rtl ? rootRect.right - contentRect.right : contentRect.left - rootRect.left
+            const contentSize = contentStart + contentRect[side]
             const pageCount = Math.ceil(contentSize / this.#size)
             const expandedSize = pageCount * this.#size
             this.#element.style.padding = '0'
