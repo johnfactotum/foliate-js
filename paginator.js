@@ -308,11 +308,12 @@ class View {
         }
     }
     expand() {
+        const { documentElement } = this.document
         if (this.#column) {
             const side = this.#vertical ? 'height' : 'width'
             const otherSide = this.#vertical ? 'width' : 'height'
             const contentRect = this.#contentRange.getBoundingClientRect()
-            const rootRect = this.document.documentElement.getBoundingClientRect()
+            const rootRect = documentElement.getBoundingClientRect()
             // offset caused by column break at the start of the page
             // which seem to be supported only by WebKit and only for horizontal writing
             const contentStart = this.#vertical ? 0
@@ -325,8 +326,7 @@ class View {
             this.#element.style[side] = `${expandedSize + this.#size * 2}px`
             this.#iframe.style[otherSide] = '100%'
             this.#element.style[otherSide] = '100%'
-            if (this.document)
-                this.document.documentElement.style[side] = `${this.#size}px`
+            documentElement.style[side] = `${this.#size}px`
             if (this.#overlayer) {
                 this.#overlayer.element.style.margin = '0'
                 this.#overlayer.element.style.left = this.#vertical ? '0' : `${this.#size}px`
@@ -337,8 +337,7 @@ class View {
         } else {
             const side = this.#vertical ? 'width' : 'height'
             const otherSide = this.#vertical ? 'height' : 'width'
-            const doc = this.document
-            const contentSize = doc?.documentElement?.getBoundingClientRect()?.[side]
+            const contentSize = documentElement.getBoundingClientRect()[side]
             const expandedSize = contentSize
             const { margin } = this.#layout
             const padding = this.#vertical ? `0 ${margin}px` : `${margin}px 0`
