@@ -533,7 +533,10 @@ export class Paginator extends HTMLElement {
         this.sections = book.sections
     }
     #createView() {
-        if (this.#view) this.#container.removeChild(this.#view.element)
+        if (this.#view) {
+            this.#view.destroy()
+            this.#container.removeChild(this.#view.element)
+        }
         this.#view = new View({
             container: this,
             onExpand: () => this.scrollToAnchor(this.#anchor),
