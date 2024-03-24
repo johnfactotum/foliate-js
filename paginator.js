@@ -270,7 +270,7 @@ class View {
             'padding': vertical ? `${gap / 2}px 0` : `0 ${gap / 2}px`,
             'overflow': 'hidden',
             // force wrap long words
-            'overflow-wrap': 'anywhere',
+            'overflow-wrap': 'break-word',
             // reset some potentially problematic props
             'position': 'static', 'border': '0', 'margin': '0',
             'max-height': 'none', 'max-width': 'none',
