@@ -32,10 +32,16 @@ const getReferencedType = el => {
 const isInline = 'a, span, sup, sub, em, strong, i, b, small, big'
 const extractFootnote = (doc, anchor) => {
     let el = anchor(doc)
+    const target = el
     while (el.matches(isInline)) {
         const parent = el.parentElement
         if (!parent) break
         el = parent
+    }
+    if (el === doc.body) {
+        const sibling = target.nextElementSibling
+        if (sibling && !sibling.matches(isInline)) return sibling
+        throw new Error('Failed to extract footnote')
     }
     return el
 }
@@ -44,41 +50,49 @@ export class FootnoteHandler extends EventTarget {
     detectFootnotes = true
     #showFragment(book, { index, anchor }, href) {
         const view = document.createElement('foliate-view')
-        view.addEventListener('load', e => {
-            const { doc } = e.detail
-            const el = anchor(doc)
-            const type = getReferencedType(el)
-            const hidden = el?.matches?.('aside') && type === 'footnote'
-            if (el) {
-                const range = el.startContainer ? el : doc.createRange()
-                if (!el.startContainer) {
-                    if (el.matches('li, aside')) range.selectNodeContents(el)
-                    else range.selectNode(el)
+        return new Promise((resolve, reject) => {
+            view.addEventListener('load', e => {
+                try {
+                    const { doc } = e.detail
+                    const el = anchor(doc)
+                    const type = getReferencedType(el)
+                    const hidden = el?.matches?.('aside') && type === 'footnote'
+                    if (el) {
+                        const range = el.startContainer ? el : doc.createRange()
+                        if (!el.startContainer) {
+                            if (el.matches('li, aside')) range.selectNodeContents(el)
+                            else range.selectNode(el)
+                        }
+                        const frag = range.extractContents()
+                        doc.body.replaceChildren()
+                        doc.body.appendChild(frag)
+                    }
+                    const detail = { view, href, type, hidden, target: el }
+                    this.dispatchEvent(new CustomEvent('render', { detail }))
+                    resolve()
+                } catch (e) {
+                    reject(e)
                 }
-                const frag = range.extractContents()
-                doc.body.replaceChildren()
-                doc.body.appendChild(frag)
-            }
-            const detail = { view, href, type, hidden, target: el }
-            this.dispatchEvent(new CustomEvent('render', { detail }))
+            })
+            view.open(book)
+                .then(() => this.dispatchEvent(new CustomEvent('before-render', { detail: { view } })))
+                .then(() => view.goTo(index))
+                .catch(reject)
         })
-        view.open(book)
-            .then(() => this.dispatchEvent(new CustomEvent('before-render', { detail: { view } })))
-            .then(() => view.goTo(index))
     }
     handle(book, e) {
         const { a, href } = e.detail
         const { yes, maybe } = isFootnoteReference(a)
         if (yes) {
             e.preventDefault()
-            Promise.resolve(book.resolveHref(href)).then(target =>
+            return Promise.resolve(book.resolveHref(href)).then(target =>
                 this.#showFragment(book, target, href))
         }
         else if (this.detectFootnotes && maybe()) {
             e.preventDefault()
-            Promise.resolve(book.resolveHref(href)).then(({ index, anchor }) => {
+            return Promise.resolve(book.resolveHref(href)).then(({ index, anchor }) => {
                 const target = { index, anchor: doc => extractFootnote(doc, anchor) }
-                this.#showFragment(book, target, href)
+                return this.#showFragment(book, target, href)
             })
         }
     }
