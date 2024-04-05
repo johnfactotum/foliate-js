@@ -543,6 +543,8 @@ class Resources {
             }))
 
         this.cover = this.getItemByProperty('cover-image')
+            // Workaround epubs that are not spec conformant.
+            ?? this.getItemByID('cover')
             // EPUB 2 compat
             ?? this.getItemByID($$$(opf, 'meta')
                 .find(filterAttribute('name', 'cover'))
