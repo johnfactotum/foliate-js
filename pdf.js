@@ -494,7 +494,13 @@ const annotationLayerBuilderCSS = `
 `
 
 const renderPage = async (page, getImageBlob) => {
-    const scale = devicePixelRatio
+
+    const naturalPdfSize = page.getViewport({ scale: 1 })
+    const naturalPdfRatio = naturalPdfSize.width / naturalPdfSize.height
+    const appRatio = innerWidth / innerHeight
+    const pdfToAppResolutionRatio = appRatio / naturalPdfRatio
+
+    const scale = devicePixelRatio * pdfToAppResolutionRatio
     const viewport = page.getViewport({ scale })
 
     const canvas = document.createElement('canvas')
