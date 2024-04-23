@@ -785,7 +785,7 @@ class MOBI6 {
             const recindex = img.getAttribute('recindex')
             try {
                 img.src = await this.loadRecindex(recindex)
-            } catch (e) {
+            } catch {
                 console.warn(`Failed to load image ${recindex}`)
             }
         }
@@ -795,7 +795,7 @@ class MOBI6 {
             try {
                 media.src = await this.loadRecindex(mediarecindex)
                 if (recindex) media.poster = await this.loadRecindex(recindex)
-            } catch (e) {
+            } catch {
                 console.warn(`Failed to load media ${mediarecindex}`)
             }
         }

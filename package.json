@@ -1,0 +1,37 @@
+{
+  "name": "foliate",
+  "version": "0.0.0",
+  "description": "Render e-books in the browser",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/johnfactotum/foliate-js.git"
+  },
+  "bugs": {
+    "url": "https://github.com/johnfactotum/foliate-js/issues"
+  },
+  "homepage": "https://github.com/johnfactotum/foliate-js#readme",
+  "author": "John Factotum",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./*.js": "./*.js"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.1.0",
+    "globals": "^15.0.0"
+  },
+  "keywords": [
+    "ebook",
+    "reader",
+    "epub",
+    "cfi",
+    "mobi",
+    "azw",
+    "azw3",
+    "fb2",
+    "cbz",
+    "dictd",
+    "stardict",
+    "opds"
+  ]
+}

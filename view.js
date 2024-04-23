@@ -67,11 +67,6 @@ export class View extends HTMLElement {
     #tocProgress
     #pageProgress
     #searchResults = new Map()
-    #ssml
-    #speechDoc
-    #speechRanges
-    #speechGranularity
-    #lastSpeechMark
     isFixedLayout = false
     lastLocation
     history = new History()
