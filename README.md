@@ -179,7 +179,7 @@ The layout can be configured by setting the following attributes:
 - `gap`: a CSS `<percentage>`. The size of the space between columns, relative to page size.
 - `max-inline-size`: a CSS `<length>`. The unit must be `px`. The maximum inline size of the text (column width in paginated mode).
 - `max-block-size`: same as above, but for the size in the block direction.
-- `max-column-count`: integer. The maximum number of columns. Has no effect in scrolled mode.
+- `max-column-count`: integer. The maximum number of columns. Has no effect in scrolled mode, or when the orientation of the renderer element is `portrait` (or, for vertical writing, `landscape`).
 
 (Note: there's no JS property API. You must use `.setAttribute()`.)
 
