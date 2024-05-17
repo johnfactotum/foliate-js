@@ -72,10 +72,9 @@ Scripting is not supported, as it is currently impossible to do so securely due 
 
 Furthermore, while the renderers do use the `sandox` attribute on iframes, it is useless, as it requires `allow-scripts` due to a WebKit bug: https://bugs.webkit.org/show_bug.cgi?id=218086.
 
-It is therefore imperative that you use [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) to block all scripts except `'self'`.
+It is therefore imperative that you use [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) to block all scripts except `'self'`. An EPUB file for testing can be found at https://github.com/johnfactotum/epub-test.
 
-> **Warning**
->
+> [!CAUTION]
 > Do NOT use this library without CSP unless you completely trust the content you're rendering or can block scripts by other means.
 
 ### The Main Interface for Books
