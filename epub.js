@@ -788,6 +788,14 @@ const getPageSpread = properties => {
     }
 }
 
+const getDisplayOptions = doc => {
+    if (!doc) return null
+    return {
+        fixedLayout: getElementText(doc.querySelector('option[name="fixed-layout"]')),
+        openToSpread: getElementText(doc.querySelector('option[name="open-to-spread"]')),
+    }
+}
+
 export class EPUB {
     parser = new DOMParser()
     #loader
@@ -880,6 +888,16 @@ ${doc.querySelector('parsererror').innerText}`)
         this.rendition = rendition
         this.media = media
         this.dir = this.resources.pageProgressionDirection
+        const displayOptions = getDisplayOptions(
+            await this.#loadXML('META-INF/com.apple.ibooks.display-options.xml')
+            ?? await this.#loadXML('META-INF/com.kobobooks.display-options.xml'))
+        if (displayOptions) {
+            if (displayOptions.fixedLayout === 'true')
+                this.rendition.layout ??= 'pre-paginated'
+            if (displayOptions.openToSpread === 'false') this.sections
+                .find(section => section.linear !== 'no').pageSpread ??=
+                    this.dir === 'rtl' ? 'left' : 'right'
+        }
 
         this.parsedMetadata = metadata // for debugging or advanced use cases
         const title = metadata?.title?.[0]
