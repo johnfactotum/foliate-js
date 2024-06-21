@@ -592,6 +592,7 @@ export const makePDF = async file => {
         },
         size: 1000,
     }))
+    book.sections[0].pageSpread = 'right'
     book.isExternal = uri => /^\w+:/i.test(uri)
     book.resolveHref = async href => {
         const parsed = JSON.parse(href)
