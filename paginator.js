@@ -424,7 +424,9 @@ export class Paginator extends HTMLElement {
             display: grid;
             grid-template-columns:
                 minmax(var(--_half-gap), 1fr)
-                minmax(0, var(--_max-width))
+                var(--_half-gap)
+                minmax(0, calc(var(--_max-width) - var(--_gap)))
+                var(--_half-gap)
                 minmax(var(--_half-gap), 1fr);
             grid-template-rows:
                 minmax(var(--_margin), 1fr)
@@ -445,30 +447,26 @@ export class Paginator extends HTMLElement {
             }
         }
         #background {
-            grid-column-start: 1;
-            grid-column-end: 4;
-            grid-row-start: 1;
-            grid-row-end: 4;
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
         }
         #container {
-            grid-column-start: 2;
-            grid-row-start: 2;
+            grid-column: 2 / 5;
+            grid-row: 2;
             overflow: hidden;
         }
         :host([flow="scrolled"]) #container {
-            grid-column-start: 1;
-            grid-column-end: 4;
-            grid-row-start: 1;
-            grid-row-end: 4;
+            grid-column: 1 / -1;
+            grid-row: 1 / -1;
             overflow: auto;
         }
         #header {
-            grid-column-start: 2;
-            grid-row-start: 1;
+            grid-column: 3 / 4;
+            grid-row: 1;
         }
         #footer {
-            grid-column-start: 2;
-            grid-row-start: 3;
+            grid-column: 3 / 4;
+            grid-row: 3;
             align-self: end;
         }
         #header, #footer {
@@ -625,7 +623,6 @@ export class Paginator extends HTMLElement {
         const marginalStyle = {
             gridTemplateColumns: `repeat(${marginalDivisor}, 1fr)`,
             gap: `${gap}px`,
-            padding: vertical ? '0' : `0 ${gap / 2}px`,
             direction: this.bookDir === 'rtl' ? 'rtl' : 'ltr',
         }
         Object.assign(this.#header.style, marginalStyle)
