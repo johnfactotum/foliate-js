@@ -627,6 +627,7 @@ export class MOBI extends PDB {
             description: unescapeHTML(exth?.description),
             subject: exth?.subject?.map(unescapeHTML),
             rights: unescapeHTML(exth?.rights),
+            contributor: exth?.contributor,
         }
     }
     async getCover() {
