@@ -324,6 +324,6 @@ const params = new URLSearchParams(location.search)
 const url = params.get('url')
 if (url) fetch(url)
     .then(res => res.blob())
-    .then(blob => open(new File([blob], new URL(url).pathname)))
+    .then(blob => open(new File([blob], new URL(url, window.location.origin).pathname)))
     .catch(e => console.error(e))
 else dropTarget.style.visibility = 'visible'
