@@ -673,8 +673,9 @@ class Loader {
         if ([MIME.XHTML, MIME.HTML, MIME.SVG].includes(mediaType)) {
             let doc = new DOMParser().parseFromString(str, mediaType)
             // change to HTML if it's not valid XHTML
-            if (mediaType === MIME.XHTML && doc.querySelector('parsererror')) {
-                console.warn(doc.querySelector('parsererror').innerText)
+            if (mediaType === MIME.XHTML && (doc.querySelector('parsererror')
+            || !doc.documentElement?.namespaceURI)) {
+                console.warn(doc.querySelector('parsererror')?.innerText ?? 'Invalid XHTML')
                 item.mediaType = MIME.HTML
                 doc = new DOMParser().parseFromString(str, item.mediaType)
             }

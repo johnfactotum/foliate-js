@@ -1154,7 +1154,7 @@ class KF8 {
 
         // by default, type is XHTML; change to HTML if it's not valid XHTML
         let doc = this.parser.parseFromString(replaced, this.#type)
-        if (doc.querySelector('parsererror')) {
+        if (doc.querySelector('parsererror') || !doc.documentElement?.namespaceURI) {
             this.#type = MIME.HTML
             doc = this.parser.parseFromString(replaced, this.#type)
         }
