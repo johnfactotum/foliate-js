@@ -24,8 +24,13 @@ const makeZipLoader = async file => {
     const map = new Map(entries.map(entry => [entry.filename, entry]))
     const load = f => (name, ...args) =>
         map.has(name) ? f(map.get(name), ...args) : null
-    const loadText = load(entry => entry.getData(new TextWriter()))
-    const loadBlob = load((entry, type) => entry.getData(new BlobWriter(type)))
+    const loadText = load(entry =>  entry.getData(new TextWriter()).catch(_error => { return "Chapter missing from file!" }))
+    const loadBlob = load((entry, type) => 
+        entry.getData(new BlobWriter(type)).catch(_error => 
+            fetch('/ui/placeholder.png').then(res => res.blob())
+        )
+    )
+
     const getSize = name => map.get(name)?.uncompressedSize ?? 0
     return { entries, loadText, loadBlob, getSize }
 }
