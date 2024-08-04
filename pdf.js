@@ -112,7 +112,7 @@ const textLayerBuilderCSS = `
 .textLayer .endOfContent.active {
   top: 0;
 }
-`
+`;
 
 //https://github.com/mozilla/pdf.js/blob/d64f223d034ad74fb62571c3acff566d25eca413/web/annotation_layer_builder.css
 const annotationLayerBuilderCSS = `
@@ -491,27 +491,28 @@ const annotationLayerBuilderCSS = `
   left: 0;
   z-index: -1;
 }
-`
+`;
 
 const renderPage = async (page, getImageBlob) => {
+  const naturalPdfSize = page.getViewport({ scale: 1 });
+  const naturalPdfRatio = naturalPdfSize.width / naturalPdfSize.height;
+  const appRatio = innerWidth / innerHeight;
+  const pdfToAppResolutionRatio = appRatio / naturalPdfRatio;
 
-    const naturalPdfSize = page.getViewport({ scale: 1 })
-    const naturalPdfRatio = naturalPdfSize.width / naturalPdfSize.height
-    const appRatio = innerWidth / innerHeight
-    const pdfToAppResolutionRatio = appRatio / naturalPdfRatio
+  const scale = devicePixelRatio * pdfToAppResolutionRatio * 3;
+  const viewport = page.getViewport({ scale });
 
-    const scale = devicePixelRatio * pdfToAppResolutionRatio * 1.5;
-    const viewport = page.getViewport({ scale })
+  const canvas = document.createElement("canvas");
+  canvas.height = viewport.height;
+  canvas.width = viewport.width;
+  const canvasContext = canvas.getContext("2d");
+  await page.render({ canvasContext, viewport }).promise;
+  const blob = await new Promise((resolve) =>
+    canvas.toBlob(resolve, "image/png"),
+  );
+  if (getImageBlob) return blob;
 
-    const canvas = document.createElement('canvas')
-    canvas.height = viewport.height
-    canvas.width = viewport.width
-    const canvasContext = canvas.getContext('2d')
-    await page.render({ canvasContext, viewport }).promise
-    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
-    if (getImageBlob) return blob
-
-    /*
+  /*
     // with the SVG backend
     const operatorList = await page.getOperatorList()
     const svgGraphics = new pdfjsLib.SVGGraphics(page.commonObjs, page.objs)
@@ -520,25 +521,29 @@ const renderPage = async (page, getImageBlob) => {
     const blob = new Blob([str], { type: 'image/svg+xml' })
     */
 
-    const container = document.createElement('div')
-    container.classList.add('textLayer')
-    await pdfjsLib.renderTextLayer({
-        textContentSource: await page.getTextContent(),
-        container, viewport,
-    }).promise
+  const container = document.createElement("div");
+  container.classList.add("textLayer");
+  await pdfjsLib.renderTextLayer({
+    textContentSource: await page.getTextContent(),
+    container,
+    viewport,
+  }).promise;
 
-    const div = document.createElement('div')
-    div.classList.add('annotationLayer')
-    await new pdfjsLib.AnnotationLayer({ page, viewport, div }).render({
-        annotations: await page.getAnnotations(),
-        linkService: {
-            getDestinationHash: dest => JSON.stringify(dest),
-            addLinkAttributes: (link, url) => link.href = url,
-        },
-    })
+  const div = document.createElement("div");
+  div.classList.add("annotationLayer");
+  await new pdfjsLib.AnnotationLayer({ page, viewport, div }).render({
+    annotations: await page.getAnnotations(),
+    linkService: {
+      getDestinationHash: (dest) => JSON.stringify(dest),
+      addLinkAttributes: (link, url) => (link.href = url),
+    },
+  });
 
-    const src = URL.createObjectURL(blob)
-    const url = URL.createObjectURL(new Blob([`
+  const src = URL.createObjectURL(blob);
+  const url = URL.createObjectURL(
+    new Blob(
+      [
+        `
         <!DOCTYPE html>
         <meta charset="utf-8">
         <style>
@@ -560,60 +565,64 @@ const renderPage = async (page, getImageBlob) => {
         <img src="${src}" style="image-rendering: auto; -webkit-font-smoothing: antialiased;">
         ${container.outerHTML}
         ${div.outerHTML}
-    `], { type: 'text/html' }))
-    return url
-}
+    `,
+      ],
+      { type: "text/html" },
+    ),
+  );
+  return url;
+};
 
-const makeTOCItem = item => ({
-    label: item.title,
-    href: JSON.stringify(item.dest),
-    subitems: item.items.length ? item.items.map(makeTOCItem) : null,
-})
+const makeTOCItem = (item) => ({
+  label: item.title,
+  href: JSON.stringify(item.dest),
+  subitems: item.items.length ? item.items.map(makeTOCItem) : null,
+});
 
-export const makePDF = async file => {
-    const data = new Uint8Array(await file.arrayBuffer())
-    const pdf = await pdfjsLib.getDocument({ data }).promise
+export const makePDF = async (file) => {
+  const data = new Uint8Array(await file.arrayBuffer());
+  const pdf = await pdfjsLib.getDocument({ data }).promise;
 
-    const book = { rendition: { layout: 'pre-paginated' } }
+  const book = { rendition: { layout: "pre-paginated" } };
 
-    const info = (await pdf.getMetadata())?.info
-    book.metadata = {
-        title: info?.Title,
-        author: info?.Author,
-    }
+  const info = (await pdf.getMetadata())?.info;
+  book.metadata = {
+    title: info?.Title,
+    author: info?.Author,
+  };
 
-    const outline = await pdf.getOutline()
-    book.toc = outline?.map(makeTOCItem)
+  const outline = await pdf.getOutline();
+  book.toc = outline?.map(makeTOCItem);
 
-    const cache = new Map()
-    book.sections = Array.from({ length: pdf.numPages }).map((_, i) => ({
-        id: i,
-        load: async () => {
-            const cached = cache.get(i)
-            if (cached) return cached
-            const url = await renderPage(await pdf.getPage(i + 1))
-            cache.set(i, url)
-            return url
-        },
-        size: 1000,
-    }))
-    book.sections[0].pageSpread = 'right'
-    book.isExternal = uri => /^\w+:/i.test(uri)
-    book.resolveHref = async href => {
-        const parsed = JSON.parse(href)
-        const dest = typeof parsed === 'string'
-            ? await pdf.getDestination(parsed) : parsed
-        const index = await pdf.getPageIndex(dest[0])
-        return { index }
-    }
-    book.splitTOCHref = async href => {
-        const parsed = JSON.parse(href)
-        const dest = typeof parsed === 'string'
-            ? await pdf.getDestination(parsed) : parsed
-        const index = await pdf.getPageIndex(dest[0])
-        return [index, null]
-    }
-    book.getTOCFragment = doc => doc.documentElement
-    book.getCover = async () => renderPage(await pdf.getPage(1), true)
-    return book
-}
+  const cache = new Map();
+  book.sections = Array.from({ length: pdf.numPages }).map((_, i) => ({
+    id: i,
+    load: async () => {
+      const cached = cache.get(i);
+      if (cached) return cached;
+      const url = await renderPage(await pdf.getPage(i + 1));
+      cache.set(i, url);
+      return url;
+    },
+    size: 1000,
+  }));
+  book.sections[0].pageSpread = "right";
+  book.isExternal = (uri) => /^\w+:/i.test(uri);
+  book.resolveHref = async (href) => {
+    const parsed = JSON.parse(href);
+    const dest =
+      typeof parsed === "string" ? await pdf.getDestination(parsed) : parsed;
+    const index = await pdf.getPageIndex(dest[0]);
+    return { index };
+  };
+  book.splitTOCHref = async (href) => {
+    const parsed = JSON.parse(href);
+    const dest =
+      typeof parsed === "string" ? await pdf.getDestination(parsed) : parsed;
+    const index = await pdf.getPageIndex(dest[0]);
+    return [index, null];
+  };
+  book.getTOCFragment = (doc) => doc.documentElement;
+  book.getCover = async () => renderPage(await pdf.getPage(1), true);
+  return book;
+};
