@@ -500,7 +500,7 @@ const renderPage = async (page, getImageBlob) => {
     const appRatio = innerWidth / innerHeight
     const pdfToAppResolutionRatio = appRatio / naturalPdfRatio
 
-    const scale = devicePixelRatio * pdfToAppResolutionRatio
+    const scale = devicePixelRatio * pdfToAppResolutionRatio * 1.5;
     const viewport = page.getViewport({ scale })
 
     const canvas = document.createElement('canvas')
@@ -508,7 +508,7 @@ const renderPage = async (page, getImageBlob) => {
     canvas.width = viewport.width
     const canvasContext = canvas.getContext('2d')
     await page.render({ canvasContext, viewport }).promise
-    const blob = await new Promise(resolve => canvas.toBlob(resolve))
+    const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
     if (getImageBlob) return blob
 
     /*
@@ -549,10 +549,15 @@ const renderPage = async (page, getImageBlob) => {
             margin: 0;
             padding: 0;
         }
+        body {
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
         ${textLayerBuilderCSS}
         ${annotationLayerBuilderCSS}
         </style>
-        <img src="${src}">
+        <img src="${src}" style="image-rendering: auto; -webkit-font-smoothing: antialiased;">
         ${container.outerHTML}
         ${div.outerHTML}
     `], { type: 'text/html' }))
