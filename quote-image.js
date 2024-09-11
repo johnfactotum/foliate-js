@@ -17,6 +17,9 @@ const pixelRatio = 2
 const html = `<style>
 :host {
     position: absolute;
+    width: 0;
+    height: 0;
+    overflow: hidden;
     visibility: hidden;
 }
 </style>
