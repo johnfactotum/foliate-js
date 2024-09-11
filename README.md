@@ -340,6 +340,18 @@ These two functions return an object that implements the following interface:
     - `value`: a string; the default value of the parameter
 - `.search(map)`: a function, whose argument is a `Map` whose values are `Map`s (i.e. a two-dimensional map). The first key is the namespace of the search parameter. For non-namespaced parameters, the first key must be `null`. The second key is the parameter's name. Returns a string representing the URL of the search results.
 
+### Generating Images for Quotes
+
+With `quote-image.js`, one can generate shareable images for quotes:
+
+```js
+document.querySelector('foliate-quoteimage').getBlob({
+    title: 'The Time Machine',
+    author: 'H. G. Wells',
+    text: 'Can an instantaneous cube exist?',
+})
+```
+
 ### Supported Browsers
 
 The main use of the library is for use in [Foliate](https://github.com/johnfactotum/foliate), which uses WebKitGTK. As such it's the only engine that has been tested extensively. But it should also work in Chromium and Firefox.
