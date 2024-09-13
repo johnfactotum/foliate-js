@@ -183,10 +183,9 @@ export class FixedLayout extends HTMLElement {
 
         if (rendition?.spread === 'none')
             this.#spreads = book.sections.map(section => ({ center: section }))
-        else this.#spreads = book.sections.reduce((arr, section) => {
+        else this.#spreads = book.sections.reduce((arr, section, i) => {
             const last = arr[arr.length - 1]
-            const { linear, pageSpread } = section
-            if (linear === 'no') return arr
+            const { pageSpread } = section
             const newSpread = () => {
                 const spread = {}
                 arr.push(spread)
@@ -197,21 +196,21 @@ export class FixedLayout extends HTMLElement {
                 spread.center = section
             }
             else if (pageSpread === 'left') {
-                const spread = last.center || last.left || ltr ? newSpread() : last
+                const spread = last.center || last.left || ltr && i ? newSpread() : last
                 spread.left = section
             }
             else if (pageSpread === 'right') {
-                const spread = last.center || last.right || rtl ? newSpread() : last
+                const spread = last.center || last.right || rtl && i ? newSpread() : last
                 spread.right = section
             }
             else if (ltr) {
                 if (last.center || last.right) newSpread().left = section
-                else if (last.left) last.right = section
+                else if (last.left || !i) last.right = section
                 else last.left = section
             }
             else {
                 if (last.center || last.left) newSpread().right = section
-                else if (last.right) last.left = section
+                else if (last.right || !i) last.left = section
                 else last .right = section
             }
             return arr
