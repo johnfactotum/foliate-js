@@ -519,6 +519,10 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
             doc.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
             doc.addEventListener('touchend', this.#onTouchEnd.bind(this))
+
+            doc.addEventListener('focusin', e =>
+                // NOTE: `requestAnimationFrame` is needed in WebKit
+                requestAnimationFrame(() => this.scrollToAnchor(e.target)))
         })
 
         this.#mediaQueryListener = () => {
