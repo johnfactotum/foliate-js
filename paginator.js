@@ -866,6 +866,7 @@ export class Paginator extends HTMLElement {
     async #display(promise) {
         const { index, src, anchor, onLoad, select } = await promise
         this.#index = index
+        const hasFocus = this.#view?.document?.hasFocus()
         if (src) {
             const view = this.#createView()
             const afterLoad = doc => {
@@ -890,6 +891,7 @@ export class Paginator extends HTMLElement {
         }
         await this.scrollToAnchor((typeof anchor === 'function'
             ? anchor(this.#view.document) : anchor) ?? 0, select)
+        if (hasFocus) this.focusView()
     }
     #canGoToIndex(index) {
         return index >= 0 && index <= this.sections.length - 1
@@ -1005,6 +1007,9 @@ export class Paginator extends HTMLElement {
 
         // needed because the resize observer doesn't work in Firefox
         this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
+    }
+    focusView() {
+        this.#view.document.defaultView.focus()
     }
     destroy() {
         this.#observer.unobserve(this)
