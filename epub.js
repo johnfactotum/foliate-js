@@ -23,6 +23,39 @@ const MIME = {
     JS: /\/(x-)?(javascript|ecmascript)/,
 }
 
+// https://www.w3.org/TR/epub-33/#sec-reserved-prefixes
+const PREFIX = {
+    a11y: 'http://www.idpf.org/epub/vocab/package/a11y/#',
+    dcterms: 'http://purl.org/dc/terms/',
+    marc: 'http://id.loc.gov/vocabulary/',
+    media: 'http://www.idpf.org/epub/vocab/overlays/#',
+    onix: 'http://www.editeur.org/ONIX/book/codelists/current.html#',
+    rendition: 'http://www.idpf.org/vocab/rendition/#',
+    schema: 'http://schema.org/',
+    xsd: 'http://www.w3.org/2001/XMLSchema#',
+    msv: 'http://www.idpf.org/epub/vocab/structure/magazine/#',
+    prism: 'http://www.prismstandard.org/specifications/3.0/PRISM_CV_Spec_3.0.htm#',
+}
+
+const RELATORS = {
+    art: 'artist',
+    aut: 'author',
+    clr: 'colorist',
+    edt: 'editor',
+    ill: 'illustrator',
+    nrt: 'narrator',
+    trl: 'translator',
+    pbl: 'publisher',
+}
+
+const ONIX5 = {
+    '02': 'isbn',
+    '06': 'doi',
+    '15': 'isbn',
+    '26': 'doi',
+    '34': 'issn',
+}
+
 // convert to camel case
 const camel = x => x.toLowerCase().replace(/[-:](.)/g, (_, g) => g.toUpperCase())
 
@@ -98,111 +131,183 @@ const replaceSeries = async (str, regex, f) => {
 
 const regexEscape = str => str.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&')
 
-const LANGS = { attrs: ['dir', 'xml:lang'] }
-const ALTS = { name: 'alternate-script', many: true, ...LANGS, props: ['file-as'] }
-const CONTRIB = {
-    many: true, ...LANGS,
-    props: [{ name: 'role', many: true, attrs: ['scheme'] }, 'file-as', ALTS],
-    setLegacyAttrs: (obj, el) => {
-        if (!obj.role?.length) {
-            const value = el.getAttributeNS(NS.OPF, 'role')
-            if (value) obj.role = [{ value }]
+const tidy = obj => {
+    for (const [key, val] of Object.entries(obj))
+        if (val == null) delete obj[key]
+        else if (Array.isArray(val)) {
+            obj[key] = val.filter(x => x).map(x =>
+                typeof x === 'object' && !Array.isArray(x) ? tidy(x) : x)
+            if (!obj[key].length) delete obj[key]
+            else if (obj[key].length === 1) obj[key] = val[0]
         }
-        obj.fileAs ??= el.getAttributeNS(NS.OPF, 'file-as')
-    },
+        else if (typeof val === 'object') {
+            obj[key] = tidy(val)
+            if (!Object.keys(val).length) delete obj[key]
+        }
+    const keys = Object.keys(obj)
+    if (keys.length === 1) return obj[keys[0]]
+    return obj
 }
-const METADATA = [
-    {
-        name: 'title', many: true, ...LANGS,
-        props: ['title-type', 'display-seq', 'file-as', ALTS],
-    },
-    {
-        name: 'identifier', many: true,
-        props: [{ name: 'identifier-type', attrs: ['scheme'] }],
-        setLegacyAttrs: (obj, el) => {
-            if (!obj.identifierType) {
-                const value = el.getAttributeNS(NS.OPF, 'scheme')
-                if (value) obj.identifierType = { value }
-            }
-        },
-    },
-    { name: 'language', many: true },
-    { name: 'creator', ...CONTRIB },
-    { name: 'contributor', ...CONTRIB },
-    { name: 'publisher', ...LANGS, props: ['file-as', ALTS] },
-    { name: 'description', ...LANGS, props: [ALTS] },
-    { name: 'rights', ...LANGS, props: [ALTS] },
-    { name: 'date' },
-    { name: 'dcterms:modified', type: 'meta' },
-    {
-        name: 'subject', many: true, ...LANGS, props: ['term', 'authority', ALTS],
-        setLegacyAttrs: (obj, el) => {
-            obj.term ??= el.getAttributeNS(NS.OPF, 'term')
-            obj.authority ??= el.getAttributeNS(NS.OPF, 'authority')
-        },
-    },
-    { name: 'source', many: true },
-    {
-        name: 'belongs-to-collection', type: 'meta', many: true, ...LANGS,
-        props: [
-            'collection-type', 'group-position', 'dcterms:identifier', 'file-as',
-            ALTS, { name: 'belongs-to-collection', recursive: true },
-        ],
-    },
-]
+
+// https://www.w3.org/TR/epub/#sec-prefix-attr
+const getPrefixes = doc => {
+    const map = new Map(Object.entries(PREFIX))
+    const value = doc.documentElement.getAttributeNS(NS.EPUB, 'prefix')
+        || doc.documentElement.getAttribute('prefix')
+    if (value) for (const [, prefix, url] of value
+        .matchAll(/(.+): +(.+)[ \t\r\n]*/g)) map.set(prefix, url)
+    return map
+}
+
+// https://www.w3.org/TR/epub-rs/#sec-property-values
+// but ignoring the case where the prefix is omitted
+const getPropertyURL = (value, prefixes) => {
+    if (!value) return null
+    const [a, b] = value.split(':')
+    const prefix = b ? a : null
+    const reference = b ? b : a
+    const baseURL = prefixes.get(prefix)
+    return baseURL ? baseURL + reference : null
+}
 
 const getMetadata = opf => {
-    const { $, $$ } = childGetter(opf, NS.OPF)
+    const { $ } = childGetter(opf, NS.OPF)
     const $metadata = $(opf.documentElement, 'metadata')
-    const els = Array.from($metadata.children)
-    const getValue = (obj, el) => {
-        if (!el) return null
-        const { props = [], attrs = [] } = obj
-        const value = getElementText(el)
-        if (!props.length && !attrs.length) return value
-        const id = el.getAttribute('id')
-        const refines = id ? els.filter(filterAttribute('refines', '#' + id)) : []
-        const result = Object.fromEntries([['value', value]]
-            .concat(props.map(prop => {
-                const { many, recursive } = prop
-                const name = typeof prop === 'string' ? prop : prop.name
-                const filter = filterAttribute('property', name)
-                const subobj = recursive ? obj : prop
-                return [camel(name), many
-                    ? refines.filter(filter).map(el => getValue(subobj, el))
-                    : getValue(subobj, refines.find(filter))]
-            }))
-            .concat(attrs.map(attr => [camel(attr), el.getAttribute(attr)])))
-        obj.setLegacyAttrs?.(result, el)
-        return result
+
+    // first pass: convert to JS objects
+    const els = Object.groupBy($metadata.children, el =>
+        el.namespaceURI === NS.DC ? 'dc'
+        : el.namespaceURI === NS.OPF && el.localName === 'meta' ?
+            (el.hasAttribute('name') ? 'legacyMeta' : 'meta') : '')
+    const baseLang = $metadata.getAttribute('xml:lang')
+        ?? opf.documentElement.getAttribute('xml:lang') ?? 'und'
+    const prefixes = getPrefixes(opf)
+    const parse = el => {
+        const property = el.getAttribute('property')
+        const scheme = el.getAttribute('scheme')
+        return {
+            property: getPropertyURL(property, prefixes) ?? property,
+            scheme: getPropertyURL(scheme, prefixes) ?? scheme,
+            lang: el.getAttribute('xml:lang'),
+            value: getElementText(el),
+            props: getProperties(el),
+            // `opf:` attributes from EPUB 2 & EPUB 3.1 (removed in EPUB 3.2)
+            attrs: Object.fromEntries(Array.from(el.attributes)
+                .filter(attr => attr.namespaceURI === NS.OPF)
+                .map(attr => [attr.localName, attr.value])),
+        }
     }
-    const arr = els.filter(filterAttribute('refines', null))
-    const metadata = Object.fromEntries(METADATA.map(obj => {
-        const { type, name, many } = obj
-        const filter = type === 'meta'
-            ? el => el.namespaceURI === NS.OPF && el.getAttribute('property') === name
-            : el => el.namespaceURI === NS.DC && el.localName === name
-        return [camel(name), many ? arr.filter(filter).map(el => getValue(obj, el))
-            : getValue(obj, arr.find(filter))]
-    }))
-
-    const $$meta = $$($metadata, 'meta')
-    const getMetasByPrefix = prefix => $$meta
-        .filter(filterAttribute('property', x => x?.startsWith(prefix)))
-        .map(el => [el.getAttribute('property').replace(prefix, ''), el])
-
-    const rendition = Object.fromEntries(getMetasByPrefix('rendition:')
-        .map(([k, el]) => [k, getElementText(el)]))
-
-    const media = { narrator: [], duration: {} }
-    for (const [k, el] of getMetasByPrefix('media:')) {
-        const v = getElementText(el)
-        if (k === 'duration') media.duration[
-            el.getAttribute('refines')?.split('#')?.[1] ?? ''] = parseClock(v)
-        else if (k === 'active-class') media.activeClass = v
-        else if (k === 'narrator') media.narrator.push(v)
-        else if (k === 'playback-active-class') media.playbackActiveClass = v
+    const refines = Map.groupBy(els.meta ?? [], el => el.getAttribute('refines'))
+    const getProperties = el => {
+        const els = refines.get(el ? '#' + el.getAttribute('id') : null)
+        if (!els) return null
+        return Object.groupBy(els.map(parse), x => x.property)
     }
+    const dc = Object.fromEntries(Object.entries(Object.groupBy(els.dc, el => el.localName))
+        .map(([name, els]) => [name, els.map(parse)]))
+    const properties = getProperties() ?? {}
+    const legacyMeta = Object.fromEntries(els.legacyMeta?.map(el =>
+        [el.getAttribute('name'), el.getAttribute('content')]) ?? [])
+
+    // second pass: map to webpub
+    const one = x => x?.[0]?.value
+    const prop = (x, p) => one(x?.props?.[p])
+    const makeLanguageMap = x => {
+        if (!x) return null
+        const alts = x.props?.['alternate-script'] ?? []
+        const altRep = x.attrs['alt-rep']
+        if (!alts.length && (!x.lang || x.lang === baseLang) && !altRep) return x.value
+        const map = { [x.lang ?? baseLang]: x.value }
+        if (altRep) map[x.attrs['alt-rep-lang']] = altRep
+        for (const y of alts) map[y.lang] ??= y.value
+        return map
+    }
+    const makeContributor = x => x ? ({
+        name: makeLanguageMap(x),
+        sortAs: makeLanguageMap(x.props?.['file-as']?.[0]),
+        role: x.props?.role?.filter(x => x.scheme === PREFIX.marc + 'relators')
+            ?.map(x => x.value) ?? [x.attrs.role],
+        code: prop(x, 'term') ?? x.attrs.term,
+        scheme: prop(x, 'authority') ?? x.attrs.authority,
+    }) : null
+    const makeCollection = x => ({
+        name: makeLanguageMap(x),
+        // NOTE: webpub requires number but EPUB allows values like "2.2.1"
+        position: one(x.props?.['group-position']),
+    })
+    const makeAltIdentifier = x => {
+        const { value } = x
+        if (/^urn:/i.test(value)) return value
+        if (/^doi:/i.test(value)) return `urn:${value}`
+        const type = x.props?.['identifier-type']
+        if (!type) {
+            const scheme = x.attrs.scheme
+            if (!scheme) return value
+            // https://idpf.github.io/epub-registries/identifiers/
+            // but no "jdcn", which isn't a registered URN namespace
+            if (/^(doi|isbn|uuid)$/i.test(scheme)) return `urn:${scheme}:${value}`
+            // NOTE: webpub requires scheme to be a URI; EPUB allows anything
+            return { scheme, value }
+        }
+        if (type.scheme === PREFIX.onix + 'codelist5') {
+            const nid = ONIX5[type.value]
+            if (nid) return `urn:${nid}:${value}`
+        }
+        return value
+    }
+    const belongsTo = Object.groupBy(properties['belongs-to-collection'] ?? [],
+        x => prop(x, 'collection-type') === 'series' ? 'series' : 'collection')
+    const mainTitle = dc.title?.find(x => prop(x, 'title-type') === 'main') ?? dc.title?.[0]
+    const metadata = {
+        identifier: getIdentifier(opf),
+        title: makeLanguageMap(mainTitle),
+        sortAs: makeLanguageMap(mainTitle?.props?.['file-as']?.[0])
+            ?? makeLanguageMap(mainTitle?.attrs?.['file-as'])
+            ?? legacyMeta?.['calibre:title_sort'],
+        subtitle: dc.title?.find(x => prop(x, 'title-type') === 'subtitle')?.value,
+        language: dc.language?.map(x => x.value),
+        description: one(dc.description),
+        publisher: makeContributor(dc.publisher?.[0]),
+        published: dc.date?.find(x => x.attrs.event === 'publication')?.value
+            ?? one(dc.date),
+        modified: one(properties[PREFIX.dcterms + 'modified'])
+            ?? dc.date?.find(x => x.attrs.event === 'modification')?.value,
+        subject: dc.subject?.map(makeContributor),
+        belongsTo: {
+            collection: belongsTo.collection?.map(makeCollection),
+            series: belongsTo.series?.map(makeCollection)
+            ?? legacyMeta?.['calibre:series'] ? {
+                name: legacyMeta?.['calibre:series'],
+                position: parseFloat(legacyMeta?.['calibre:series_index']),
+            } : null,
+        },
+        altIdentifier: dc.identifier?.map(makeAltIdentifier),
+        source: dc.source?.map(makeAltIdentifier), // NOTE: not in webpub schema
+        rights: one(dc.rights), // NOTE: not in webpub schema
+    }
+    const remapContributor = defaultKey => x => {
+        const keys = new Set(x.role?.map(role => RELATORS[role] ?? defaultKey))
+        return [keys.size ? keys : [defaultKey], x]
+    }
+    for (const [keys, val] of [].concat(
+        dc.creator?.map(makeContributor)?.map(remapContributor('author')) ?? [],
+        dc.contributor?.map(makeContributor)?.map(remapContributor('contributor')) ?? []))
+        for (const key of keys)
+            if (metadata[key]) metadata[key].push(val)
+            else metadata[key] = [val]
+    tidy(metadata)
+    if (metadata.altIdentifier === metadata.identifier)
+        delete metadata.altIdentifier
+
+    const rendition = {}
+    const media = {}
+    for (const [key, val] of Object.entries(properties)) {
+        if (key.startsWith(PREFIX.rendition))
+            rendition[camel(key.replace(PREFIX.rendition, ''))] = one(val)
+        else if (key.startsWith(PREFIX.media))
+            media[camel(key.replace(PREFIX.media, ''))] = one(val)
+    }
+    if (media.duration) media.duration = parseClock(media.duration)
     return { metadata, rendition, media }
 }
 
@@ -886,6 +991,7 @@ ${doc.querySelector('parsererror').innerText}`)
         this.landmarks ??= this.resources.guide
 
         const { metadata, rendition, media } = getMetadata(opf)
+        this.metadata = metadata
         this.rendition = rendition
         this.media = media
         this.dir = this.resources.pageProgressionDirection
@@ -899,50 +1005,6 @@ ${doc.querySelector('parsererror').innerText}`)
                 .find(section => section.linear !== 'no').pageSpread ??=
                     this.dir === 'rtl' ? 'left' : 'right'
         }
-
-        this.parsedMetadata = metadata // for debugging or advanced use cases
-        const title = metadata?.title?.[0]
-        this.metadata = {
-            title: title?.value,
-            subtitle: metadata?.title?.find(x => x.titleType === 'subtitle')?.value,
-            sortAs: title?.fileAs,
-            language: metadata?.language,
-            identifier: getIdentifier(opf),
-            description: metadata?.description?.value,
-            publisher: metadata?.publisher?.value,
-            published: metadata?.date,
-            modified: metadata?.dctermsModified,
-            subject: metadata?.subject
-                ?.filter(({ value, term }) => value || term)
-                ?.map(({ value, term, authority }) =>
-                    ({ name: value, code: term, scheme: authority })),
-            rights: metadata?.rights?.value,
-        }
-        const relators = {
-            art: 'artist',
-            aut: 'author',
-            bkp: 'producer',
-            clr: 'colorist',
-            edt: 'editor',
-            ill: 'illustrator',
-            nrt: 'narrator',
-            trl: 'translator',
-            pbl: 'publisher',
-        }
-        const mapContributor = defaultKey => obj => {
-            const keys = [...new Set(obj.role?.map(({ value, scheme }) =>
-                (!scheme || scheme === 'marc:relators' ? relators[value] : null)
-                ?? defaultKey))]
-            const value = { name: obj.value, sortAs: obj.fileAs }
-            return [keys?.length ? keys : [defaultKey], value]
-        }
-        metadata?.creator?.map(mapContributor('author'))
-            ?.concat(metadata?.contributor?.map?.(mapContributor('contributor')))
-            ?.forEach(([keys, value]) => keys.forEach(key => {
-                if (this.metadata[key]) this.metadata[key].push(value)
-                else this.metadata[key] = [value]
-            }))
-
         return this
     }
     async loadDocument(item) {

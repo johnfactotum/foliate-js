@@ -151,6 +151,21 @@ const $ = document.querySelector.bind(document)
 
 const locales = 'en'
 const percentFormat = new Intl.NumberFormat(locales, { style: 'percent' })
+const listFormat = new Intl.ListFormat(locales, { style: 'short', type: 'conjunction' })
+
+const formatLanguageMap = x => {
+    if (!x) return ''
+    if (typeof x === 'string') return x
+    const keys = Object.keys(x)
+    return x[keys[0]]
+}
+
+const formatOneContributor = contributor => typeof contributor === 'string'
+    ? contributor : formatLanguageMap(contributor?.name)
+
+const formatContributor = contributor => Array.isArray(contributor)
+    ? listFormat.format(contributor.map(formatOneContributor))
+    : formatOneContributor(contributor)
 
 class Reader {
     #tocView
@@ -219,15 +234,10 @@ class Reader {
 
         document.addEventListener('keydown', this.#handleKeydown.bind(this))
 
-        const title = book.metadata?.title ?? 'Untitled Book'
+        const title = formatLanguageMap(book.metadata?.title) || 'Untitled Book'
         document.title = title
         $('#side-bar-title').innerText = title
-        const author = book.metadata?.author
-        $('#side-bar-author').innerText = typeof author === 'string' ? author
-            : author
-                ?.map(author => typeof author === 'string' ? author : author.name)
-                ?.join(', ')
-                ?? ''
+        $('#side-bar-author').innerText = formatContributor(book.metadata?.author)
         Promise.resolve(book.getCover?.())?.then(blob =>
             blob ? $('#side-bar-cover').src = URL.createObjectURL(blob) : null)
 

@@ -248,8 +248,12 @@ export const makeFB2 = async blob => {
         language: getElementText($('title-info lang')),
         author: $$('title-info author').map(getPerson),
         translator: $$('title-info translator').map(getPerson),
-        producer: $$('document-info author').map(getPerson)
-            .concat($$('document-info program-used').map(getElementText)),
+        contributor: $$('document-info author').map(getPerson)
+            // techincially the program probably shouldn't get the `bkp` role
+            // but it has been so used by calibre, so ¯\_(ツ)_/¯
+            .concat($$('document-info program-used').map(getElementText))
+            .map(x => Object.assign(typeof x === 'string' ? { name: x } : x,
+                { role: 'bkp' })),
         publisher: getElementText($('publish-info publisher')),
         published: getDate($('title-info date')),
         modified: getDate($('document-info date')),
