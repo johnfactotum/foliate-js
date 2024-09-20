@@ -120,7 +120,7 @@ const pathRelative = (from, to) => {
 const pathDirname = str => str.slice(0, str.lastIndexOf('/') + 1)
 
 // replace asynchronously and sequentially
-// same techinque as https://stackoverflow.com/a/48032528
+// same technique as https://stackoverflow.com/a/48032528
 const replaceSeries = async (str, regex, f) => {
     const matches = []
     str.replace(regex, (...args) => (matches.push(args), null))

@@ -109,11 +109,11 @@ export const search = (strs, query, options) => {
 }
 
 export const searchMatcher = (textWalker, opts) => {
-    const { defalutLocale, matchCase, matchDiacritics, matchWholeWords } = opts
+    const { defaultLocale, matchCase, matchDiacritics, matchWholeWords } = opts
     return function* (doc, query) {
         const iter = textWalker(doc, function* (strs, makeRange) {
             for (const result of search(strs, query, {
-                locales: doc.body.lang || doc.documentElement.lang || defalutLocale || 'en',
+                locales: doc.body.lang || doc.documentElement.lang || defaultLocale || 'en',
                 granularity: matchWholeWords ? 'word' : 'grapheme',
                 sensitivity: matchDiacritics && matchCase ? 'variant'
                 : matchDiacritics && !matchCase ? 'accent'
