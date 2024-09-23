@@ -1003,7 +1003,9 @@ export class Paginator extends HTMLElement {
             $style.textContent = style
         } else $style.textContent = styles
 
-        this.#background.style.background = getBackground(this.#view.document)
+        // NOTE: needs `requestAnimationFrame` in Chromium
+        requestAnimationFrame(() =>
+            this.#background.style.background = getBackground(this.#view.document))
 
         // needed because the resize observer doesn't work in Firefox
         this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
