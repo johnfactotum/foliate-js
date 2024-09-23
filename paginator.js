@@ -123,6 +123,22 @@ const getVisibleRange = (doc, start, end, mapRect) => {
     return range
 }
 
+const setSelectionTo = (target, collapse) => {
+    let range
+    if (target.startContainer) range = target.cloneRange()
+    else if (target.nodeType) {
+        range = document.createRange()
+        range.selectNode(target)
+    }
+    if (range) {
+        const sel = range.startContainer.ownerDocument.defaultView.getSelection()
+        sel.removeAllRanges()
+        if (collapse === -1) range.collapse(true)
+        else if (collapse === 1) range.collapse()
+        sel.addRange(range)
+    }
+}
+
 const getDirection = doc => {
     const { defaultView } = doc
     const { writingMode, direction } = defaultView.getComputedStyle(doc.body)
@@ -522,7 +538,16 @@ export class Paginator extends HTMLElement {
 
             doc.addEventListener('focusin', e => this.scrolled ? null :
                 // NOTE: `requestAnimationFrame` is needed in WebKit
-                requestAnimationFrame(() => this.scrollToAnchor(e.target)))
+                requestAnimationFrame(() => this.#scrollToAnchor(e.target)))
+        })
+        this.addEventListener('relocate', ({ detail }) => {
+            if (detail.reason === 'selection') setSelectionTo(this.#anchor, 0)
+            else if (detail.reason === 'navigation') {
+                if (this.#anchor === 1) setSelectionTo(detail.range, 1)
+                else if (typeof this.#anchor === 'number')
+                    setSelectionTo(detail.range, -1)
+                else setSelectionTo(this.#anchor, -1)
+            }
         })
 
         this.#mediaQueryListener = () => {
@@ -560,7 +585,7 @@ export class Paginator extends HTMLElement {
         }
         this.#view = new View({
             container: this,
-            onExpand: () => this.scrollToAnchor(this.#anchor),
+            onExpand: () => this.#scrollToAnchor(this.#anchor),
         })
         this.#container.append(this.#view.element)
         return this.#view
@@ -647,7 +672,7 @@ export class Paginator extends HTMLElement {
             vertical: this.#vertical,
             rtl: this.#rtl,
         }))
-        this.scrollToAnchor(this.#anchor)
+        this.#scrollToAnchor(this.#anchor)
     }
     get scrolled() {
         return this.getAttribute('flow') === 'scrolled'
@@ -807,6 +832,9 @@ export class Paginator extends HTMLElement {
         return this.#scrollTo(offset, reason, smooth)
     }
     async scrollToAnchor(anchor, select) {
+        return this.#scrollToAnchor(anchor, select ? 'selection' : 'navigation')
+    }
+    async #scrollToAnchor(anchor, reason = 'anchor') {
         this.#anchor = anchor
         const rects = uncollapse(anchor)?.getClientRects?.()
         // if anchor is an element or a range
@@ -816,28 +844,19 @@ export class Paginator extends HTMLElement {
             const rect = Array.from(rects)
                 .find(r => r.width > 0 && r.height > 0) || rects[0]
             if (!rect) return
-            await this.#scrollToRect(rect, 'anchor')
-            if (select) this.#selectAnchor()
+            await this.#scrollToRect(rect, reason)
             return
         }
         // if anchor is a fraction
         if (this.scrolled) {
-            await this.#scrollTo(anchor * this.viewSize, 'anchor')
+            await this.#scrollTo(anchor * this.viewSize, reason)
             return
         }
         const { pages } = this
         if (!pages) return
         const textPages = pages - 2
         const newPage = Math.round(anchor * (textPages - 1))
-        await this.#scrollToPage(newPage + 1, 'anchor')
-    }
-    #selectAnchor() {
-        const { defaultView } = this.#view.document
-        if (this.#anchor.startContainer) {
-            const sel = defaultView.getSelection()
-            sel.removeAllRanges()
-            sel.addRange(this.#anchor)
-        }
+        await this.#scrollToPage(newPage + 1, reason)
     }
     #getVisibleRange() {
         if (this.scrolled) return getVisibleRange(this.#view.document,
@@ -849,7 +868,8 @@ export class Paginator extends HTMLElement {
     #afterScroll(reason) {
         const range = this.#getVisibleRange()
         // don't set new anchor if relocation was to scroll to anchor
-        if (reason !== 'anchor') this.#anchor = range
+        if (reason !== 'selection' && reason !== 'navigation' && reason !== 'anchor')
+            this.#anchor = range
         else this.#justAnchored = true
 
         const index = this.#index
