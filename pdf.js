@@ -148,7 +148,7 @@ const annotationLayerBuilderCSS = `
     --input-disabled-border-color: GrayText;
     --input-hover-border-color: Highlight;
     --link-outline: 1.5px solid LinkText;
-    --hcm-highligh-filter: invert(100%);
+    --hcm-highlight-filter: invert(100%);
   }
   .annotationLayer .textWidgetAnnotation :is(input, textarea):required,
   .annotationLayer .choiceWidgetAnnotation select:required,
@@ -159,7 +159,7 @@ const annotationLayerBuilderCSS = `
   }
 
   .annotationLayer .linkAnnotation:hover {
-    backdrop-filter: var(--hcm-highligh-filter);
+    backdrop-filter: var(--hcm-highlight-filter);
   }
 
   .annotationLayer .linkAnnotation > a:hover {
@@ -180,7 +180,7 @@ const annotationLayerBuilderCSS = `
     left: 0;
     width: 100%;
     height: 100%;
-    backdrop-filter: var(--hcm-highligh-filter);
+    backdrop-filter: var(--hcm-highlight-filter);
     content: "";
     pointer-events: none;
   }
