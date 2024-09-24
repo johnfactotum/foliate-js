@@ -64,6 +64,21 @@ const { SHOW_ELEMENT, SHOW_TEXT, SHOW_CDATA_SECTION,
 
 const filter = SHOW_ELEMENT | SHOW_TEXT | SHOW_CDATA_SECTION
 
+// needed cause there seems to be a bug in `getBoundingClientRect()` in Firefox
+// where it fails to include rects that have zero width and non-zero height
+// (CSSOM spec says "rectangles [...] of which the height or width is not zero")
+// which makes the visible range to include an extra space at column boundaries
+const getBoundingClientRect = target => {
+    let top = Infinity, right = -Infinity, left = Infinity, bottom = -Infinity
+    for (const rect of target.getClientRects()) {
+        left = Math.min(left, rect.left)
+        top = Math.min(top, rect.top)
+        right = Math.max(right, rect.right)
+        bottom = Math.max(bottom, rect.bottom)
+    }
+    return new DOMRect(left, top, right - left, bottom - top)
+}
+
 const getVisibleRange = (doc, start, end, mapRect) => {
     // first get all visible nodes
     const acceptNode = node => {
@@ -104,15 +119,15 @@ const getVisibleRange = (doc, start, end, mapRect) => {
     // find the offset at which visibility changes
     const startOffset = from.nodeType === 1 ? 0
         : bisectNode(doc, from, (a, b) => {
-            const p = mapRect(a.getBoundingClientRect())
-            const q = mapRect(b.getBoundingClientRect())
+            const p = mapRect(getBoundingClientRect(a))
+            const q = mapRect(getBoundingClientRect(b))
             if (p.right < start && q.left > start) return 0
             return q.left > start ? -1 : 1
         })
     const endOffset = to.nodeType === 1 ? 0
         : bisectNode(doc, to, (a, b) => {
-            const p = mapRect(a.getBoundingClientRect())
-            const q = mapRect(b.getBoundingClientRect())
+            const p = mapRect(getBoundingClientRect(a))
+            const q = mapRect(getBoundingClientRect(b))
             if (p.right < end && q.left > end) return 0
             return q.left > end ? -1 : 1
         })
