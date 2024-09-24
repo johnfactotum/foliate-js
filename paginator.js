@@ -138,6 +138,13 @@ const getVisibleRange = (doc, start, end, mapRect) => {
     return range
 }
 
+const selectionIsBackward = sel => {
+    const range = document.createRange()
+    range.setStart(sel.anchorNode, sel.anchorOffset)
+    range.setEnd(sel.focusNode, sel.focusOffset)
+    return range.collapsed
+}
+
 const setSelectionTo = (target, collapse) => {
     let range
     if (target.startContainer) range = target.cloneRange()
@@ -427,6 +434,7 @@ export class Paginator extends HTMLElement {
     #scrollBounds
     #touchState
     #touchScrolled
+    #lastVisibleRange
     constructor() {
         super()
         this.#root.innerHTML = `<style>
@@ -550,11 +558,8 @@ export class Paginator extends HTMLElement {
             doc.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
             doc.addEventListener('touchmove', this.#onTouchMove.bind(this), opts)
             doc.addEventListener('touchend', this.#onTouchEnd.bind(this))
-
-            doc.addEventListener('focusin', e => this.scrolled ? null :
-                // NOTE: `requestAnimationFrame` is needed in WebKit
-                requestAnimationFrame(() => this.#scrollToAnchor(e.target)))
         })
+
         this.addEventListener('relocate', ({ detail }) => {
             if (detail.reason === 'selection') setSelectionTo(this.#anchor, 0)
             else if (detail.reason === 'navigation') {
@@ -563,6 +568,37 @@ export class Paginator extends HTMLElement {
                     setSelectionTo(detail.range, -1)
                 else setSelectionTo(this.#anchor, -1)
             }
+        })
+        const checkPointerSelection = debounce((range, sel) => {
+            const selRange = sel.getRangeAt(0)
+            const backward = selectionIsBackward(sel)
+            if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
+                this.prev()
+            else if (!backward && selRange.compareBoundaryPoints(Range.END_TO_END, range) > 0)
+                this.next()
+        }, 700)
+        this.addEventListener('load', ({ detail: { doc } }) => {
+            let isPointerSelecting = false
+            doc.addEventListener('pointerdown', () => isPointerSelecting = true)
+            doc.addEventListener('pointerup', () => isPointerSelecting = false)
+            doc.addEventListener('selectionchange', () => {
+                if (this.scrolled) return
+                const range = this.#lastVisibleRange
+                if (!range) return
+                const sel = doc.getSelection()
+                if (!sel.rangeCount) return
+                if (isPointerSelecting && sel.type === 'Range')
+                    checkPointerSelection(range, sel)
+                else {
+                    const selRange = sel.getRangeAt(0).cloneRange()
+                    const backward = selectionIsBackward(sel)
+                    if (!backward) selRange.collapse()
+                    this.#scrollToAnchor(selRange)
+                }
+            })
+            doc.addEventListener('focusin', e => this.scrolled ? null :
+                // NOTE: `requestAnimationFrame` is needed in WebKit
+                requestAnimationFrame(() => this.#scrollToAnchor(e.target)))
         })
 
         this.#mediaQueryListener = () => {
@@ -881,6 +917,7 @@ export class Paginator extends HTMLElement {
     }
     #afterScroll(reason) {
         const range = this.#getVisibleRange()
+        this.#lastVisibleRange = range
         // don't set new anchor if relocation was to scroll to anchor
         if (reason !== 'selection' && reason !== 'navigation' && reason !== 'anchor')
             this.#anchor = range
