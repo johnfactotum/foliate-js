@@ -33,7 +33,11 @@ const animate = (a, b, duration, ease, render) => new Promise(resolve => {
 const uncollapse = range => {
     if (!range?.collapsed) return range
     const { endOffset, endContainer } = range
-    if (endContainer.nodeType === 1) return endContainer
+    if (endContainer.nodeType === 1) {
+        const node = endContainer.childNodes[endOffset]
+        if (node?.nodeType === 1) return node
+        return endContainer
+    }
     if (endOffset + 1 < endContainer.length) range.setEnd(endContainer, endOffset + 1)
     else if (endOffset > 1) range.setStart(endContainer, endOffset - 1)
     else return endContainer.parentNode
