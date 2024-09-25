@@ -67,7 +67,7 @@ const filter = SHOW_ELEMENT | SHOW_TEXT | SHOW_CDATA_SECTION
 // needed cause there seems to be a bug in `getBoundingClientRect()` in Firefox
 // where it fails to include rects that have zero width and non-zero height
 // (CSSOM spec says "rectangles [...] of which the height or width is not zero")
-// which makes the visible range to include an extra space at column boundaries
+// which makes the visible range include an extra space at column boundaries
 const getBoundingClientRect = target => {
     let top = Infinity, right = -Infinity, left = Infinity, bottom = -Infinity
     for (const rect of target.getClientRects()) {
