@@ -71,7 +71,9 @@ const BODY = {
 
 const getImageSrc = el => {
     const href = el.getAttributeNS(NS.XLINK, 'href')
+    if (!href) return 'data:,'
     const [, id] = href.split('#')
+    if (!id) return href
     const bin = el.getRootNode().getElementById(id)
     return bin
         ? `data:${bin.getAttribute('content-type')};base64,${bin.textContent}`
