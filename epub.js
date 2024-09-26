@@ -486,7 +486,7 @@ class MediaOverlay extends EventTarget {
             audio.volume = this.#volume
             audio.playbackRate = this.#rate
             audio.play().catch(e => this.#error(e))
-        })
+        }, { once: true })
     }
     async start(sectionIndex, filter = () => true) {
         this.#audio?.pause()
