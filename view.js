@@ -111,8 +111,8 @@ export class View extends HTMLElement {
         this.#root.append(this.renderer)
 
         if (book.sections.some(section => section.mediaOverlay)) {
-            book.media.activeClass ||= '-epub-media-overlay-active'
             const activeClass = book.media.activeClass
+            const playbackActiveClass = book.media.playbackActiveClass
             this.mediaOverlay = book.getMediaOverlay()
             let lastActive
             this.mediaOverlay.addEventListener('highlight', e => {
@@ -123,11 +123,18 @@ export class View extends HTMLElement {
                             .find(x => x.index = resolved.index)
                         const el = resolved.anchor(doc)
                         el.classList.add(activeClass)
+                        if (playbackActiveClass) el.ownerDocument
+                            .documentElement.classList.add(playbackActiveClass)
                         lastActive = new WeakRef(el)
                     })
             })
             this.mediaOverlay.addEventListener('unhighlight', () => {
-                lastActive?.deref()?.classList?.remove(activeClass)
+                const el = lastActive?.deref()
+                if (el) {
+                    el.classList.remove(activeClass)
+                    if (playbackActiveClass) el.ownerDocument
+                        .documentElement.classList.remove(playbackActiveClass)
+                }
             })
         }
     }
