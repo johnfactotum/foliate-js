@@ -456,6 +456,9 @@ class MediaOverlay extends EventTarget {
         const url = URL.createObjectURL(await this.book.loadBlob(src))
         const audio = new Audio(url)
         this.#audio = audio
+        audio.currentTime = this.#activeItem.begin ?? 0
+        audio.volume = this.#volume
+        audio.playbackRate = this.#rate
         audio.addEventListener('timeupdate', () => {
             if (audio.paused) return
             const t = audio.currentTime
@@ -481,12 +484,8 @@ class MediaOverlay extends EventTarget {
             this.#audio = null
             this.#play(audioIndex + 1, 0).catch(e => this.#error(e))
         })
-        audio.addEventListener('canplaythrough', () => {
-            audio.currentTime = this.#activeItem.begin ?? 0
-            audio.volume = this.#volume
-            audio.playbackRate = this.#rate
-            audio.play().catch(e => this.#error(e))
-        }, { once: true })
+        audio.addEventListener('canplaythrough', () =>
+            audio.play().catch(e => this.#error(e)), { once: true })
     }
     async start(sectionIndex, filter = () => true) {
         this.#audio?.pause()
