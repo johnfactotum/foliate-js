@@ -5,6 +5,38 @@ import { textWalker } from './text-walker.js'
 
 const SEARCH_PREFIX = 'foliate-search:'
 
+class CursorAutohider {
+    #timeout
+    #el
+    #check
+    #state
+    constructor(el, check, state = {}) {
+        this.#el = el
+        this.#check = check
+        this.#state = state
+        if (this.#state.hidden) this.hide()
+        this.#el.addEventListener('mousemove', ({ screenX, screenY }) => {
+            // check if it actually moved
+            if (screenX === this.#state.x && screenY === this.#state.y) return
+            this.#state.x = screenX, this.#state.y = screenY
+            this.show()
+            if (this.#timeout) clearTimeout(this.#timeout)
+            if (check()) this.#timeout = setTimeout(this.hide.bind(this), 1000)
+        }, false)
+    }
+    cloneFor(el) {
+        return new CursorAutohider(el, this.#check, this.#state)
+    }
+    hide() {
+        this.#el.style.cursor = 'none'
+        this.#state.hidden = true
+    }
+    show() {
+        this.#el.style.removeProperty('cursor')
+        this.#state.hidden = false
+    }
+}
+
 class History extends EventTarget {
     #arr = []
     #index = -1
@@ -67,6 +99,8 @@ export class View extends HTMLElement {
     #tocProgress
     #pageProgress
     #searchResults = new Map()
+    #cursorAutohider = new CursorAutohider(this, () =>
+        this.hasAttribute('autohide-cursor'))
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -187,6 +221,7 @@ export class View extends HTMLElement {
             doc.documentElement.dir ||= this.language.direction ?? ''
 
         this.#handleLinks(doc, index)
+        this.#cursorAutohider.cloneFor(doc.documentElement)
 
         this.#emit('load', { doc, index })
     }
