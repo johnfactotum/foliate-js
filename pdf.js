@@ -1,16 +1,16 @@
+const pdfjsPath = path => new URL(`vendor/pdfjs/${path}`, import.meta.url).toString()
+
 import './vendor/pdfjs/pdf.mjs'
 const pdfjsLib = globalThis.pdfjsLib
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-    new URL('vendor/pdfjs/pdf.worker.mjs', import.meta.url).toString()
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsPath('pdf.worker.mjs')
 
-const fetchText = async url =>
-    await (await fetch(new URL(url, import.meta.url))).text()
+const fetchText = async url => await (await fetch(url)).text()
 
 // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.css
-const textLayerBuilderCSS = await fetchText('vendor/pdfjs/text_layer_builder.css')
+const textLayerBuilderCSS = await fetchText(pdfjsPath('text_layer_builder.css'))
 
 // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/annotation_layer_builder.css
-const annotationLayerBuilderCSS = await fetchText('vendor/pdfjs/annotation_layer_builder.css')
+const annotationLayerBuilderCSS = await fetchText(pdfjsPath('annotation_layer_builder.css'))
 
 const render = async (page, doc, zoom) => {
     const scale = zoom * devicePixelRatio
@@ -106,7 +106,11 @@ const makeTOCItem = item => ({
 
 export const makePDF = async file => {
     const data = new Uint8Array(await file.arrayBuffer())
-    const pdf = await pdfjsLib.getDocument({ data }).promise
+    const pdf = await pdfjsLib.getDocument({
+        data,
+        cMapUrl: pdfjsPath('cmaps/'),
+        standardFontDataUrl: pdfjsPath('standard_fonts/'),
+    }).promise
 
     const book = { rendition: { layout: 'pre-paginated' } }
 
