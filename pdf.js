@@ -51,6 +51,7 @@ const render = async (page, doc, zoom) => {
     await new pdfjsLib.AnnotationLayer({ page, viewport, div }).render({
         annotations: await page.getAnnotations(),
         linkService: {
+            goToDestination: () => {},
             getDestinationHash: dest => JSON.stringify(dest),
             addLinkAttributes: (link, url) => link.href = url,
         },

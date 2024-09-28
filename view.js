@@ -229,19 +229,20 @@ export class View extends HTMLElement {
     #handleLinks(doc, index) {
         const { book } = this
         const section = book.sections[index]
-        for (const a of doc.querySelectorAll('a[href]'))
-            a.addEventListener('click', e => {
-                e.preventDefault()
-                const href_ = a.getAttribute('href')
-                const href = section?.resolveHref?.(href_) ?? href_
-                if (book?.isExternal?.(href))
-                    Promise.resolve(this.#emit('external-link', { a, href }, true))
-                        .then(x => x ? globalThis.open(href, '_blank') : null)
-                        .catch(e => console.error(e))
-                else Promise.resolve(this.#emit('link', { a, href }, true))
-                    .then(x => x ? this.goTo(href) : null)
+        doc.addEventListener('click', e => {
+            const a = e.target.closest('a[href]')
+            if (!a) return
+            e.preventDefault()
+            const href_ = a.getAttribute('href')
+            const href = section?.resolveHref?.(href_) ?? href_
+            if (book?.isExternal?.(href))
+                Promise.resolve(this.#emit('external-link', { a, href }, true))
+                    .then(x => x ? globalThis.open(href, '_blank') : null)
                     .catch(e => console.error(e))
-            })
+            else Promise.resolve(this.#emit('link', { a, href }, true))
+                .then(x => x ? this.goTo(href) : null)
+                .catch(e => console.error(e))
+        })
     }
     async addAnnotation(annotation, remove) {
         const { value } = annotation
