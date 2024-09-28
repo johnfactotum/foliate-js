@@ -110,6 +110,7 @@ export const makePDF = async file => {
         data,
         cMapUrl: pdfjsPath('cmaps/'),
         standardFontDataUrl: pdfjsPath('standard_fonts/'),
+        isEvalSupported: false,
     }).promise
 
     const book = { rendition: { layout: 'pre-paginated' } }
