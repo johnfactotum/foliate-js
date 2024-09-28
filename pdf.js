@@ -19,8 +19,8 @@ const render = async (page, doc, zoom) => {
     doc.documentElement.style.setProperty('--scale-factor', scale)
     const viewport = page.getViewport({ scale })
 
-    // for some reason must use `document`'s canvas
-    // using a canvas in `doc` results in tofu
+    // the canvas must be in the `PDFDocument`'s `ownerDocument`
+    // (`globalThis.document` by default); that's where the fonts are loaded
     const canvas = document.createElement('canvas')
     canvas.height = viewport.height
     canvas.width = viewport.width
