@@ -47,6 +47,15 @@ const render = async (page, doc, zoom) => {
             display: 'none',
         })
 
+    // fix text selection
+    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
+    const endOfContent = document.createElement('div')
+    endOfContent.className = 'endOfContent'
+    container.append(endOfContent)
+    // TODO: this only works in Firefox; see https://github.com/mozilla/pdf.js/pull/17923
+    container.onpointerdown = () => container.classList.add('selecting')
+    container.onpointerup = () => container.classList.remove('selecting')
+
     const div = doc.querySelector('.annotationLayer')
     await new pdfjsLib.AnnotationLayer({ page, viewport, div }).render({
         annotations: await page.getAnnotations(),
