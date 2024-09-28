@@ -56,7 +56,10 @@ export class FixedLayout extends HTMLElement {
 
         this.#observer.observe(this)
     }
-    async #createFrame({ index, src }) {
+    async #createFrame({ index, src: srcOption }) {
+        const srcOptionIsString = typeof srcOption === 'string'
+        const src = srcOptionIsString ? srcOption : srcOption?.src
+        const onZoom = srcOptionIsString ? null : srcOption?.onZoom
         const element = document.createElement('div')
         const iframe = document.createElement('iframe')
         element.append(iframe)
@@ -73,8 +76,7 @@ export class FixedLayout extends HTMLElement {
         this.#root.append(element)
         if (!src) return { blank: true, element, iframe }
         return new Promise(resolve => {
-            const onload = () => {
-                iframe.removeEventListener('load', onload)
+            iframe.addEventListener('load', () => {
                 const doc = iframe.contentDocument
                 this.dispatchEvent(new CustomEvent('load', { detail: { doc, index } }))
                 const { width, height } = getViewport(doc, this.defaultViewport)
@@ -82,9 +84,9 @@ export class FixedLayout extends HTMLElement {
                     element, iframe,
                     width: parseFloat(width),
                     height: parseFloat(height),
+                    onZoom,
                 })
-            }
-            iframe.addEventListener('load', onload)
+            }, { once: true })
             iframe.src = src
         })
     }
@@ -111,11 +113,13 @@ export class FixedLayout extends HTMLElement {
                     right.height ?? blankHeight))
 
         const transform = frame => {
-            const { element, iframe, width, height, blank } = frame
+            let { element, iframe, width, height, blank, onZoom } = frame
+            if (onZoom) onZoom({ doc: frame.iframe.contentDocument, scale })
+            const iframeScale = onZoom ? scale : 1
             Object.assign(iframe.style, {
-                width: `${width}px`,
-                height: `${height}px`,
-                transform: `scale(${scale})`,
+                width: `${width * iframeScale}px`,
+                height: `${height * iframeScale}px`,
+                transform: onZoom ? 'none' : `scale(${scale})`,
                 transformOrigin: 'top left',
                 display: blank ? 'none' : 'block',
             })
