@@ -585,6 +585,9 @@ export class Paginator extends HTMLElement {
             let isPointerSelecting = false
             doc.addEventListener('pointerdown', () => isPointerSelecting = true)
             doc.addEventListener('pointerup', () => isPointerSelecting = false)
+            let isKeyboardSelecting = false
+            doc.addEventListener('keydown', () => isKeyboardSelecting = true)
+            doc.addEventListener('keyup', () => isKeyboardSelecting = false)
             doc.addEventListener('selectionchange', () => {
                 if (this.scrolled) return
                 const range = this.#lastVisibleRange
@@ -593,7 +596,7 @@ export class Paginator extends HTMLElement {
                 if (!sel.rangeCount) return
                 if (isPointerSelecting && sel.type === 'Range')
                     checkPointerSelection(range, sel)
-                else {
+                else if (isKeyboardSelecting || sel.type === 'Caret') {
                     const selRange = sel.getRangeAt(0).cloneRange()
                     const backward = selectionIsBackward(sel)
                     if (!backward) selRange.collapse()
