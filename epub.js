@@ -443,11 +443,8 @@ class MediaOverlay extends EventTarget {
         this.dispatchEvent(new CustomEvent('unhighlight', { detail: this.#activeItem }))
     }
     async #play(audioIndex, itemIndex) {
-        if (this.#audio) {
-            this.#audio.pause()
-            URL.revokeObjectURL(this.#audio.src)
-            this.#audio = null
-        }
+        const paused = this.#audio?.paused
+        if (this.#audio) this.stop()
         this.#audioIndex = audioIndex
         this.#itemIndex = itemIndex
         const src = this.#activeAudio?.src
@@ -477,14 +474,14 @@ class MediaOverlay extends EventTarget {
         audio.addEventListener('error', () =>
             this.#error(new Error(`Failed to load ${src}`)))
         audio.addEventListener('playing', () => this.#highlight())
-        audio.addEventListener('pause', () => this.#unhighlight())
         audio.addEventListener('ended', () => {
             this.#unhighlight()
             URL.revokeObjectURL(url)
             this.#audio = null
             this.#play(audioIndex + 1, 0).catch(e => this.#error(e))
         })
-        audio.addEventListener('canplaythrough', () =>
+        if (paused) this.#highlight()
+        else audio.addEventListener('canplaythrough', () =>
             audio.play().catch(e => this.#error(e)), { once: true })
     }
     async start(sectionIndex, filter = () => true) {
@@ -511,6 +508,14 @@ class MediaOverlay extends EventTarget {
     }
     resume() {
         this.#audio?.play().catch(e => this.#error(e))
+    }
+    stop() {
+        if (this.#audio) {
+            this.#audio.pause()
+            URL.revokeObjectURL(this.#audio.src)
+            this.#audio = null
+            this.#unhighlight()
+        }
     }
     prev() {
         if (this.#itemIndex > 0) this.#play(this.#audioIndex, this.#itemIndex - 1)
