@@ -138,14 +138,14 @@ const tidy = obj => {
             obj[key] = val.filter(x => x).map(x =>
                 typeof x === 'object' && !Array.isArray(x) ? tidy(x) : x)
             if (!obj[key].length) delete obj[key]
-            else if (obj[key].length === 1) obj[key] = val[0]
+            else if (obj[key].length === 1) obj[key] = obj[key][0]
         }
         else if (typeof val === 'object') {
             obj[key] = tidy(val)
             if (!Object.keys(val).length) delete obj[key]
         }
     const keys = Object.keys(obj)
-    if (keys.length === 1) return obj[keys[0]]
+    if (keys.length === 1 && keys[0] === 'name') return obj[keys[0]]
     return obj
 }
 
