@@ -125,6 +125,15 @@ const getLink = link => {
     return obj
 }
 
+const getPerson = person => {
+    const NS = person.namespaceURI
+    const uri = person.getElementsByTagNameNS(NS, 'uri')[0]?.textContent
+    return {
+        name: person.getElementsByTagNameNS(NS, 'name')[0]?.textContent ?? '',
+        links: uri ? [{ href: uri }] : [],
+    }
+}
+
 export const getPublication = entry => {
     const filter = filterNS(useNS(entry.ownerDocument, NS.ATOM))
     const children = Array.from(entry.children)
@@ -139,14 +148,8 @@ export const getPublication = entry => {
     return {
         metadata: {
             title: children.find(filter('title'))?.textContent ?? '',
-            author: children.filter(filter('author')).map(person => {
-                const NS = person.namespaceURI
-                const uri = person.getElementsByTagNameNS(NS, 'uri')[0]?.textContent
-                return {
-                    name: person.getElementsByTagNameNS(NS, 'name')[0]?.textContent ?? '',
-                    links: uri ? [{ href: uri }] : [],
-                }
-            }),
+            author: children.filter(filter('author')).map(getPerson),
+            contributor: children.filter(filter('contributor')).map(getPerson),
             publisher: children.find(filterDC('publisher'))?.textContent,
             published: (children.find(filterDCTERMS('issued'))
                 ?? children.find(filterDC('date')))?.textContent,
@@ -155,7 +158,9 @@ export const getPublication = entry => {
             subject: children.filter(filter('category')).map(category => ({
                 name: category.getAttribute('label'),
                 code: category.getAttribute('term'),
+                scheme: category.getAttribute('scheme'),
             })),
+            rights: children.find(filter('rights'))?.textContent ?? '',
             [SYMBOL.CONTENT]: getContent(children.find(filter('content'))
                 ?? children.find(filter('summary'))),
         },
