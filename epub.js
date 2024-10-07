@@ -400,6 +400,7 @@ class MediaOverlay extends EventTarget {
     #audio
     #volume = 1
     #rate = 1
+    #state
     constructor(book, loadXML) {
         super()
         this.book = book
@@ -443,8 +444,7 @@ class MediaOverlay extends EventTarget {
         this.dispatchEvent(new CustomEvent('unhighlight', { detail: this.#activeItem }))
     }
     async #play(audioIndex, itemIndex) {
-        const paused = this.#audio?.paused
-        if (this.#audio) this.stop()
+        this.#stop()
         this.#audioIndex = audioIndex
         this.#itemIndex = itemIndex
         const src = this.#activeAudio?.src
@@ -453,7 +453,6 @@ class MediaOverlay extends EventTarget {
         const url = URL.createObjectURL(await this.book.loadBlob(src))
         const audio = new Audio(url)
         this.#audio = audio
-        audio.currentTime = this.#activeItem.begin ?? 0
         audio.volume = this.#volume
         audio.playbackRate = this.#rate
         audio.addEventListener('timeupdate', () => {
@@ -480,9 +479,17 @@ class MediaOverlay extends EventTarget {
             this.#audio = null
             this.#play(audioIndex + 1, 0).catch(e => this.#error(e))
         })
-        if (paused) this.#highlight()
-        else audio.addEventListener('canplaythrough', () =>
-            audio.play().catch(e => this.#error(e)), { once: true })
+        if (this.#state === 'paused') {
+            this.#highlight()
+            audio.currentTime = this.#activeItem.begin ?? 0
+        }
+        else audio.addEventListener('canplaythrough', () => {
+            // for some reason need to seek in `canplaythrough`
+            // or it won't play when skipping in WebKit
+            audio.currentTime = this.#activeItem.begin ?? 0
+            this.#state = 'playing'
+            audio.play().catch(e => this.#error(e))
+        }, { once: true })
     }
     async start(sectionIndex, filter = () => true) {
         this.#audio?.pause()
@@ -504,18 +511,24 @@ class MediaOverlay extends EventTarget {
         }
     }
     pause() {
+        this.#state = 'paused'
         this.#audio?.pause()
     }
     resume() {
+        this.#state = 'playing'
         this.#audio?.play().catch(e => this.#error(e))
     }
-    stop() {
+    #stop() {
         if (this.#audio) {
             this.#audio.pause()
             URL.revokeObjectURL(this.#audio.src)
             this.#audio = null
             this.#unhighlight()
         }
+    }
+    stop() {
+        this.#state = 'stopped'
+        this.#stop()
     }
     prev() {
         if (this.#itemIndex > 0) this.#play(this.#audioIndex, this.#itemIndex - 1)
