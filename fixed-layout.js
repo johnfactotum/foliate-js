@@ -30,6 +30,7 @@ const getViewport = (doc, viewport) => {
 }
 
 export class FixedLayout extends HTMLElement {
+    static observedAttributes = ['zoom']
     #root = this.attachShadow({ mode: 'closed' })
     #observer = new ResizeObserver(() => this.#render())
     #spreads
@@ -41,6 +42,7 @@ export class FixedLayout extends HTMLElement {
     #right
     #center
     #side
+    #zoom
     constructor() {
         super()
 
@@ -52,9 +54,19 @@ export class FixedLayout extends HTMLElement {
             display: flex;
             justify-content: center;
             align-items: center;
+            overflow: auto;
         }`)
 
         this.#observer.observe(this)
+    }
+    attributeChangedCallback(name, _, value) {
+        switch (name) {
+            case 'zoom':
+                this.#zoom = value !== 'fit-width' && value !== 'fit-page'
+                    ? parseFloat(value) : value
+                this.#render()
+                break
+        }
     }
     async #createFrame({ index, src: srcOption }) {
         const srcOptionIsString = typeof srcOption === 'string'
@@ -102,15 +114,20 @@ export class FixedLayout extends HTMLElement {
         const blankWidth = left.width ?? right.width
         const blankHeight = left.height ?? right.height
 
-        const scale = portrait || this.#center
-            ? Math.min(
-                width / (target.width ?? blankWidth),
-                height / (target.height ?? blankHeight))
-            : Math.min(
-                width / ((left.width ?? blankWidth) + (right.width ?? blankWidth)),
-                height / Math.max(
-                    left.height ?? blankHeight,
-                    right.height ?? blankHeight))
+        const scale = typeof this.#zoom === 'number' && !isNaN(this.#zoom)
+            ? this.#zoom
+            : this.#zoom === 'fit-width' ? (portrait || this.#center
+                ? width / (target.width ?? blankWidth)
+                : width / ((left.width ?? blankWidth) + (right.width ?? blankWidth)))
+            : (portrait || this.#center
+                ? Math.min(
+                    width / (target.width ?? blankWidth),
+                    height / (target.height ?? blankHeight))
+                : Math.min(
+                    width / ((left.width ?? blankWidth) + (right.width ?? blankWidth)),
+                    height / Math.max(
+                        left.height ?? blankHeight,
+                        right.height ?? blankHeight)))
 
         const transform = frame => {
             let { element, iframe, width, height, blank, onZoom } = frame
@@ -128,6 +145,8 @@ export class FixedLayout extends HTMLElement {
                 height: `${(height ?? blankHeight) * scale}px`,
                 overflow: 'hidden',
                 display: 'block',
+                flexShrink: '0',
+                marginBlock: 'auto',
             })
             if (portrait && frame !== target) {
                 element.style.display = 'none'
