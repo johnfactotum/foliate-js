@@ -46,7 +46,7 @@ There are mainly three kinds of modules:
 
 The modules are designed to be modular. In general, they don't directly depend on each other. Instead they depend on certain interfaces, detailed below. The exception is `view.js`. It is the higher level renderer that strings most of the things together, and you can think of it as the main entry point of the library. See "Basic Usage" below.
 
-The repo also includes a still higher level reader, though strictly speaking, `reader.html` (along with `reader.js` and its associated files in `ui/` and `vendor/`) is not considered part of the library itself. It's akin to [Epub.js Reader](https://github.com/futurepress/epubjs-reader). You are expected to modify it or replace it with your own code.
+The repo also includes a still higher level reader, though strictly speaking, `reader.html` (along with `reader.js` and its associated files in `ui/`) is not considered part of the library itself. It's akin to [Epub.js Reader](https://github.com/futurepress/epubjs-reader). You are expected to modify it or replace it with your own code.
 
 ### Basic Usage
 
@@ -61,8 +61,9 @@ view.addEventListener('relocate', e => {
     console.log(e.detail)
 })
 
-const book = /* an object implementing the "book" interface */
-await view.open(book)
+// can open a File/Blob object or a URL
+// or any object that implements the "book" interface
+await view.open('example.epub')
 await view.goTo(/* path, section index, or CFI */)
 ```
 
