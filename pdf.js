@@ -120,10 +120,19 @@ export const makePDF = async file => {
 
     const book = { rendition: { layout: 'pre-paginated' } }
 
-    const info = (await pdf.getMetadata())?.info
+    const { metadata, info } = await pdf.getMetadata() ?? {}
+    // TODO: for better results, parse `metadata.getRaw()`
     book.metadata = {
-        title: info?.Title,
-        author: info?.Author,
+        title: metadata?.get('dc:title') ?? info?.Title,
+        author: metadata?.get('dc:creator') ?? info?.Author,
+        contributor: metadata?.get('dc:contributor'),
+        description: metadata?.get('dc:description') ?? info?.Subject,
+        language: metadata?.get('dc:language'),
+        publisher: metadata?.get('dc:publisher'),
+        subject: metadata?.get('dc:subject'),
+        identifier: metadata?.get('dc:identifier'),
+        source: metadata?.get('dc:source'),
+        rights: metadata?.get('dc:rights'),
     }
 
     const outline = await pdf.getOutline()
