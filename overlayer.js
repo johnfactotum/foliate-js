@@ -4,7 +4,9 @@ const createSVGElement = tag =>
 export class Overlayer {
     #svg = createSVGElement('svg')
     #map = new Map()
-    constructor() {
+    #doc = null
+    constructor(doc) {
+        this.#doc = doc
         Object.assign(this.#svg.style, {
             position: 'absolute', top: '0', left: '0',
             width: '100%', height: '100%',
@@ -14,10 +16,50 @@ export class Overlayer {
     get element() {
         return this.#svg
     }
+    get #zoom() {
+        // Safari does not zoom the client rects, while Chrome, Edge and Firefox does
+        if (/^((?!chrome|android).)*AppleWebKit/i.test(navigator.userAgent) && !window.chrome) {
+            return window.getComputedStyle(this.#doc.body).zoom || 1.0
+        }
+        return 1.0
+    }
+    #splitRangeByParagraph(range) {
+        const ancestor = range.commonAncestorContainer
+        const paragraphs = Array.from(ancestor.querySelectorAll?.('p') || [])
+        if (paragraphs.length === 0) return [range]
+
+        const splitRanges = []
+        paragraphs.forEach((p) => {
+            const pRange = document.createRange()
+            if (range.intersectsNode(p)) {
+                pRange.selectNodeContents(p)
+                if (pRange.compareBoundaryPoints(Range.START_TO_START, range) < 0) {
+                    pRange.setStart(range.startContainer, range.startOffset)
+                }
+                if (pRange.compareBoundaryPoints(Range.END_TO_END, range) > 0) {
+                    pRange.setEnd(range.endContainer, range.endOffset)
+                }
+                splitRanges.push(pRange)
+            }
+        })
+        return splitRanges
+    }
     add(key, range, draw, options) {
         if (this.#map.has(key)) this.remove(key)
         if (typeof range === 'function') range = range(this.#svg.getRootNode())
-        const rects = range.getClientRects()
+        const zoom = this.#zoom
+        let rects = []
+        this.#splitRangeByParagraph(range).forEach((pRange) => {
+            const pRects = Array.from(pRange.getClientRects()).map(rect => ({
+                left: rect.left * zoom,
+                top: rect.top * zoom,
+                right: rect.right * zoom,
+                bottom: rect.bottom * zoom,
+                width: rect.width * zoom,
+                height: rect.height * zoom,
+            }))
+            rects = rects.concat(pRects)
+        })
         const element = draw(rects, options)
         this.#svg.append(element)
         this.#map.set(key, { range, draw, options, element, rects })
@@ -31,7 +73,19 @@ export class Overlayer {
         for (const obj of this.#map.values()) {
             const { range, draw, options, element } = obj
             this.#svg.removeChild(element)
-            const rects = range.getClientRects()
+            const zoom = this.#zoom
+            let rects = []
+            this.#splitRangeByParagraph(range).forEach((pRange) => {
+                const pRects = Array.from(pRange.getClientRects()).map(rect => ({
+                    left: rect.left * zoom,
+                    top: rect.top * zoom,
+                    right: rect.right * zoom,
+                    bottom: rect.bottom * zoom,
+                    width: rect.width * zoom,
+                    height: rect.height * zoom,
+                }))
+                rects = rects.concat(pRects)
+            })
             const el = draw(rects, options)
             this.#svg.append(el)
             obj.element = el

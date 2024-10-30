@@ -402,7 +402,7 @@ export class View extends HTMLElement {
             .find(x => x.index === index && x.overlayer)
     }
     #createOverlayer({ doc, index }) {
-        const overlayer = new Overlayer()
+        const overlayer = new Overlayer(doc)
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
             if (value && !value.startsWith(SEARCH_PREFIX)) {

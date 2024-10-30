@@ -32,7 +32,7 @@ export const textWalker = function* (x, func) {
     const walker = document.createTreeWalker(root, filter, { acceptNode })
     const walk = x.commonAncestorContainer ? walkRange : walkDocument
     const nodes = walk(x, walker)
-    const strs = nodes.map(node => node.nodeValue)
+    const strs = nodes.map(node => node.nodeValue ?? '')
     const makeRange = (startIndex, startOffset, endIndex, endOffset) => {
         const range = document.createRange()
         range.setStart(nodes[startIndex], startOffset)
