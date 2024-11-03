@@ -224,7 +224,7 @@ const getMetadata = opf => {
     }
     const makeContributor = x => x ? ({
         name: makeLanguageMap(x),
-        sortAs: makeLanguageMap(x.props?.['file-as']?.[0]),
+        sortAs: makeLanguageMap(x.props?.['file-as']?.[0]) ?? x.attrs['file-as'],
         role: x.props?.role?.filter(x => x.scheme === PREFIX.marc + 'relators')
             ?.map(x => x.value) ?? [x.attrs.role],
         code: prop(x, 'term') ?? x.attrs.term,
@@ -262,7 +262,7 @@ const getMetadata = opf => {
         identifier: getIdentifier(opf),
         title: makeLanguageMap(mainTitle),
         sortAs: makeLanguageMap(mainTitle?.props?.['file-as']?.[0])
-            ?? makeLanguageMap(mainTitle?.attrs?.['file-as'])
+            ?? mainTitle?.attrs?.['file-as']
             ?? legacyMeta?.['calibre:title_sort'],
         subtitle: dc.title?.find(x => prop(x, 'title-type') === 'subtitle')?.value,
         language: dc.language?.map(x => x.value),
