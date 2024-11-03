@@ -5,7 +5,7 @@ export const makeComicBook = ({ entries, loadBlob, getSize }, file) => {
         if (cache.has(name)) return cache.get(name)
         const src = URL.createObjectURL(await loadBlob(name))
         const page = URL.createObjectURL(
-            new Blob([`<img src="${src}">`], { type: 'text/html' }))
+            new Blob([`<body style="margin: 0"><img src="${src}">`], { type: 'text/html' }))
         urls.set(name, [src, page])
         cache.set(name, page)
         return page
