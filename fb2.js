@@ -30,7 +30,7 @@ const TABLE = {
     'tr': ['tr', {
         'th': ['th', STYLE, ['colspan', 'rowspan', 'align', 'valign']],
         'td': ['td', STYLE, ['colspan', 'rowspan', 'align', 'valign']],
-    }, ['align']]
+    }, ['align']],
 }
 
 const POEM = {
