@@ -3,11 +3,11 @@
 Library for rendering e-books in the browser.
 
 Features:
-- Supports EPUB, MOBI, KF8 (AZW3), FB2, CBZ, PDF (experimental; requires PDF.js), or add support for other formats yourself by implementing the book interface
+- Supports EPUB, MOBI, KF8 (AZW3), FB2, CBZ, PDF (experimental; requires PDF.js)
+- Add support for other formats yourself by implementing the book interface
 - Pure JavaScript
 - Small and modular
-- No dependencies
-- Does not depend on or include any library for unzipping; bring your own Zip library
+- No hard dependencies
 - Does not require loading whole file into memory
 - Does not care about older browsers
 
@@ -19,9 +19,9 @@ Also note that deobfuscating fonts with the IDPF algorithm requires a SHA-1 func
 
 ## Current Status
 
-It's far from complete or stable yet, though it should have near feature parity with [Epub.js](https://github.com/futurepress/epub.js). There's no support for continuous scrolling, however.
+It works reasonably well, and has been used in several stable releases of [Foliate](https://github.com/johnfactotum/foliate). This library itself is, however, *not* stable. Expect it to break and the API to change at any time. Use it at your own risk.
 
-Among other things, the fixed-layout renderer is notably unfinished at the moment.
+If you do decide to use it, since there's no release yet, it is recommended that you include the library as a git submodule in your project so that you can easily update it.
 
 ## Documentation
 
@@ -50,8 +50,10 @@ The repo also includes a still higher level reader, though strictly speaking, `r
 
 ### Basic Usage
 
+To get started, clone the repo and import `view.js`:
+
 ```js
-import './view.js'
+import './foliate-js/view.js'
 
 const view = document.createElement('foliate-view')
 document.body.append(view)
@@ -67,16 +69,19 @@ await view.open('example.epub')
 await view.goTo(/* path, section index, or CFI */)
 ```
 
+See the [online demo](https://johnfactotum.github.io/foliate-js/reader.html) for a more advanced example.
+
 ### Security
 
-Scripting is not supported, as it is currently impossible to do so securely due to the content being served from the same origin (using `blob:` URLs).
+EPUB books can contain [scripted content](https://www.w3.org/TR/epub/#sec-scripted-content) (i.e. JavaScript in the e-book), which is potentially dangerous, and is not supported by this library because
 
-Furthermore, while the renderers do use the `sandox` attribute on iframes, it is useless, as it requires `allow-scripts` due to a WebKit bug: https://bugs.webkit.org/show_bug.cgi?id=218086.
+- It is currently impossible to do so securely due to the content being served from the same origin (using `blob:` URLs).
+- Due to [WebKit Bug 218086](https://bugs.webkit.org/show_bug.cgi?id=218086), the `allow-scripts` attribute is required on iframes, which renders iframe sandbox useless.
 
 It is therefore imperative that you use [Content Security Policy (CSP)](https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP) to block all scripts except `'self'`. An EPUB file for testing can be found at https://github.com/johnfactotum/epub-test.
 
 > [!CAUTION]
-> Do NOT use this library without CSP unless you completely trust the content you're rendering or can block scripts by other means.
+> Do NOT use this library (or any other e-book library, for that matter) without CSP unless you completely trust the content you're rendering or can block scripts by other means.
 
 ### The Main Interface for Books
 
@@ -111,22 +116,22 @@ Almost all of the properties and methods are optional. At minimum it needs `.sec
 
 ### Archived Files
 
-Reading Zip-based formats will require adapting an external library. Both `epub.js` and `comic-book.js` expect a `loader` object that implements the following interface:
+Reading Zip-based formats requires adapting an external library. Both `epub.js` and `comic-book.js` expect a `loader` object that implements the following interface:
 
 - `.entries`: (only used by `comic-book.js`) an array, each element of which has a `filename` property, which is a string containing the filename (the full path).
 - `.loadText(filename)`: given the path, returns the contents of the file as string.  May be async.
 - `.loadBlob(filename)`: given the path, returns the file as a `Blob` object. May be async.
 - `.getSize(filename)`: returns the file size in bytes. Used to set the `.size` property for `.sections` (see above).
 
-In the demo, this is implemented using [zip.js](https://github.com/gildas-lormeau/zip.js), which is highly recommended because it seems to be the only library that supports random access for `File` objects (as well as HTTP range requests).
+In `view.js`, this is implemented using [zip.js](https://github.com/gildas-lormeau/zip.js), which is highly recommended because it seems to be the only library that supports random access for `File` objects (as well as HTTP range requests).
 
-One advantage of having such an interface is that one can easily use it for reading unarchived files as well. For example, the demo has a loader that allows you to open unpacked EPUBs as directories.
+One advantage of having such an interface is that one can easily use it for reading unarchived files as well. For example, `view.js` has a loader that allows you to open unpacked EPUBs as directories.
 
 ### Mobipocket and Kindle Files
 
 It can read both MOBI and KF8 (.azw3, and combo .mobi files) from a `File` (or `Blob`) object. For MOBI files, it decompresses all text at once and splits the raw markup into sections at every `<mbp:pagebreak>`, instead of outputting one long page for the whole book, which drastically improves rendering performance. For KF8 files, it tries to decompress as little text as possible when loading a section, but it can still be quite slow due to the slowness of the current HUFF/CDIC decompressor implementation. In all cases, images and other resources are not loaded until they are needed.
 
-Note that KF8 files can contain fonts that are zlib-compressed. They need to be decompressed with an external library. The demo uses [fflate](https://github.com/101arrowz/fflate) to decompress them.
+Note that KF8 files can contain fonts that are zlib-compressed. They need to be decompressed with an external library. `view.js` uses [fflate](https://github.com/101arrowz/fflate) to decompress them.
 
 ### PDF and Other Fixed-Layout Formats
 
@@ -136,7 +141,7 @@ CBZs are similarly handled like fixed-layout EPUBs.
 
 ### The Renderers
 
-It has two renderers, one for paginating reflowable books, and one for fixed-layout. They are custom elements (web components).
+To simplify things, it has two separate renderers, one for reflowable books, and one for fixed layout books (as such there's no support for mixed layout books). These renderers are custom elements (web components).
 
 A renderer's interface is currently mainly:
 - `.open(book)`: open a book object.
@@ -149,17 +154,6 @@ It has the following custom events:
 - `relocate`, when the location changes. Its `event.detail` has the properties `range`, `index`, and `fraction`, where `range` is a `Range` object containing the current visible area, and `fraction` is a number between 0 and 1, representing the reading progress within the section.
 - `create-overlayer`, which allows adding an overlay to the page. The `event.detail` has the properties `doc`, `index`, and a function `attach(overlay)`, which should be called with an overlayer object (see the description for `overlayer.js` below).
 
-The paginator uses the same pagination strategy as [Epub.js](https://github.com/futurepress/epub.js): it uses CSS multi-column. As such it shares much of the same limitations (it's slow, some CSS styles do not work as expected, and other bugs). There are a few differences:
-- It is a totally standalone module. You can use it to paginate any content.
-- It is much simpler, but currently there's no support for continuous scrolling.
-- It has no concept of CFIs and operates on `Range` objects directly. 
-- It uses bisecting to find the current visible range, which is more accurate than what Epub.js does.
-- It has an internal `#anchor` property, which can be a `Range`, `Element`, or a fraction that represents the current location. The view is *anchored* to it no matter how you resize the window.
-- It supports more than two columns.
-- It supports switching between scrolled and paginated mode without reloading (I can't figure out how to do this in Epub.js).
-
-To simplify things, it has a totally separate renderer for fixed layout books. As such there's no support for mixed layout books.
-
 Both renderers have the [`part`](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/part) named `filter`, which you can apply CSS filters to, to e.g. invert colors or adjust brightness:
 
 ```css
@@ -171,6 +165,15 @@ foliate-view::part(filter) {
 The filter only applies to the book itself, leaving overlaid elements such as highlights unaffected.
 
 ### The Paginator
+
+The paginator uses the same pagination strategy as [Epub.js](https://github.com/futurepress/epub.js): it uses CSS multi-column. As such it shares much of the same limitations (it's slow, some CSS styles do not work as expected, and other bugs). There are a few differences:
+- It is a totally standalone module. You can use it to paginate any content.
+- It is much simpler, but currently there's no support for continuous scrolling.
+- It has no concept of CFIs and operates on `Range` objects directly. 
+- It uses bisecting to find the current visible range, which is more accurate than what Epub.js does.
+- It has an internal `#anchor` property, which can be a `Range`, `Element`, or a fraction that represents the current location. The view is *anchored* to it no matter how you resize the window.
+- It supports more than two columns.
+- It supports switching between scrolled and paginated mode without reloading (I can't figure out how to do this in Epub.js).
 
 The layout can be configured by setting the following attributes:
 - `animated`: a [boolean attribute](https://developer.mozilla.org/en-US/docs/Glossary/Boolean/HTML). If present, adds a sliding transition effect.
@@ -355,15 +358,15 @@ document.querySelector('foliate-quoteimage').getBlob({
 
 ### Supported Browsers
 
-The main use of the library is for use in [Foliate](https://github.com/johnfactotum/foliate), which uses WebKitGTK. As such it's the only engine that has been tested extensively. But it should also work in Chromium and Firefox.
+It aims to support the latest version of WebKitGTK, Firefox, and Chromium. Older browsers like Firefox ESR are not supported. 
 
-Apart from the renderers, using the modules outside browsers is also possible. Most features depend on having the global objects `Blob`, `TextDecoder`, `TextEncoder`, `DOMParser`, `XMLSerializer`, and `URL`, and should work if you polyfill them. Note that `epubcfi.js` can be used as is in any environment if you only need to parse or sort CFIs.
+Although it's mainly indeded for rendering e-books in the browser, some features can be used in non-browser environments as well. In particular, `epubcfi.js` can be used as is in any environment if you only need to parse or sort CFIs. Most other features depend on having the global objects `Blob`, `TextDecoder`, `TextEncoder`, `DOMParser`, `XMLSerializer`, and `URL`, and should work if you polyfill them.
 
 ## License
 
 MIT.
 
-Vendored libraries for the demo:
+Vendored libraries:
 - [zip.js](https://github.com/gildas-lormeau/zip.js) is licensed under the BSD-3-Clause license.
 - [fflate](https://github.com/101arrowz/fflate) is MIT licensed.
 - [PDF.js](https://mozilla.github.io/pdf.js/) is licensed under Apache.
