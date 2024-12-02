@@ -2,8 +2,12 @@ const getTypes = el => new Set(el?.getAttributeNS?.('http://www.idpf.org/2007/op
 const getRoles = el => new Set(el?.getAttribute?.('role')?.split(' '))
 
 const isSuper = el => {
+    if (el.matches('sup')) return true
     const { verticalAlign } = getComputedStyle(el)
-    return verticalAlign === 'super' || /^\d/.test(verticalAlign)
+    return verticalAlign === 'super'
+        || verticalAlign === 'top'
+        || verticalAlign === 'text-top'
+        || /^\d/.test(verticalAlign)
 }
 
 const refTypes = ['biblioref', 'glossref', 'noteref']
