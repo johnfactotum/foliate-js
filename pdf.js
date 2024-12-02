@@ -123,7 +123,7 @@ export const makePDF = async file => {
     const { metadata, info } = await pdf.getMetadata() ?? {}
     // TODO: for better results, parse `metadata.getRaw()`
     book.metadata = {
-        title: metadata?.get('dc:title') ?? info?.Title,
+        title: metadata?.get('dc:title') ?? info?.Title ?? file.name.replace(/\.\w+?$/g,''),
         author: metadata?.get('dc:creator') ?? info?.Author,
         contributor: metadata?.get('dc:contributor'),
         description: metadata?.get('dc:description') ?? info?.Subject,

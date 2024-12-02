@@ -25,7 +25,7 @@ export const makeComicBook = ({ entries, loadBlob, getSize }, file) => {
 
     const book = {}
     book.getCover = () => loadBlob(files[0])
-    book.metadata = { title: file.name }
+    book.metadata = { title: file.name.replace(/\.\w+?$/g,'') }
     book.sections = files.map(name => ({
         id: name,
         load: () => load(name),
