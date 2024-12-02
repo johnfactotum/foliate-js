@@ -27,9 +27,10 @@ const STYLE = {
 }
 
 const TABLE = {
-    'tr': ['tr', ['align']],
-    'th': ['th', ['colspan', 'rowspan', 'align', 'valign']],
-    'td': ['td', ['colspan', 'rowspan', 'align', 'valign']],
+    'tr': ['tr', {
+        'th': ['th', STYLE, ['colspan', 'rowspan', 'align', 'valign']],
+        'td': ['td', STYLE, ['colspan', 'rowspan', 'align', 'valign']],
+    }, ['align']]
 }
 
 const POEM = {
@@ -125,7 +126,7 @@ class FB2Converter {
         if (!d) return null
         if (typeof d === 'string') return this[d](node)
 
-        const [name, opts] = d
+        const [name, opts, attrs] = d
         const el = this.doc.createElement(name)
 
         // copy the ID, and set class name from original element name
@@ -133,11 +134,13 @@ class FB2Converter {
         el.classList.add(node.nodeName)
 
         // copy attributes
-        if (Array.isArray(opts)) for (const attr of opts)
-            el.setAttribute(attr, node.getAttribute(attr))
+        if (Array.isArray(attrs)) for (const attr of attrs) {
+            const value = node.getAttribute(attr)
+            if (value) el.setAttribute(attr, value)
+        }
 
         // process child elements recursively
-        const childDef = opts === 'self' ? def : Array.isArray(opts) ? null : opts
+        const childDef = opts === 'self' ? def : opts
         let child = node.firstChild
         while (child) {
             const childEl = this.convert(child, childDef)
