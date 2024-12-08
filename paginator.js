@@ -250,7 +250,9 @@ class View {
                 // it needs to be visible for Firefox to get computed style
                 this.#iframe.style.display = 'block'
                 const { vertical, rtl } = getDirection(doc)
-                const background = getBackground(doc)
+                this.docBackground = getBackground(doc)
+                doc.body.style.background = 'none'
+                const background = this.docBackground
                 this.#iframe.style.display = 'none'
 
                 this.#vertical = vertical
@@ -610,7 +612,9 @@ export class Paginator extends HTMLElement {
 
         this.#mediaQueryListener = () => {
             if (!this.#view) return
-            this.#background.style.background = getBackground(this.#view.document)
+            this.#background.style.background = this.#view.docBackground
+            const adjustedSize = this.#getAdjustedBackgroundSize(this.#view.docBackground, this.columnCount)
+            if (adjustedSize) this.#background.style.backgroundSize = adjustedSize
         }
         this.#mediaQuery.addEventListener('change', this.#mediaQueryListener)
     }
@@ -647,6 +651,14 @@ export class Paginator extends HTMLElement {
         })
         this.#container.append(this.#view.element)
         return this.#view
+    }
+    #getAdjustedBackgroundSize(background, columnCount) {
+        const match = background?.match(/\/\s+(\d+(?:\.\d+)?)%\s+auto/)
+        if (match && columnCount > 0) {
+            const originalPercent = parseFloat(match[1])
+            const newPercent = originalPercent / columnCount
+            return `${newPercent}% auto`
+        }
     }
     #beforeRender({ vertical, rtl, background }) {
         this.#vertical = vertical
@@ -702,6 +714,7 @@ export class Paginator extends HTMLElement {
         }
 
         const divisor = Math.min(maxColumnCount, Math.ceil(size / maxInlineSize))
+        this.columnCount = divisor
         const columnWidth = (size / divisor) - gap
         this.setAttribute('dir', rtl ? 'rtl' : 'ltr')
 
@@ -721,6 +734,9 @@ export class Paginator extends HTMLElement {
         this.feet = feet.map(el => el.children[0])
         this.#header.replaceChildren(...heads)
         this.#footer.replaceChildren(...feet)
+
+        const adjustedSize = this.#getAdjustedBackgroundSize(this.#view.docBackground, this.columnCount)
+        if (adjustedSize) this.#background.style.backgroundSize = adjustedSize
 
         return { height, width, margin, gap, columnWidth }
     }
@@ -1082,8 +1098,11 @@ export class Paginator extends HTMLElement {
         } else $style.textContent = styles
 
         // NOTE: needs `requestAnimationFrame` in Chromium
-        requestAnimationFrame(() =>
-            this.#background.style.background = getBackground(this.#view.document))
+        requestAnimationFrame(() => {
+            this.#background.style.background = this.#view.docBackground
+            const adjustedSize = this.#getAdjustedBackgroundSize(this.#view.docBackground, this.columnCount)
+            if (adjustedSize) this.#background.style.backgroundSize = adjustedSize
+        })
 
         // needed because the resize observer doesn't work in Firefox
         this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
