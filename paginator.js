@@ -596,7 +596,7 @@ export class Paginator extends HTMLElement {
                 if (!sel.rangeCount) return
                 if (isPointerSelecting && sel.type === 'Range')
                     checkPointerSelection(range, sel)
-                else if (isKeyboardSelecting || sel.type === 'Caret') {
+                else if (isKeyboardSelecting) {
                     const selRange = sel.getRangeAt(0).cloneRange()
                     const backward = selectionIsBackward(sel)
                     if (!backward) selRange.collapse()
