@@ -167,7 +167,7 @@ export const compare = (a, b) => {
         || compare(collapse(a, true), collapse(b, true))
 
     for (let i = 0; i < Math.max(a.length, b.length); i++) {
-        const p = a[i], q = b[i]
+        const p = a[i] ?? [], q = b[i] ?? []
         const maxIndex = Math.max(p.length, q.length) - 1
         for (let i = 0; i <= maxIndex; i++) {
             const x = p[i], y = q[i]

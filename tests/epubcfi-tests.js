@@ -227,6 +227,8 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
             '/6/4!/4/12',
             -1,
         ],
+        ['/6/4', '/6/4!/2', -1],
+        ['/6/4!/2', '/6/4!/2!/2', -1],
     ]) {
         const x = CFI.compare(a, b)
         console.assert(x === c, `compare ${a} and ${b}, expected ${c}, got ${x}`)
