@@ -574,6 +574,7 @@ export class Paginator extends HTMLElement {
             }
         })
         const checkPointerSelection = debounce((range, sel) => {
+            if (!sel.rangeCount) return
             const selRange = sel.getRangeAt(0)
             const backward = selectionIsBackward(sel)
             if (backward && selRange.compareBoundaryPoints(Range.START_TO_START, range) < 0)
