@@ -666,7 +666,7 @@ class Resources {
 
         this.cover = this.getItemByProperty('cover-image')
             // EPUB 2 compat
-            ?? this.getItemByID($$$(opf, 'meta')
+            ?? resolveHref($$$(opf, 'meta')
                 .find(filterAttribute('name', 'cover'))
                 ?.getAttribute('content'))
             ?? this.getItemByHref(this.guide
