@@ -659,6 +659,9 @@ export class Paginator extends HTMLElement {
             parsedBackground[0] = themeBgColor
             background = parsedBackground.join(' ')
         }
+        if (/cover.*fixed|fixed.*cover/.test(background)) {
+            background = background.replace('cover', 'auto 100%').replace('fixed', '')
+        }
         this.#background.innerHTML = ''
         this.#background.style.display = 'grid'
         this.#background.style.gridTemplateColumns = `repeat(${columnCount}, 1fr)`
