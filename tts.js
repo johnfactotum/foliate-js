@@ -34,10 +34,10 @@ const getSegmenter = (lang = 'en', granularity = 'word') => {
             while (sum <= index) sum += strs[++strIndex].length
             const startIndex = strIndex
             const startOffset = index - (sum - strs[strIndex].length)
-            const end = index + segment.length
+            const end = index + segment.length - 1
             if (end < str.length) while (sum <= end) sum += strs[++strIndex].length
             const endIndex = strIndex
-            const endOffset = end - (sum - strs[strIndex].length)
+            const endOffset = end - (sum - strs[strIndex].length) + 1
             yield [(name++).toString(),
                 makeRange(startIndex, startOffset, endIndex, endOffset)]
         }
@@ -207,11 +207,11 @@ export class TTS {
     #ranges
     #lastMark
     #serializer = new XMLSerializer()
-    constructor(doc, textWalker, highlight) {
+    constructor(doc, textWalker, highlight, granularity) {
         this.doc = doc
         this.highlight = highlight
         this.#list = new ListIterator(getBlocks(doc), range => {
-            const { entries, ssml } = getFragmentWithMarks(range, textWalker)
+            const { entries, ssml } = getFragmentWithMarks(range, textWalker, granularity)
             this.#ranges = new Map(entries)
             return [ssml, range]
         })
