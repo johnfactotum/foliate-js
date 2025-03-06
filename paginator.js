@@ -536,7 +536,7 @@ export class Paginator extends HTMLElement {
         <div id="top">
             <div id="background" part="filter"></div>
             <div id="header"></div>
-            <div id="container"></div>
+            <div id="container" part="container"></div>
             <div id="footer"></div>
         </div>
         `
