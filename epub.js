@@ -870,6 +870,15 @@ class Loader {
                 `-webkit-column-break-${x}:`)
             .replace(/break-(after|before|inside)\s*:\s*(avoid-)?page/gi, (_, x, y) =>
                 `break-${x}: ${y ?? ''}column`)
+            // replace absolute font sizes with rem units
+            .replace(/font-size\s*:\s*xx-small/gi, 'font-size: 0.6rem')
+            .replace(/font-size\s*:\s*x-small/gi, 'font-size: 0.75rem')
+            .replace(/font-size\s*:\s*small/gi, 'font-size: 0.875rem')
+            .replace(/font-size\s*:\s*medium/gi, 'font-size: 1rem')
+            .replace(/font-size\s*:\s*large/gi, 'font-size: 1.2rem')
+            .replace(/font-size\s*:\s*x-large/gi, 'font-size: 1.5rem')
+            .replace(/font-size\s*:\s*xx-large/gi, 'font-size: 2rem')
+            .replace(/font-size\s*:\s*xxx-large/gi, 'font-size: 3rem')
     }
     // find & replace all possible relative paths for all assets without parsing
     replaceString(str, href, parents = []) {
