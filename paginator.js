@@ -790,17 +790,26 @@ export class Paginator extends HTMLElement {
     get pages() {
         return Math.round(this.viewSize / this.size)
     }
+    // this is the current position of the container
+    get containerPosition() {
+        return this.#container[this.scrollProp]
+    }
+
+    // this is the new position of the containr
+    set containerPosition(newVal) {
+        this.#container[this.scrollProp] = newVal
+    }
+
     scrollBy(dx, dy) {
         const delta = this.#vertical ? dy : dx
-        const element = this.#container
-        const { scrollProp } = this
         const [offset, a, b] = this.#scrollBounds
         const rtl = this.#rtl
         const min = rtl ? offset - b : offset - a
         const max = rtl ? offset + a : offset + b
-        element[scrollProp] = Math.max(min, Math.min(max,
-            element[scrollProp] + delta))
+        this.containerPosition = Math.max(min, Math.min(max,
+            this.containerPosition + delta))
     }
+
     snap(vx, vy) {
         const velocity = this.#vertical ? vy : vx
         const [offset, a, b] = this.#scrollBounds
@@ -898,9 +907,8 @@ export class Paginator extends HTMLElement {
         return this.#scrollToPage(Math.floor(offset / this.size) + (this.#rtl ? -1 : 1), reason)
     }
     async #scrollTo(offset, reason, smooth) {
-        const element = this.#container
-        const { scrollProp, size } = this
-        if (element[scrollProp] === offset) {
+        const { size } = this
+        if (this.containerPosition === offset) {
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
             return
@@ -908,14 +916,14 @@ export class Paginator extends HTMLElement {
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
         if ((reason === 'snap' || smooth) && this.hasAttribute('animated')) return animate(
-            element[scrollProp], offset, 300, easeOutQuad,
-            x => element[scrollProp] = x,
+            this.containerPosition, offset, 300, easeOutQuad,
+            x => this.containerPosition = x,
         ).then(() => {
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
         })
         else {
-            element[scrollProp] = offset
+            this.containerPosition = offset
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
             this.#afterScroll(reason)
         }
@@ -1010,7 +1018,7 @@ export class Paginator extends HTMLElement {
     #canGoToIndex(index) {
         return index >= 0 && index <= this.sections.length - 1
     }
-    async #goTo({ index, anchor, select}) {
+    async #goTo({ index, anchor, select }) {
         if (index === this.#index) await this.#display({ index, anchor, select })
         else {
             const oldIndex = this.#index
