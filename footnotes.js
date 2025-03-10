@@ -93,9 +93,9 @@ export class FootnoteHandler extends EventTarget {
         })
     }
     handle(book, e) {
-        const { a, href } = e.detail
+        const { a, href, follow } = e.detail
         const { yes, maybe } = isFootnoteReference(a)
-        if (yes) {
+        if (yes || follow) {
             e.preventDefault()
             return Promise.resolve(book.resolveHref(href)).then(target =>
                 this.#showFragment(book, target, href))
