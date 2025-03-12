@@ -70,27 +70,30 @@ const BODY = {
     'section': ['section', SECTION],
 }
 
-const getImageSrc = el => {
-    const href = el.getAttributeNS(NS.XLINK, 'href')
-    if (!href) return 'data:,'
-    const [, id] = href.split('#')
-    if (!id) return href
-    const bin = el.getRootNode().getElementById(id)
-    return bin
-        ? `data:${bin.getAttribute('content-type')};base64,${bin.textContent}`
-        : href
-}
-
 class FB2Converter {
     constructor(fb2) {
         this.fb2 = fb2
         this.doc = document.implementation.createDocument(NS.XHTML, 'html')
+        // use this instead of `getElementById` to allow images like
+        // `<image l:href="#img1.jpg" id="img1.jpg" />`
+        this.bins = new Map(Array.from(this.fb2.getElementsByTagName('binary'),
+            el => [el.id, el]))
+    }
+    getImageSrc(el) {
+        const href = el.getAttributeNS(NS.XLINK, 'href')
+        if (!href) return 'data:,'
+        const [, id] = href.split('#')
+        if (!id) return href
+        const bin = this.bins.get(id)
+        return bin
+            ? `data:${bin.getAttribute('content-type')};base64,${bin.textContent}`
+            : href
     }
     image(node) {
         const el = this.doc.createElement('img')
         el.alt = node.getAttribute('alt')
         el.title = node.getAttribute('title')
-        el.setAttribute('src', getImageSrc(node))
+        el.setAttribute('src', this.getImageSrc(node))
         return el
     }
     anchor(node) {
@@ -267,7 +270,7 @@ export const makeFB2 = async blob => {
         subject: $$('title-info genre').map(getElementText),
     }
     if ($('coverpage image')) {
-        const src = getImageSrc($('coverpage image'))
+        const src = converter.getImageSrc($('coverpage image'))
         book.getCover = () => fetch(src).then(res => res.blob())
     } else book.getCover = () => null
 
