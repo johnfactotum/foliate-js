@@ -256,7 +256,7 @@ export class View extends HTMLElement {
             await import('./paginator.js')
             this.renderer = document.createElement('foliate-paginator')
         }
-        this.renderer.setAttribute('exportparts', 'head,foot,filter')
+        this.renderer.setAttribute('exportparts', 'head,foot,filter,container')
         this.renderer.addEventListener('load', e => this.#onLoad(e.detail))
         this.renderer.addEventListener('relocate', e => this.#onRelocate(e.detail))
         this.renderer.addEventListener('create-overlayer', e =>
@@ -402,7 +402,7 @@ export class View extends HTMLElement {
             .find(x => x.index === index && x.overlayer)
     }
     #createOverlayer({ doc, index }) {
-        const overlayer = new Overlayer()
+        const overlayer = new Overlayer(doc)
         doc.addEventListener('click', e => {
             const [value, range] = overlayer.hitTest(e)
             if (value && !value.startsWith(SEARCH_PREFIX)) {

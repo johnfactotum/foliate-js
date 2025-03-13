@@ -1,16 +1,13 @@
-const pdfjsPath = path => new URL(`vendor/pdfjs/${path}`, import.meta.url).toString()
+const pdfjsPath = path => `/vendor/pdfjs/${path}`
 
-import './vendor/pdfjs/pdf.mjs'
+import '@pdfjs/pdf.mjs'
 const pdfjsLib = globalThis.pdfjsLib
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsPath('pdf.worker.mjs')
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsPath('pdf.worker.min.mjs')
 
 const fetchText = async url => await (await fetch(url)).text()
 
-// https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.css
-const textLayerBuilderCSS = await fetchText(pdfjsPath('text_layer_builder.css'))
-
-// https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/annotation_layer_builder.css
-const annotationLayerBuilderCSS = await fetchText(pdfjsPath('annotation_layer_builder.css'))
+let textLayerBuilderCSS = null
+let annotationLayerBuilderCSS = null
 
 const render = async (page, doc, zoom) => {
     const scale = zoom * devicePixelRatio
@@ -77,6 +74,14 @@ const renderPage = async (page, getImageBlob) => {
         await page.render({ canvasContext, viewport }).promise
         return new Promise(resolve => canvas.toBlob(resolve))
     }
+    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.css
+    if (textLayerBuilderCSS == null) {
+        textLayerBuilderCSS = await fetchText(pdfjsPath('text_layer_builder.css'))
+    }
+    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/annotation_layer_builder.css
+    if (annotationLayerBuilderCSS == null) {
+        annotationLayerBuilderCSS = await fetchText(pdfjsPath('annotation_layer_builder.css'))
+    }
     const src = URL.createObjectURL(new Blob([`
         <!DOCTYPE html>
         <html lang="en">
@@ -100,7 +105,7 @@ const renderPage = async (page, getImageBlob) => {
 
 const makeTOCItem = item => ({
     label: item.title,
-    href: JSON.stringify(item.dest),
+    href: item.dest ? JSON.stringify(item.dest) : '',
     subitems: item.items.length ? item.items.map(makeTOCItem) : null,
 })
 
@@ -159,6 +164,7 @@ export const makePDF = async file => {
         return { index }
     }
     book.splitTOCHref = async href => {
+        if (!href) return [null, null]
         const parsed = JSON.parse(href)
         const dest = typeof parsed === 'string'
             ? await pdf.getDestination(parsed) : parsed

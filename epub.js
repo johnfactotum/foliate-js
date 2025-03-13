@@ -94,7 +94,7 @@ const childGetter = (doc, ns) => {
 
 const resolveURL = (url, relativeTo) => {
     try {
-        if (relativeTo.includes(':')) return new URL(url, relativeTo)
+        if (relativeTo.includes(':') && !relativeTo.startsWith('OEBPS')) return new URL(url, relativeTo)
         // the base needs to be a valid URL, so set a base URL and then remove it
         const root = 'https://invalid.invalid/'
         const obj = new URL(url, root + relativeTo)
@@ -203,7 +203,7 @@ const getMetadata = opf => {
         if (!els) return null
         return Object.groupBy(els.map(parse), x => x.property)
     }
-    const dc = Object.fromEntries(Object.entries(Object.groupBy(els.dc, el => el.localName))
+    const dc = Object.fromEntries(Object.entries(Object.groupBy(els.dc || [], el => el.localName))
         .map(([name, els]) => [name, els.map(parse)]))
     const properties = getProperties() ?? {}
     const legacyMeta = Object.fromEntries(els.legacyMeta?.map(el =>
@@ -669,6 +669,8 @@ class Resources {
             ?? this.getItemByID($$$(opf, 'meta')
                 .find(filterAttribute('name', 'cover'))
                 ?.getAttribute('content'))
+            ?? this.manifest.find(item => item.href.includes('cover')
+                && item.mediaType.startsWith('image'))
             ?? this.getItemByHref(this.guide
                 ?.find(ref => ref.type.includes('cover'))?.href)
 
@@ -859,7 +861,7 @@ class Loader {
         const h = window?.innerHeight ?? 600
         return replacedImports
             // unprefix as most of the props are (only) supported unprefixed
-            .replace(/(?<=[{\s;])-epub-/gi, '')
+            .replace(/([{\s;])-epub-/gi, '$1')
             // replace vw and vh as they cause problems with layout
             .replace(/(\d*\.?\d+)vw/gi, (_, d) => parseFloat(d) * w / 100 + 'px')
             .replace(/(\d*\.?\d+)vh/gi, (_, d) => parseFloat(d) * h / 100 + 'px')
@@ -868,6 +870,18 @@ class Loader {
                 `-webkit-column-break-${x}:`)
             .replace(/break-(after|before|inside)\s*:\s*(avoid-)?page/gi, (_, x, y) =>
                 `break-${x}: ${y ?? ''}column`)
+            // replace absolute font sizes with rem units
+            .replace(/font-size\s*:\s*xx-small/gi, 'font-size: 0.6rem')
+            .replace(/font-size\s*:\s*x-small/gi, 'font-size: 0.75rem')
+            .replace(/font-size\s*:\s*small/gi, 'font-size: 0.875rem')
+            .replace(/font-size\s*:\s*medium/gi, 'font-size: 1rem')
+            .replace(/font-size\s*:\s*large/gi, 'font-size: 1.2rem')
+            .replace(/font-size\s*:\s*x-large/gi, 'font-size: 1.5rem')
+            .replace(/font-size\s*:\s*xx-large/gi, 'font-size: 2rem')
+            .replace(/font-size\s*:\s*xxx-large/gi, 'font-size: 3rem')
+            // replace hardcoded colors
+            .replace(/color\s*:\s*#000000/gi, 'color: unset')
+            .replace(/color\s*:\s*#000/gi, 'color: unset')
     }
     // find & replace all possible relative paths for all assets without parsing
     replaceString(str, href, parents = []) {
