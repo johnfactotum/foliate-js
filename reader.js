@@ -111,6 +111,12 @@ class Reader {
         this.view.addEventListener('relocate', this.#onRelocate.bind(this))
 
         const { book } = this.view
+        book.transformTarget?.addEventListener('data', ({ detail }) => {
+            detail.data = Promise.resolve(detail.data).catch(e => {
+                console.error(new Error(`Failed to load ${detail.name}`, { cause: e }))
+                return ''
+            })
+        })
         this.view.renderer.setStyles?.(getCSS(this.style))
         this.view.renderer.next()
 

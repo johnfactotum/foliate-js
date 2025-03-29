@@ -636,6 +636,22 @@ export class Paginator extends HTMLElement {
     open(book) {
         this.bookDir = book.dir
         this.sections = book.sections
+        book.transformTarget?.addEventListener('data', ({ detail }) => {
+            if (detail.type !== 'text/css') return
+            const w = innerWidth
+            const h = innerHeight
+            detail.data = Promise.resolve(detail.data).then(data => data
+                // unprefix as most of the props are (only) supported unprefixed
+                .replace(/(?<=[{\s;])-epub-/gi, '')
+                // replace vw and vh as they cause problems with layout
+                .replace(/(\d*\.?\d+)vw/gi, (_, d) => parseFloat(d) * w / 100 + 'px')
+                .replace(/(\d*\.?\d+)vh/gi, (_, d) => parseFloat(d) * h / 100 + 'px')
+                // `page-break-*` unsupported in columns; replace with `column-break-*`
+                .replace(/page-break-(after|before|inside)\s*:/gi, (_, x) =>
+                    `-webkit-column-break-${x}:`)
+                .replace(/break-(after|before|inside)\s*:\s*(avoid-)?page/gi, (_, x, y) =>
+                    `break-${x}: ${y ?? ''}column`))
+        })
     }
     #createView() {
         if (this.#view) {

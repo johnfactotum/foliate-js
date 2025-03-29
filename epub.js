@@ -706,6 +706,7 @@ class Loader {
     #children = new Map()
     #refCount = new Map()
     allowScript = false
+    eventTarget = new EventTarget()
     constructor({ loadText, loadBlob, resources }) {
         this.loadText = loadText
         this.loadBlob = loadBlob
@@ -714,9 +715,15 @@ class Loader {
         // needed only when replacing in (X)HTML w/o parsing (see below)
         //.filter(({ mediaType }) => ![MIME.XHTML, MIME.HTML].includes(mediaType))
     }
-    createURL(href, data, type, parent) {
+    async createURL(href, data, type, parent) {
         if (!data) return ''
-        const url = URL.createObjectURL(new Blob([data], { type }))
+        const detail = { data, type }
+        Object.defineProperty(detail, 'name', { value: href }) // readonly
+        const event = new CustomEvent('data', { detail })
+        this.eventTarget.dispatchEvent(event)
+        const newData = await event.detail.data
+        const newType = await event.detail.type
+        const url = URL.createObjectURL(new Blob([newData], { type: newType }))
         this.#cache.set(href, url)
         this.#refCount.set(href, 1)
         if (parent) {
@@ -767,7 +774,9 @@ class Loader {
             // prevent circular references
             && parents.every(p => p !== href)
         if (shouldReplace) return this.loadReplaced(item, parents)
-        return this.createURL(href, await this.loadBlob(href), mediaType, parent)
+        // NOTE: this can be replaced with `Promise.try()`
+        const tryLoadBlob = Promise.resolve().then(() => this.loadBlob(href))
+        return this.createURL(href, tryLoadBlob, mediaType, parent)
     }
     async loadHref(href, base, parents = []) {
         if (isExternal(href)) return href
@@ -779,7 +788,12 @@ class Loader {
     async loadReplaced(item, parents = []) {
         const { href, mediaType } = item
         const parent = parents.at(-1)
-        const str = await this.loadText(href)
+        let str = ''
+        try {
+            str = await this.loadText(href)
+        } catch (e) {
+            return this.createURL(href, Promise.reject(e), mediaType, parent)
+        }
         if (!str) return null
 
         // note that one can also just use `replaceString` for everything:
@@ -851,23 +865,10 @@ class Loader {
             (_, url) => this.loadHref(url, href, parents)
                 .then(url => `url("${url}")`))
         // apart from `url()`, strings can be used for `@import` (but why?!)
-        const replacedImports = await replaceSeries(replacedUrls,
+        return replaceSeries(replacedUrls,
             /@import\s*["']([^"'\n]*?)["']/gi,
             (_, url) => this.loadHref(url, href, parents)
                 .then(url => `@import "${url}"`))
-        const w = window?.innerWidth ?? 800
-        const h = window?.innerHeight ?? 600
-        return replacedImports
-            // unprefix as most of the props are (only) supported unprefixed
-            .replace(/(?<=[{\s;])-epub-/gi, '')
-            // replace vw and vh as they cause problems with layout
-            .replace(/(\d*\.?\d+)vw/gi, (_, d) => parseFloat(d) * w / 100 + 'px')
-            .replace(/(\d*\.?\d+)vh/gi, (_, d) => parseFloat(d) * h / 100 + 'px')
-            // `page-break-*` unsupported in columns; replace with `column-break-*`
-            .replace(/page-break-(after|before|inside)\s*:/gi, (_, x) =>
-                `-webkit-column-break-${x}:`)
-            .replace(/break-(after|before|inside)\s*:\s*(avoid-)?page/gi, (_, x, y) =>
-                `break-${x}: ${y ?? ''}column`)
     }
     // find & replace all possible relative paths for all assets without parsing
     replaceString(str, href, parents = []) {
@@ -965,6 +966,7 @@ ${doc.querySelector('parsererror').innerText}`)
                 .then(this.#encryption.getDecoder(uri)),
             resources: this.resources,
         })
+        this.transformTarget = this.#loader.eventTarget
         this.sections = this.resources.spine.map((spineItem, index) => {
             const { idref, linear, properties = [] } = spineItem
             const item = this.resources.getItemByID(idref)

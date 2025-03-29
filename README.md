@@ -112,6 +112,8 @@ The following methods are consumed by `progress.js`, for getting the correct TOC
 - `.splitTOCHref(href)`: given an href string (from the TOC), returns an array, the first element of which is the `id` of the section (see above), and the second element is the fragment identifier (can be any type; see below). May be async.
 - `.getTOCFragment(doc, id)`: given a `Document` object and a fragment identifier (the one provided by `.splitTOCHref()`; see above), returns a `Node` representing the target linked by the TOC item
 
+In addition, the `.transformTarget`, if present, can be used to transform the contents of the book as it loads. It is an `EventTarget` with a custom event `"data"`, whose `.detail` is `{ data, type, name }`, where `.data` is either a string or `Blob`, or a `Promise` thereof, `.type` the content type string, and `.name` the identifier of the resource. Event handlers should mutate `.data` to transform the data.
+
 Almost all of the properties and methods are optional. At minimum it needs `.sections` and the `.load()` method for the sections, as otherwise there won't be anything to render.
 
 ### Archived Files
