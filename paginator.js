@@ -158,10 +158,12 @@ const setSelectionTo = (target, collapse) => {
     }
     if (range) {
         const sel = range.startContainer.ownerDocument.defaultView.getSelection()
-        sel.removeAllRanges()
-        if (collapse === -1) range.collapse(true)
-        else if (collapse === 1) range.collapse()
-        sel.addRange(range)
+        if (sel) {
+            sel.removeAllRanges()
+            if (collapse === -1) range.collapse(true)
+            else if (collapse === 1) range.collapse()
+            sel.addRange(range)
+        }
     }
 }
 
