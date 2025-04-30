@@ -109,7 +109,7 @@ export const search = (strs, query, options) => {
 }
 
 export const searchMatcher = (textWalker, opts) => {
-    const { defaultLocale, matchCase, matchDiacritics, matchWholeWords } = opts
+    const { defaultLocale, matchCase, matchDiacritics, matchWholeWords, acceptNode } = opts
     return function* (doc, query) {
         const iter = textWalker(doc, function* (strs, makeRange) {
             for (const result of search(strs, query, {
@@ -124,7 +124,7 @@ export const searchMatcher = (textWalker, opts) => {
                 result.range = makeRange(startIndex, startOffset, endIndex, endOffset)
                 yield result
             }
-        })
+        }, acceptNode)
         for (const result of iter) yield result
     }
 }
