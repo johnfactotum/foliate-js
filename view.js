@@ -96,7 +96,7 @@ const makeDirectoryLoader = async entry => {
     const getBuffer = name => map.get(name)?.arrayBuffer() ?? null
     const loadText = async name => decode(await getBuffer(name))
     const loadBlob = name => map.get(name)
-    const getSize = name => map.get(name)?.size ?? 0
+    const getSize = name => map.get(name)?.file.size ?? 0
     return { loadText, loadBlob, getSize }
 }
 
