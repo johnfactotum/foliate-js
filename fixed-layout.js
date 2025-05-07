@@ -234,14 +234,14 @@ export class FixedLayout extends HTMLElement {
             else {
                 if (last.center || last.left) newSpread().right = section
                 else if (last.right || !i) last.left = section
-                else last .right = section
+                else last.right = section
             }
             return arr
         }, [{}])
     }
     get index() {
         const spread = this.#spreads[this.#index]
-        const section = spread?.center ?? (this.side === 'left'
+        const section = spread?.center ?? (this.#side === 'left'
             ? spread.left ?? spread.right : spread.right ?? spread.left)
         return this.book.sections.indexOf(section)
     }
