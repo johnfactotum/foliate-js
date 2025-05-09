@@ -295,12 +295,12 @@ export class FixedLayout extends HTMLElement {
     }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
-        if (s) this.#reportLocation('page')
+        if (s) { this.#render(); this.#reportLocation('page') }
         else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
     }
     async prev() {
         const s = this.rtl ? this.#goRight() : this.#goLeft()
-        if (s) this.#reportLocation('page')
+        if (s) { this.#render(); this.#reportLocation('page') }
         else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
     }
     getContents() {
