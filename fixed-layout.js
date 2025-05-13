@@ -309,6 +309,17 @@ export class FixedLayout extends HTMLElement {
             // TODO: index, overlayer
         }))
     }
+    getRenderDetails() {
+        return {
+            leftWidth: this.#left?.element.clientWidth,
+            rightWidth: this.#right?.element.clientWidth,
+            centerWidth: this.#center?.element.clientWidth,
+            height: this.#left?.element.clientHeight
+                    || this.#right?.element.clientHeight
+                    || this.#center?.element.clientHeight,
+            side: this.#side
+        }
+    }
     destroy() {
         this.#observer.unobserve(this)
     }
