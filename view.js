@@ -10,6 +10,24 @@ const isZip = async file => {
     return arr[0] === 0x50 && arr[1] === 0x4b && arr[2] === 0x03 && arr[3] === 0x04
 }
 
+const isRar = async file => {
+    const arr = new Uint8Array(await file.slice(0, 6).arrayBuffer())
+    return arr[0] === 0x52 && arr[1] === 0x61 && arr[2] === 0x72 && arr[3] === 0x21 && arr[4] === 0x1A && arr[5] === 0x07
+}
+
+const isTar = async file => {
+    let arr = new Uint8Array(await file.slice(257, 262).arrayBuffer());
+    if (arr[0] === 0x75 && arr[1] === 0x73 && arr[2] === 0x74 && arr[3] === 0x61 && arr[4] === 0x72) { return true; }  //tar
+    arr = new Uint8Array(await file.slice(0, 6).arrayBuffer());
+    return arr[0] === 0x1F && arr[1] === 0x8B  //tar.gz
+        || arr[0] === 0xFD && arr[1] === 0x37 && arr[2] === 0x7A && arr[3] === 0x58 && arr[4] === 0x5A && arr[5] === 0x00;  //tar.xz
+}
+
+const is7zip = async file => {
+    const arr = new Uint8Array(await file.slice(0, 6).arrayBuffer())
+    return arr[0] === 0x37 && arr[1] === 0x7A && arr[2] === 0xBC && arr[3] === 0xAF && arr[4] === 0x27 && arr[5] === 0x1C
+}
+
 const isPDF = async file => {
     const arr = new Uint8Array(await file.slice(0, 5).arrayBuffer())
     return arr[0] === 0x25
@@ -18,7 +36,7 @@ const isPDF = async file => {
 }
 
 const isCBZ = ({ name, type }) =>
-    type === 'application/vnd.comicbook+zip' || name.endsWith('.cbz')
+    type === 'application/x-cbz' || type === 'application/vnd.comicbook+zip' || name.endsWith('.cbz')
 
 const isFB2 = ({ name, type }) =>
     type === 'application/x-fictionbook+xml' || name.endsWith('.fb2')
@@ -42,6 +60,23 @@ const makeZipLoader = async file => {
     return { entries, loadText, loadBlob, getSize }
 }
 
+const makeGenericArchiveLoader = async file => {
+    const { Archive } = (await import('./vendor/libarchive.js'))
+    Archive.init({ workerUrl: './vendor/worker-bundle.js' })
+    const archive = await Archive.open(file)
+    const entries = (await archive.getFilesArray())
+        .map(entry => ({filename: entry.file.name, file: entry.file}))
+    const map = new Map(entries.map(entry => [entry.file.name, entry]))
+    const load = f => (name, ...args) =>
+        map.has(name) ? f(map.get(name), ...args) : null
+    const loadText = load(entry => entry.file.extract().text())
+    const loadBlob = load((entry, type) => !type
+            ? entry.file.extract()
+            : entry.file.extract().then(data => data.arrayBuffer()).then(ab => new Blob([ab], {type})))
+    const getSize = name => map.get(name)?.size ?? 0;
+    return { entries, loadText, loadBlob, getSize }
+}
+
 const getFileEntries = async entry => entry.isFile ? entry
     : (await Promise.all(Array.from(
         await new Promise((resolve, reject) => entry.createReader()
@@ -61,7 +96,7 @@ const makeDirectoryLoader = async entry => {
     const getBuffer = name => map.get(name)?.arrayBuffer() ?? null
     const loadText = async name => decode(await getBuffer(name))
     const loadBlob = name => map.get(name)
-    const getSize = name => map.get(name)?.size ?? 0
+    const getSize = name => map.get(name)?.file.size ?? 0
     return { loadText, loadBlob, getSize }
 }
 
@@ -73,7 +108,7 @@ const fetchFile = async url => {
     const res = await fetch(url)
     if (!res.ok) throw new ResponseError(
         `${res.status} ${res.statusText}`, { cause: res })
-    return new File([await res.blob()], new URL(res.url).pathname)
+    return new File([await res.blob()], new URL(res.url).pathname, {type: res.headers.get("content-type") || ""})
 }
 
 export const makeBook = async file => {
@@ -85,6 +120,11 @@ export const makeBook = async file => {
         book = await new EPUB(loader).init()
     }
     else if (!file.size) throw new NotFoundError('File not found')
+    else if (await isRar(file) || await isTar(file) || await is7zip(file)) {
+        const loader = await makeGenericArchiveLoader(file);
+        const { makeComicBook } = await import('./comic-book.js')
+        book = makeComicBook(loader, file);
+    }
     else if (await isZip(file)) {
         const loader = await makeZipLoader(file)
         if (isCBZ(file)) {
