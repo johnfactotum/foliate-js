@@ -259,6 +259,8 @@ export class View extends HTMLElement {
         this.renderer.setAttribute('exportparts', 'head,foot,filter')
         this.renderer.addEventListener('load', e => this.#onLoad(e.detail))
         this.renderer.addEventListener('relocate', e => this.#onRelocate(e.detail))
+        this.renderer.addEventListener('reached-start', () => this.#onReachedStart())
+        this.renderer.addEventListener('reached-end', () => this.#onReachedEnd())
         this.renderer.addEventListener('create-overlayer', e =>
             e.detail.attach(this.#createOverlayer(e.detail)))
         this.renderer.open(book)
@@ -344,6 +346,12 @@ export class View extends HTMLElement {
         this.#cursorAutohider.cloneFor(doc.documentElement)
 
         this.#emit('load', { doc, index })
+    }
+    #onReachedStart() {
+        this.#emit('reached-start')
+    }
+    #onReachedEnd() {
+        this.#emit('reached-end')
     }
     #handleLinks(doc, index) {
         const { book } = this
