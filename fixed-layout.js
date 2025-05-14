@@ -293,6 +293,12 @@ export class FixedLayout extends HTMLElement {
         const { index, side } = this.getSpreadOf(section)
         await this.goToSpread(index, side)
     }
+    get atStart() {
+        return this.#index === 0
+    }
+    get atEnd() {
+        return this.#index === this.#spreads.length - 1
+    }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
         if (s) this.#reportLocation('page')
