@@ -1023,7 +1023,10 @@ export class Paginator extends HTMLElement {
                 Math.max(0, this.start - (distance ?? this.size)), null, true)
             return true
         }
-        if (this.atStart) return
+        if (this.atStart) {
+            this.dispatchEvent(new Event('reached-start'))
+            return
+        }
         const page = this.page - 1
         return this.#scrollToPage(page, 'page', true).then(() => page <= 0)
     }
@@ -1034,7 +1037,10 @@ export class Paginator extends HTMLElement {
                 Math.min(this.viewSize, distance ? this.start + distance : this.end), null, true)
             return true
         }
-        if (this.atEnd) return
+        if (this.atEnd) {
+            this.dispatchEvent(new Event('reached-end'))
+            return
+        }
         const page = this.page + 1
         const pages = this.pages
         return this.#scrollToPage(page, 'page', true).then(() => page >= pages - 1)

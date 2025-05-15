@@ -293,13 +293,21 @@ export class FixedLayout extends HTMLElement {
         const { index, side } = this.getSpreadOf(section)
         await this.goToSpread(index, side)
     }
+    get atStart() {
+        return this.#index === 0
+    }
+    get atEnd() {
+        return this.#index === this.#spreads.length - 1
+    }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
+        if (!s && this.atEnd) this.dispatchEvent(new Event("reached-end"));
         if (s) this.#reportLocation('page')
         else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
     }
     async prev() {
         const s = this.rtl ? this.#goRight() : this.#goLeft()
+        if (!s && this.atStart) this.dispatchEvent(new Event("reached-start"));
         if (s) this.#reportLocation('page')
         else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
     }
