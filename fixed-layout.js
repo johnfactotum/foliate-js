@@ -301,13 +301,13 @@ export class FixedLayout extends HTMLElement {
     }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
-        if (!s && this.atEnd) this.dispatchEvent(new CustomEvent("reached-end"));
+        if (!s && this.atEnd) this.dispatchEvent(new Event("reached-end"));
         if (s) this.#reportLocation('page')
         else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
     }
     async prev() {
         const s = this.rtl ? this.#goRight() : this.#goLeft()
-        if (!s && this.atStart) this.dispatchEvent(new CustomEvent("reached-start"));
+        if (!s && this.atStart) this.dispatchEvent(new Event("reached-start"));
         if (s) this.#reportLocation('page')
         else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
     }

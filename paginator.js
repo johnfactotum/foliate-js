@@ -1024,7 +1024,7 @@ export class Paginator extends HTMLElement {
             return true
         }
         if (this.atStart) {
-            this.dispatchEvent(new CustomEvent('reached-start'))
+            this.dispatchEvent(new Event('reached-start'))
             return
         }
         const page = this.page - 1
@@ -1038,7 +1038,7 @@ export class Paginator extends HTMLElement {
             return true
         }
         if (this.atEnd) {
-            this.dispatchEvent(new CustomEvent('reached-end'))
+            this.dispatchEvent(new Event('reached-end'))
             return
         }
         const page = this.page + 1
