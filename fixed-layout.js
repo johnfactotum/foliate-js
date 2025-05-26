@@ -137,7 +137,7 @@ export class FixedLayout extends HTMLElement {
                 width: `${width * iframeScale}px`,
                 height: `${height * iframeScale}px`,
                 transform: onZoom ? 'none' : `scale(${scale})`,
-                transformOrigin: 'top left',
+                transformOrigin: 'top ' + (getComputedStyle(iframe).direction === 'rtl' ? 'right' : 'left'),
                 display: blank ? 'none' : 'block',
             })
             Object.assign(element.style, {
