@@ -76,7 +76,7 @@ const fetchFile = async url => {
     return new File([await res.blob()], new URL(res.url).pathname)
 }
 
-export const makeBook = async file => {
+export const makeBook = async (file, smart) => {
     if (typeof file === 'string') file = await fetchFile(file)
     let book
     if (file.isDirectory) {
@@ -89,7 +89,7 @@ export const makeBook = async file => {
         const loader = await makeZipLoader(file)
         if (isCBZ(file)) {
             const { makeComicBook } = await import('./comic-book.js')
-            book = makeComicBook(loader, file)
+            book = makeComicBook(loader, file, smart)
         }
         else if (isFBZ(file)) {
             const { makeFB2 } = await import('./fb2.js')
@@ -211,6 +211,7 @@ const languageInfo = lang => {
 }
 
 export class View extends HTMLElement {
+    static observedAttributes = ['smart']
     #root = this.attachShadow({ mode: 'closed' })
     #sectionProgress
     #tocProgress
@@ -218,6 +219,7 @@ export class View extends HTMLElement {
     #searchResults = new Map()
     #cursorAutohider = new CursorAutohider(this, () =>
         this.hasAttribute('autohide-cursor'))
+    #smart = false
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -228,10 +230,17 @@ export class View extends HTMLElement {
             this.renderer.goTo(resolved)
         })
     }
+    attributeChangedCallback(name, _, value) {
+        switch (name) {
+            case 'smart':
+                this.#smart = true;
+                break;
+        }
+    }
     async open(book) {
         if (typeof book === 'string'
         || typeof book.arrayBuffer === 'function'
-        || book.isDirectory) book = await makeBook(book)
+        || book.isDirectory) book = await makeBook(book, this.#smart)
         this.book = book
         this.language = languageInfo(book.metadata?.language)
 
@@ -261,7 +270,7 @@ export class View extends HTMLElement {
         this.renderer.addEventListener('relocate', e => this.#onRelocate(e.detail))
         this.renderer.addEventListener('create-overlayer', e =>
             e.detail.attach(this.#createOverlayer(e.detail)))
-        this.renderer.open(book)
+        await this.renderer.open(book)
         this.#root.append(this.renderer)
 
         if (book.sections.some(section => section.mediaOverlay)) {

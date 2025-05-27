@@ -198,7 +198,7 @@ export class FixedLayout extends HTMLElement {
             return true
         }
     }
-    open(book) {
+    async open(book) {
         this.book = book
         const { rendition } = book
         this.spread = rendition?.spread
@@ -207,6 +207,20 @@ export class FixedLayout extends HTMLElement {
         const rtl = book.dir === 'rtl'
         const ltr = !rtl
         this.rtl = rtl
+
+        const promises = [];
+        book.sections.forEach((section) => {
+            if (!section.getDimensions) return;
+            const promise = section.getDimensions();
+            if (promise instanceof Promise) {
+                promises.push(promise);
+                promise.then((dimensions) => section.dimensions = dimensions);
+            } else if (typeof promise === "object") {
+                section.dimensions = promise;
+            }
+        });
+
+        await Promise.all(promises);
 
         if (rendition?.spread === 'none')
             this.#spreads = book.sections.map(section => ({ center: section }))
@@ -230,15 +244,21 @@ export class FixedLayout extends HTMLElement {
                 const spread = last.center || last.right || rtl && i ? newSpread() : last
                 spread.right = section
             }
-            else if (ltr) {
-                if (last.center || last.right) newSpread().left = section
-                else if (last.left || !i) last.right = section
-                else last.left = section
-            }
             else {
-                if (last.center || last.left) newSpread().right = section
-                else if (last.right || !i) last.left = section
-                else last.right = section
+                if (section.dimensions?.width > section.dimensions?.height * 1.05) {
+                    newSpread().center = section
+                } else {
+                    if (ltr) {
+                        if (last.center || last.right) newSpread().left = section
+                        else if (last.left || !i) last.right = section
+                        else last.left = section
+                    }
+                    else {
+                        if (last.center || last.left) newSpread().right = section
+                        else if (last.right || !i) last.left = section
+                        else last.right = section
+                    }
+                }
             }
             return arr
         }, [{}])

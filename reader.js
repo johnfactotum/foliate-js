@@ -105,6 +105,7 @@ class Reader {
     }
     async open(file) {
         this.view = document.createElement('foliate-view')
+        //this.view.setAttribute("smart", true);
         document.body.append(this.view)
         await this.view.open(file)
         this.view.addEventListener('load', this.#onLoad.bind(this))
