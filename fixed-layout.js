@@ -105,32 +105,35 @@ export class FixedLayout extends HTMLElement {
     #render(side = this.#side) {
         if (!side) return
         const left = this.#left ?? {}
-        const right = this.#center ?? this.#right
+        const right = this.#center ?? this.#right ?? {}
         const target = side === 'left' ? left : right
         const { width, height } = this.getBoundingClientRect()
         const portrait = this.spread !== 'both' && this.spread !== 'portrait'
             && height > width
         this.#portrait = portrait
-        const blankWidth = left.width ?? right.width
-        const blankHeight = left.height ?? right.height
+        const blankWidth = left.width ?? right.width ?? 0
+        const blankHeight = left.height ?? right.height ?? 0
 
         const scale = typeof this.#zoom === 'number' && !isNaN(this.#zoom)
             ? this.#zoom
-            : this.#zoom === 'fit-width' ? (portrait || this.#center
-                ? width / (target.width ?? blankWidth)
-                : width / ((left.width ?? blankWidth) + (right.width ?? blankWidth)))
-            : (portrait || this.#center
-                ? Math.min(
-                    width / (target.width ?? blankWidth),
-                    height / (target.height ?? blankHeight))
-                : Math.min(
-                    width / ((left.width ?? blankWidth) + (right.width ?? blankWidth)),
-                    height / Math.max(
-                        left.height ?? blankHeight,
-                        right.height ?? blankHeight)))
+            : (this.#zoom === 'fit-width'
+                ? (portrait || this.#center
+                    ? width / (target.width ?? blankWidth)
+                    : width / ((left.width ?? blankWidth) + (right.width ?? blankWidth)))
+                : (portrait || this.#center
+                    ? Math.min(
+                        width / (target.width ?? blankWidth),
+                        height / (target.height ?? blankHeight))
+                    : Math.min(
+                        width / ((left.width ?? blankWidth) + (right.width ?? blankWidth)),
+                        height / Math.max(
+                            left.height ?? blankHeight,
+                            right.height ?? blankHeight)))
+            ) || 1;
 
         const transform = frame => {
             let { element, iframe, width, height, blank, onZoom } = frame
+            if (!iframe) return;
             if (onZoom) onZoom({ doc: frame.iframe.contentDocument, scale })
             const iframeScale = onZoom ? scale : 1
             Object.assign(iframe.style, {
