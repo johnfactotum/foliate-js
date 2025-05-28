@@ -670,6 +670,7 @@ class MOBI6 {
     constructor(mobi) {
         this.mobi = mobi
     }
+    get type() { return 'mobi'; }
     async init() {
         // load all text records in an array
         let array = new Uint8Array()
@@ -940,6 +941,7 @@ class KF8 {
     constructor(mobi) {
         this.mobi = mobi
     }
+    get type() { return 'kf8'; }
     async init() {
         const loadRecord = this.mobi.loadRecord.bind(this.mobi)
         const { kf8 } = this.mobi.headers
