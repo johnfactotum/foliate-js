@@ -73,6 +73,7 @@ export class FixedLayout extends HTMLElement {
         const src = srcOptionIsString ? srcOption : srcOption?.src
         const onZoom = srcOptionIsString ? null : srcOption?.onZoom
         const element = document.createElement('div')
+        element.setAttribute("dir", "ltr")
         const iframe = document.createElement('iframe')
         element.append(iframe)
         Object.assign(iframe.style, {
@@ -137,7 +138,7 @@ export class FixedLayout extends HTMLElement {
                 width: `${width * iframeScale}px`,
                 height: `${height * iframeScale}px`,
                 transform: onZoom ? 'none' : `scale(${scale})`,
-                transformOrigin: 'top ' + (getComputedStyle(iframe).direction === 'rtl' ? 'right' : 'left'),
+                transformOrigin: 'top left',
                 display: blank ? 'none' : 'block',
             })
             Object.assign(element.style, {
