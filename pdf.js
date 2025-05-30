@@ -119,7 +119,6 @@ export const makePDF = async file => {
     }).promise
 
     const book = { rendition: { layout: 'pre-paginated' } }
-    Object.defineProperty(book, "type", {get: () => 'pdf'})
 
     const { metadata, info } = await pdf.getMetadata() ?? {}
     // TODO: for better results, parse `metadata.getRaw()`

@@ -930,7 +930,6 @@ export class EPUB {
         this.getSize = getSize
         this.#encryption = new Encryption(deobfuscators(sha1))
     }
-    get type() { return 'epub'; }
     async #loadXML(uri) {
         const str = await this.loadText(uri)
         if (!str) return null

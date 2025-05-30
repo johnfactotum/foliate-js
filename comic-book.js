@@ -24,7 +24,6 @@ export const makeComicBook = ({ entries, loadBlob, getSize }, file) => {
     if (!files.length) throw new Error('No supported image files in archive')
 
     const book = {}
-    Object.defineProperty(book, "type", {get: () => 'comic-book'})
     book.getCover = () => loadBlob(files[0])
     book.metadata = { title: file.name }
     book.sections = files.map(name => ({
