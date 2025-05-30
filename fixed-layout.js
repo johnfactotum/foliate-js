@@ -179,18 +179,18 @@ export class FixedLayout extends HTMLElement {
     #goLeft() {
         if (this.#center || this.#left?.blank) return
         if (this.#portrait && this.#left?.element?.style?.display === 'none') {
-            this.#right.element.style.display = 'none'
-            this.#left.element.style.display = 'block'
             this.#side = 'left'
+            this.#render()
+            this.#reportLocation('page')
             return true
         }
     }
     #goRight() {
         if (this.#center || this.#right?.blank) return
         if (this.#portrait && this.#right?.element?.style?.display === 'none') {
-            this.#left.element.style.display = 'none'
-            this.#right.element.style.display = 'block'
             this.#side = 'right'
+            this.#render()
+            this.#reportLocation('page')
             return true
         }
     }
@@ -295,13 +295,11 @@ export class FixedLayout extends HTMLElement {
     }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
-        if (s) this.#reportLocation('page')
-        else return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
+        if (!s) return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
     }
     async prev() {
         const s = this.rtl ? this.#goRight() : this.#goLeft()
-        if (s) this.#reportLocation('page')
-        else return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
+        if (!s) return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
     }
     getContents() {
         return Array.from(this.#root.querySelectorAll('iframe'), frame => ({
