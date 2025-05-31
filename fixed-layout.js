@@ -73,7 +73,7 @@ export class FixedLayout extends HTMLElement {
         const src = srcOptionIsString ? srcOption : srcOption?.src
         const onZoom = srcOptionIsString ? null : srcOption?.onZoom
         const element = document.createElement('div')
-        element.setAttribute("dir", "ltr")
+        element.setAttribute('dir', 'ltr')
         const iframe = document.createElement('iframe')
         element.append(iframe)
         Object.assign(iframe.style, {
@@ -130,11 +130,11 @@ export class FixedLayout extends HTMLElement {
                         height / Math.max(
                             left.height ?? blankHeight,
                             right.height ?? blankHeight)))
-            ) || 1;
+            ) || 1
 
         const transform = frame => {
             let { element, iframe, width, height, blank, onZoom } = frame
-            if (!iframe) return;
+            if (!iframe) return
             if (onZoom) onZoom({ doc: frame.iframe.contentDocument, scale })
             const iframeScale = onZoom ? scale : 1
             Object.assign(iframe.style, {
