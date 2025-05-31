@@ -73,6 +73,7 @@ export class FixedLayout extends HTMLElement {
         const src = srcOptionIsString ? srcOption : srcOption?.src
         const onZoom = srcOptionIsString ? null : srcOption?.onZoom
         const element = document.createElement('div')
+        element.setAttribute("dir", "ltr")
         const iframe = document.createElement('iframe')
         element.append(iframe)
         Object.assign(iframe.style, {
