@@ -76,7 +76,7 @@ const fetchFile = async url => {
     return new File([await res.blob()], new URL(res.url).pathname)
 }
 
-export const makeBook = async file => {
+export const makeBook = async (file, options) => {
     if (typeof file === 'string') file = await fetchFile(file)
     let book
     if (file.isDirectory) {
@@ -89,7 +89,7 @@ export const makeBook = async file => {
         const loader = await makeZipLoader(file)
         if (isCBZ(file)) {
             const { makeComicBook } = await import('./comic-book.js')
-            book = makeComicBook(loader, file)
+            book = makeComicBook(loader, file, options?.smartSpreads)
         }
         else if (isFBZ(file)) {
             const { makeFB2 } = await import('./fb2.js')
@@ -228,10 +228,11 @@ export class View extends HTMLElement {
             this.renderer.goTo(resolved)
         })
     }
-    async open(book) {
+    async open(book, options) {
+        options = Object.assign({fileToBook: makeBook}, options || {})
         if (typeof book === 'string'
         || typeof book.arrayBuffer === 'function'
-        || book.isDirectory) book = await makeBook(book)
+        || book.isDirectory) book = await options.fileToBook(book, options)
         this.book = book
         this.language = languageInfo(book.metadata?.language)
 
