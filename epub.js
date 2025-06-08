@@ -645,6 +645,7 @@ class Resources {
                 item.properties = item.properties?.split(/\s/)
                 return item
             })
+        this.manifestById = new Map(this.manifest.map(item => [item.id, item]))
         this.spine = $$itemref
             .map(getAttributes('idref', 'id', 'linear', 'properties'))
             .map(item => (item.properties = item.properties?.split(/\s/), item))
@@ -675,7 +676,7 @@ class Resources {
         this.cfis = CFI.fromElements($$itemref)
     }
     getItemByID(id) {
-        return this.manifest.find(item => item.id === id)
+        return this.manifestById.get(id)
     }
     getItemByHref(href) {
         return this.manifest.find(item => item.href === href)
