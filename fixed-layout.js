@@ -18,7 +18,7 @@ const getViewport = (doc, viewport) => {
 
     // fallback to book's viewport
     if (typeof viewport === 'string') return parseViewport(viewport)
-    if (viewport) return viewport
+    if (viewport?.width && viewport.height) return viewport
 
     // if no viewport (possibly with image directly in spine), get image size
     const img = doc.querySelector('img')
