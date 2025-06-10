@@ -925,6 +925,7 @@ const getPageSpread = properties => {
 class KF8 {
     parser = new DOMParser()
     serializer = new XMLSerializer()
+    transformTarget = new EventTarget()
     #cache = new Map()
     #fragmentOffsets = new Map()
     #fragmentSelectors = new Map()
@@ -1071,8 +1072,13 @@ class KF8 {
             : await this.mobi.loadResource(id - 1)
         const result = [MIME.XHTML, MIME.HTML, MIME.CSS, MIME.SVG].includes(type)
             ? await this.replaceResources(this.mobi.decode(raw)) : raw
-        const doc = type === MIME.SVG ? this.parser.parseFromString(result, type) : null
-        return [new Blob([result], { type }),
+        const detail = { data: result, type }
+        const event = new CustomEvent('data', { detail })
+        this.transformTarget.dispatchEvent(event)
+        const newData = await event.detail.data
+        const newType = await event.detail.type
+        const doc = newType === MIME.SVG ? this.parser.parseFromString(newData, newType) : null
+        return [new Blob([newData], { newType }),
             // SVG wrappers need to be inlined
             // as browsers don't allow external resources when loading SVG as an image
             doc?.getElementsByTagNameNS('http://www.w3.org/2000/svg', 'image')?.length
