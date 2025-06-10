@@ -27,9 +27,9 @@ const acceptNode = node => {
     return NodeFilter.FILTER_ACCEPT
 }
 
-export const textWalker = function* (x, func) {
+export const textWalker = function* (x, func, filterFunc) {
     const root = x.commonAncestorContainer ?? x.body ?? x
-    const walker = document.createTreeWalker(root, filter, { acceptNode })
+    const walker = document.createTreeWalker(root, filter, { acceptNode: filterFunc || acceptNode })
     const walk = x.commonAncestorContainer ? walkRange : walkDocument
     const nodes = walk(x, walker)
     const strs = nodes.map(node => node.nodeValue)
