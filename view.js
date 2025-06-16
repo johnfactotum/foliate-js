@@ -577,12 +577,12 @@ export class View extends HTMLElement {
             for (const item of list) this.deleteAnnotation(item)
         this.#searchResults.clear()
     }
-    async initTTS(granularity = 'word') {
+    async initTTS(granularity = 'word', highlight) {
         const doc = this.renderer.getContents()[0].doc
         if (this.tts && this.tts.doc === doc) return
         const { TTS } = await import('./tts.js')
-        this.tts = new TTS(doc, textWalker, range =>
-            this.renderer.scrollToAnchor(range, true), granularity)
+        this.tts = new TTS(doc, textWalker, highlight || (range =>
+            this.renderer.scrollToAnchor(range, true)), granularity)
     }
     startMediaOverlay() {
         const { index } = this.renderer.getContents()[0]
