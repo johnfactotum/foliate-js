@@ -19,6 +19,10 @@ const easeOutQuad = x => 1 - (1 - x) * (1 - x)
 const animate = (a, b, duration, ease, render) => new Promise(resolve => {
     let start
     const step = now => {
+        if (document.hidden) {
+            render(lerp(a, b, 1))
+            return resolve()
+        }
         start ??= now
         const fraction = Math.min(1, (now - start) / duration)
         render(lerp(a, b, ease(fraction)))
