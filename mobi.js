@@ -1142,7 +1142,7 @@ class KF8 {
 
             const offsets = this.#fragmentOffsets.get(frag.index)
             if (offsets) for (const offset of offsets) {
-                const str = this.mobi.decode(fragRaw).slice(offset)
+                const str = this.mobi.decode(fragRaw.slice(offset))
                 const selector = getFragmentSelector(str)
                 this.#setFragmentSelector(frag.index, offset, selector)
             }
