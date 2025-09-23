@@ -1212,7 +1212,7 @@ class KF8 {
         const frag = frags.find(frag => frag.index === fid)
         const offset = skel.offset + skel.length + frag.offset
         const fragRaw = await this.loadRaw(offset, offset + frag.length)
-        const str = this.mobi.decode(fragRaw).slice(off)
+        const str = this.mobi.decode(fragRaw.slice(off))
         const selector = getFragmentSelector(str)
         this.#setFragmentSelector(fid, off, selector)
         const anchor = doc => doc.querySelector(selector)
