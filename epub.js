@@ -848,8 +848,8 @@ class Loader {
             for (const el of doc.querySelectorAll('[srcset]'))
                 el.setAttribute('srcset', await replaceSeries(el.getAttribute('srcset'),
                     /(\s*)(.+?)\s*((?:\s[\d.]+[wx])+\s*(?:,|$)|,\s+|$)/g,
-                (_, p1, p2, p3) => this.loadHref(p2, href, parents)
-                    .then(p2 => `${p1}${p2}${p3}`)))
+                    (_, p1, p2, p3) => this.loadHref(p2, href, parents)
+                        .then(p2 => `${p1}${p2}${p3}`)))
             // replace inline styles
             for (const el of doc.querySelectorAll('style'))
                 if (el.textContent) el.textContent =
