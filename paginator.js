@@ -360,6 +360,7 @@ class View {
         }
     }
     expand() {
+        if (!this.document) return;
         const { documentElement } = this.document
         if (this.#column) {
             const side = this.#vertical ? 'height' : 'width'
