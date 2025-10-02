@@ -152,6 +152,50 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
 }
 
 {
+    // regression: selections inside FILTER_SKIP wrappers must preserve offsets
+    // https://github.com/johnfactotum/foliate-js/issues/100
+    const page = XHTML(`<html xmlns="http://www.w3.org/1999/xhtml">
+    <head></head>
+    <body>
+        <p id="test-skip-1">Hello, World</p>
+        <p id="test-skip-2"><span class="SKIP">H</span>e<span class="SKIP">ll</span>o, World</p>
+    </body>
+    </html>`)
+    const filter = node => node.nodeType === 1 && node.classList?.contains('SKIP')
+        ? NodeFilter.FILTER_SKIP
+        : NodeFilter.FILTER_ACCEPT
+    
+    // cfi1
+    const para1 = page.getElementById('test-skip-1')
+    const text1 = para1.firstChild
+    const range1 = page.createRange()
+    range1.setStart(text1, 3)
+    range1.setEnd(text1, 8)
+    const cfi1 = CFI.fromRange(range1, filter)
+
+    const expected1 = 'epubcfi(/4/2[test-skip-1],/1:3,/1:8)'
+    console.assert(cfi1 === expected1, `expected ${expected1}, got ${cfi1}`)
+    
+
+    // cfi2
+    const para2 = page.getElementById('test-skip-2')
+    const skips = para2.querySelectorAll('.SKIP')
+    const tail2 = para2.lastChild
+    const range2 = page.createRange()
+    range2.setStart(skips[1].firstChild, 1)
+    range2.setEnd(tail2, 4)
+    const cfi2 = CFI.fromRange(range2, filter)
+
+    const expected2 = 'epubcfi(/4/4[test-skip-2],/1:3,/1:8)'
+    console.assert(cfi2 === expected2, `expected ${expected2}, got ${cfi2}`)
+
+    const rebuilt = CFI.toRange(page, CFI.parse('/4/4[test-skip-2],/1:3,/1:8'), filter)
+    console.assert(rebuilt.toString() === 'lo, W', `expected lo, W, got ${rebuilt}`)
+    const roundtrip = CFI.fromRange(rebuilt, filter)
+    console.assert(roundtrip === expected2, `expected ${expected2}, got ${roundtrip}`)
+}
+
+{
     // special characters in ID assertions
     const opf = XML(`<?xml version="1.0"?>
 <package version="2.0" 
