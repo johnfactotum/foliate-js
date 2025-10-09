@@ -2,6 +2,7 @@ import * as CFI from './epubcfi.js'
 import { TOCProgress, SectionProgress } from './progress.js'
 import { Overlayer } from './overlayer.js'
 import { textWalker } from './text-walker.js'
+import { FootnoteHandler } from './footnotes.js'
 
 const SEARCH_PREFIX = 'foliate-search:'
 
@@ -218,6 +219,8 @@ export class View extends HTMLElement {
     #searchResults = new Map()
     #cursorAutohider = new CursorAutohider(this, () =>
         this.hasAttribute('autohide-cursor'))
+    #footnoteHandler = new FootnoteHandler()
+    #pendingFootnoteView = null
     isFixedLayout = false
     lastLocation
     history = new History()
@@ -227,7 +230,297 @@ export class View extends HTMLElement {
             const resolved = this.resolveNavigation(detail.state)
             this.renderer.goTo(resolved)
         })
+        
+        // Set up footnote handler to show modal instead of creating new view
+        this.#footnoteHandler.addEventListener('render', ({ detail }) => {
+            this.#showFootnoteModal(detail)
+        })
+        
+        // Also listen for the before-render event to get the content earlier
+        this.#footnoteHandler.addEventListener('before-render', ({ detail }) => {
+            this.#prepareFootnoteModal(detail)
+        })
+        
+        // Test modal functionality
+        setTimeout(() => {
+            const modal = document.getElementById('footnote-modal')
+            if (modal) {
+                // Add a test keyboard shortcut to manually show modal
+                document.addEventListener('keydown', (e) => {
+                    if (e.key === 'F' && e.ctrlKey) {
+                        modal.showModal()
+                    }
+                })
+            }
+        }, 1000)
     }
+    
+    #prepareFootnoteModal({ view }) {
+        // Store reference to the view for later use
+        this.#pendingFootnoteView = view
+    }
+    
+    #showFootnoteModal({ view, href, type, hidden, target }) {
+        const modal = document.getElementById('footnote-modal')
+        const content = document.getElementById('footnote-content')
+        const title = document.getElementById('footnote-title')
+        
+        if (!modal || !content || !title) {
+            view.remove()
+            return
+        }
+        
+        // Simple approach: just show the modal with basic content
+        // The footnote handler has already extracted the content
+        content.innerHTML = '<p>Footnote content is being loaded...</p>'
+        
+        // Update title based on footnote type
+        title.textContent = type === 'footnote' ? 'Footnote' : 
+                          type === 'endnote' ? 'Endnote' : 'Note'
+        
+        // Show the modal
+        modal.showModal()
+        
+        // Set up close button
+        const closeBtn = document.getElementById('footnote-close')
+        if (closeBtn) {
+            closeBtn.onclick = () => modal.close()
+        }
+        
+        // Close on backdrop click
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.close()
+            }
+        }
+        
+        // Close on Escape key
+        modal.onkeydown = (e) => {
+            if (e.key === 'Escape') {
+                modal.close()
+            }
+        }
+        
+        // Try to extract content after a short delay
+        setTimeout(() => {
+            try {
+                // Look for content in the view's shadow root
+                const footnoteDoc = view.shadowRoot?.querySelector('foliate-paginator, foliate-fxl')
+                if (footnoteDoc) {
+                    // Try to find iframe or embed element
+                    const iframe = footnoteDoc.shadowRoot?.querySelector('iframe')
+                    if (iframe && iframe.contentDocument) {
+                        const bodyContent = iframe.contentDocument.body.cloneNode(true)
+                        if (bodyContent.children.length > 0) {
+                            content.innerHTML = ''
+                            content.appendChild(bodyContent)
+                        }
+                    }
+                }
+            } catch (error) {
+                content.innerHTML = '<p>Error loading footnote content.</p>'
+            } finally {
+                // Clean up the temporary view
+                view.remove()
+            }
+        }, 200)
+    }
+    
+    #showSimpleFootnoteModal(href, text) {
+        const modal = document.getElementById('footnote-modal')
+        const content = document.getElementById('footnote-content')
+        const title = document.getElementById('footnote-title')
+        
+        if (!modal || !content || !title) {
+            return
+        }
+        
+        title.textContent = 'Footnote'
+        content.innerHTML = `
+            <p><strong>Footnote ${text}</strong></p>
+            <p>Reference: ${href}</p>
+            <p><em>Footnote content could not be loaded. This may be an external reference or the footnote may not be available in this document.</em></p>
+        `
+        
+        modal.showModal()
+        
+        const closeBtn = document.getElementById('footnote-close')
+        if (closeBtn) {
+            closeBtn.onclick = () => modal.close()
+        }
+        
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.close()
+            }
+        }
+        
+        modal.onkeydown = (e) => {
+            if (e.key === 'Escape') {
+                modal.close()
+            }
+        }
+    }
+    
+    async #tryDirectFootnoteNavigation(href, text) {
+        try {
+            // Check if this is a cross-file reference (contains .xhtml or .html)
+            if (href.includes('.xhtml') || href.includes('.html')) {
+                await this.#loadCrossFileFootnote(href, text)
+                return
+            }
+            
+            // Try to navigate to the footnote using the main view
+            const result = await this.goTo(href)
+            
+            if (result) {
+                // Get the current content
+                const contents = this.renderer.getContents()
+                const currentContent = contents.find(c => c.index === result.index)
+                
+                if (currentContent && currentContent.doc) {
+                    // Look for the footnote element
+                    const footnoteElement = currentContent.doc.querySelector(href.replace(/^#/, ''))
+                    if (footnoteElement) {
+                        this.#showFootnoteContent(footnoteElement, text)
+                        return
+                    }
+                }
+            }
+            
+            // If direct navigation didn't work, show fallback
+            this.#showSimpleFootnoteModal(href, text)
+            
+        } catch (error) {
+            this.#showSimpleFootnoteModal(href, text)
+        }
+    }
+    
+    async #loadCrossFileFootnote(href, text) {
+        try {
+            // Extract filename and anchor from href
+            const [filename, anchor] = href.split('#')
+            
+            // Find the section that contains this file
+            let section = this.book.sections.find(s => s && s.id === filename)
+            
+            if (!section) {
+                section = this.book.sections.find(s => {
+                    if (!s || !s.id) return false
+                    return s.id.includes(filename)
+                })
+            }
+            if (!section) {
+                section = this.book.sections.find(s => {
+                    if (!s || !s.id) return false
+                    return s.id.endsWith(filename)
+                })
+            }
+            if (!section) {
+                section = this.book.sections.find(s => {
+                    if (!s || !s.id) return false
+                    const lastPart = s.id.split('/').pop()
+                    return lastPart && filename.includes(lastPart)
+                })
+            }
+            
+            if (!section) {
+                this.#showSimpleFootnoteModal(href, text)
+                return
+            }
+            
+            // Try to load the section content directly
+            try {
+                const doc = await section.createDocument()
+                
+                if (doc) {
+                    const footnoteElement = doc.querySelector(`#${anchor}`)
+                    
+                    if (footnoteElement) {
+                        this.#showFootnoteContent(footnoteElement, text)
+                        return
+                    } else {
+                        // Try alternative selectors
+                        const altSelectors = [
+                            `[id="${anchor}"]`,
+                            `[name="${anchor}"]`,
+                            `.${anchor}`,
+                            `a[name="${anchor}"]`
+                        ]
+                        
+                        for (const selector of altSelectors) {
+                            const element = doc.querySelector(selector)
+                            if (element) {
+                                this.#showFootnoteContent(element, text)
+                                return
+                            }
+                        }
+                    }
+                }
+                
+                this.#showSimpleFootnoteModal(href, text)
+                
+            } catch (docError) {
+                this.#showSimpleFootnoteModal(href, text)
+            }
+            
+        } catch (error) {
+            this.#showSimpleFootnoteModal(href, text)
+        }
+    }
+    
+    #showFootnoteContent(element, text) {
+        const modal = document.getElementById('footnote-modal')
+        const content = document.getElementById('footnote-content')
+        const title = document.getElementById('footnote-title')
+        
+        if (!modal || !content || !title) {
+            return
+        }
+        
+        title.textContent = `Footnote ${text}`
+        
+        // Clone the footnote content
+        const clonedContent = element.cloneNode(true)
+        
+        // Remove all backlinks from the cloned content
+        const backlinks = clonedContent.querySelectorAll('[role="doc-backlink"]')
+        backlinks.forEach(backlink => backlink.remove())
+        
+        // Remove all links with relative URLs (same document links)
+        const links = clonedContent.querySelectorAll('a[href]')
+        links.forEach(link => {
+            const href = link.getAttribute('href')
+            // Remove links that start with # (same document anchors) or are relative paths
+            if (href && (href.startsWith('#') || !href.includes('://'))) {
+                // Remove the entire link element
+                link.remove()
+            }
+        })
+        
+        content.innerHTML = ''
+        content.appendChild(clonedContent)
+        
+        modal.showModal()
+        
+        const closeBtn = document.getElementById('footnote-close')
+        if (closeBtn) {
+            closeBtn.onclick = () => modal.close()
+        }
+        
+        modal.onclick = (e) => {
+            if (e.target === modal) {
+                modal.close()
+            }
+        }
+        
+        modal.onkeydown = (e) => {
+            if (e.key === 'Escape') {
+                modal.close()
+            }
+        }
+    }
+    
     async open(book) {
         if (typeof book === 'string'
         || typeof book.arrayBuffer === 'function'
@@ -351,15 +644,59 @@ export class View extends HTMLElement {
         doc.addEventListener('click', e => {
             const a = e.target.closest('a[href]')
             if (!a) return
+            
+            // Try footnote handler first
+            const href = a.getAttribute('href')
+            
+            // Check if this looks like a footnote link first
+            const isLikelyFootnote = href && (
+                href.includes('#') || 
+                href.startsWith('#') ||
+                href.includes('footnote') ||
+                href.includes('note') ||
+                a.textContent.match(/^\d+$/) // Superscript numbers
+            )
+            
+            
+            if (isLikelyFootnote) {
+                // Try to resolve the href relative to the current section first
+                const resolvedHref = section?.resolveHref?.(href) ?? href
+                // Check if this is a cross-file reference - skip footnote handler entirely
+                if (href.includes('.xhtml') || href.includes('.html')) {
+                    e.preventDefault()
+                    this.#tryDirectFootnoteNavigation(resolvedHref, a.textContent)
+                    return
+                }
+                
+                // For same-file footnotes, try the footnote handler
+                const resolvedFootnoteEvent = {
+                    detail: { a, href: resolvedHref },
+                    preventDefault: () => e.preventDefault()
+                }
+                
+                const footnoteResult = this.#footnoteHandler.handle(book, resolvedFootnoteEvent)
+                if (footnoteResult) {
+                    footnoteResult.catch(e => {
+                        // Try alternative approach: direct navigation
+                        this.#tryDirectFootnoteNavigation(resolvedHref, a.textContent)
+                    })
+                    return
+                } else {
+                    // If footnote handler doesn't return a promise, try direct navigation
+                    this.#tryDirectFootnoteNavigation(resolvedHref, a.textContent)
+                    return
+                }
+            }
+            
             e.preventDefault()
             const href_ = a.getAttribute('href')
-            const href = section?.resolveHref?.(href_) ?? href_
-            if (book?.isExternal?.(href))
-                Promise.resolve(this.#emit('external-link', { a, href }, true))
-                    .then(x => x ? globalThis.open(href, '_blank') : null)
+            const resolvedHref = section?.resolveHref?.(href_) ?? href_
+            if (book?.isExternal?.(resolvedHref))
+                Promise.resolve(this.#emit('external-link', { a, href: resolvedHref }, true))
+                    .then(x => x ? globalThis.open(resolvedHref, '_blank') : null)
                     .catch(e => console.error(e))
-            else Promise.resolve(this.#emit('link', { a, href }, true))
-                .then(x => x ? this.goTo(href) : null)
+            else Promise.resolve(this.#emit('link', { a, href: resolvedHref }, true))
+                .then(x => x ? this.goTo(resolvedHref) : null)
                 .catch(e => console.error(e))
         })
     }
