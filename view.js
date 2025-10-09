@@ -608,7 +608,8 @@ export class View extends HTMLElement {
                 href.includes('footnote') ||
                 href.includes('note') ||
                 a.textContent.match(/^\d+$/) || // Superscript numbers
-                a.getAttributeNS('http://www.idpf.org/2007/ops', 'type') === 'noteref' // EPUB noteref
+                a.getAttributeNS('http://www.idpf.org/2007/ops', 'type') === 'noteref' || // EPUB noteref
+                a.querySelector('sup') // Links containing superscript elements
             )
             
             if (isLikelyFootnote) {
