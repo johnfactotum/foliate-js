@@ -13,6 +13,10 @@
         :root {
             --active-bg: rgba(255, 255, 255, .1);
         }
+        .modal-header {
+            border-bottom-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.02);
+        }
     }
 }
 html {
@@ -313,13 +317,6 @@ dialog#footnote-modal {
     padding: 16px 20px;
     border-bottom: 1px solid rgba(0, 0, 0, 0.1);
     background: rgba(0, 0, 0, 0.02);
-}
-
-@media (prefers-color-scheme: dark) {
-    .modal-header {
-        border-bottom-color: rgba(255, 255, 255, 0.1);
-        background: rgba(255, 255, 255, 0.02);
-    }
 }
 
 .modal-header h3 {

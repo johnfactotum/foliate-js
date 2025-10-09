@@ -609,9 +609,9 @@ export class View extends HTMLElement {
                 href.startsWith('#') ||
                 href.includes('footnote') ||
                 href.includes('note') ||
-                a.textContent.match(/^\d+$/) // Superscript numbers
+                a.textContent.match(/^\d+$/) || // Superscript numbers
+                a.getAttributeNS('http://www.idpf.org/2007/ops', 'type') === 'noteref' // EPUB noteref
             )
-            
             
             if (isLikelyFootnote) {
                 // Try to resolve the href relative to the current section first
@@ -631,16 +631,11 @@ export class View extends HTMLElement {
                 
                 const footnoteResult = this.#footnoteHandler.handle(book, resolvedFootnoteEvent)
                 if (footnoteResult) {
-                    footnoteResult.catch(e => {
-                        // Try alternative approach: direct navigation
-                        this.#tryDirectFootnoteNavigation(resolvedHref, a.textContent)
-                    })
-                    return
+                    footnoteResult.catch(() => this.#tryDirectFootnoteNavigation(resolvedHref, a.textContent))
                 } else {
-                    // If footnote handler doesn't return a promise, try direct navigation
                     this.#tryDirectFootnoteNavigation(resolvedHref, a.textContent)
-                    return
                 }
+                return
             }
             
             e.preventDefault()
