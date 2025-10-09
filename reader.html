@@ -262,6 +262,7 @@ body {
     transform: translate(-50%, -50%) !important;
     width: min(90vw, 600px);
     max-height: 80vh;
+    margin: 0 !important;
     border: none;
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -269,26 +270,7 @@ body {
     color: CanvasText;
     padding: 0;
     overflow: hidden;
-    margin: 0 !important;
-    inset: auto !important;
     z-index: 1000;
-}
-
-/* Override any default dialog positioning */
-#footnote-modal[open] {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-}
-
-/* Additional fallback for dialog positioning issues */
-dialog#footnote-modal {
-    position: fixed !important;
-    top: 50% !important;
-    left: 50% !important;
-    transform: translate(-50%, -50%) !important;
-    margin: 0 !important;
 }
 
 #footnote-modal::backdrop {
@@ -296,18 +278,12 @@ dialog#footnote-modal {
     backdrop-filter: blur(2px);
 }
 
-/* Ensure modal is properly centered on all screen sizes */
 @media (max-width: 768px) {
-    #footnote-modal {
-        width: 95vw;
-        max-height: 85vh;
-    }
+    #footnote-modal { width: 95vw; max-height: 85vh; }
 }
 
 @media (max-height: 600px) {
-    #footnote-modal {
-        max-height: 90vh;
-    }
+    #footnote-modal { max-height: 90vh; }
 }
 
 .modal-header {
