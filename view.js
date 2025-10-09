@@ -605,8 +605,6 @@ export class View extends HTMLElement {
             
             // Check if this looks like a footnote link first
             const isLikelyFootnote = href && (
-                href.includes('#') || 
-                href.startsWith('#') ||
                 href.includes('footnote') ||
                 href.includes('note') ||
                 a.textContent.match(/^\d+$/) || // Superscript numbers
