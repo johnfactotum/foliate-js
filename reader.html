@@ -357,7 +357,7 @@ body {
     </div>
 </div>
 <div id="dimming-overlay" aria-hidden="true"></div>
-<dialog id="footnote-modal" aria-labelledby="footnote-title">
+<dialog id="footnote-modal" aria-labelledby="footnote-title" data-error-message="<p><em>Footnote content could not be loaded. This may be an external reference or the footnote may not be available in this document.</em></p>">
     <div class="modal-header">
         <h3 id="footnote-title">Footnote</h3>
         <button id="footnote-close" aria-label="Close footnote" type="button">
@@ -369,7 +369,6 @@ body {
     </div>
     <div class="modal-content" id="footnote-content" tabindex="-1">
         <!-- Footnote content will replace this paragraph is loading is successful -->
-        <p><em>Footnote content could not be loaded. This may be an external reference or the footnote may not be available in this document.</em></p>
     </div>
 </dialog>
 <div id="side-bar">

@@ -348,7 +348,7 @@ export class View extends HTMLElement {
                         }
                     }
                 } catch (error) {
-                    content.innerHTML = '<p>Error loading footnote content.</p>'
+                    content.innerHTML = modal.dataset.errorMessage || '<p>Error loading footnote content.</p>'
                 } finally {
                     // Clean up the temporary view
                     options.view.remove()
