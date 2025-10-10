@@ -251,24 +251,13 @@ export class View extends HTMLElement {
     #showFootnoteModal(options = {}) {
         const modal = document.getElementById('footnote-modal')
         const content = document.getElementById('footnote-content')
-        const title = document.getElementById('footnote-title')
         
-        if (!modal || !content || !title) {
+        if (!modal || !content) {
             // Clean up view if provided
             if (options.view) {
                 options.view.remove()
             }
             return
-        }
-        
-        // Determine title based on type or text
-        if (options.type) {
-            title.textContent = options.type === 'footnote' ? 'Footnote' : 
-                              options.type === 'endnote' ? 'Endnote' : 'Note'
-        } else if (options.text) {
-            title.textContent = `Footnote ${options.text}`
-        } else {
-            title.textContent = 'Footnote'
         }
         
         // Handle different content types
@@ -296,15 +285,8 @@ export class View extends HTMLElement {
         } else if (options.htmlContent) {
             // Case 2: Display provided HTML content
             content.innerHTML = options.htmlContent
-        } else if (options.href && options.text) {
-            // Case 3: Show simple fallback message
-            content.innerHTML = `
-                <p><strong>Footnote ${options.text}</strong></p>
-                <p>Reference: ${options.href}</p>
-                <p><em>Footnote content could not be loaded. This may be an external reference or the footnote may not be available in this document.</em></p>
-            `
-        } else {
-            // Case 4: Loading state (for complex footnote extraction)
+        } else if (!options.href || !options.text) {
+            // Case 3: Loading state (for complex footnote extraction)
             content.innerHTML = '<p>Footnote content is being loaded...</p>'
         }
         
@@ -318,6 +300,9 @@ export class View extends HTMLElement {
             modal.style.left = '50%'
             modal.style.transform = 'translate(-50%, -50%)'
             modal.style.margin = '0'
+
+            // Prevent close button from being focused, focus content instead
+            content.focus()
         }, 0)
         
         // Set up close button

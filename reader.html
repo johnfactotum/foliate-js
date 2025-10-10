@@ -326,6 +326,7 @@ body {
     max-height: calc(80vh - 80px);
     overflow-y: auto;
     line-height: 1.6;
+    outline: none;
 }
 
 .modal-content p {
@@ -366,8 +367,9 @@ body {
             </svg>
         </button>
     </div>
-    <div class="modal-content" id="footnote-content">
-        <!-- Footnote content will be inserted here -->
+    <div class="modal-content" id="footnote-content" tabindex="-1">
+        <!-- Footnote content will replace this paragraph is loading is successful -->
+        <p><em>Footnote content could not be loaded. This may be an external reference or the footnote may not be available in this document.</em></p>
     </div>
 </dialog>
 <div id="side-bar">
