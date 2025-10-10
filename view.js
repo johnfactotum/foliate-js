@@ -290,6 +290,31 @@ export class View extends HTMLElement {
             content.innerHTML = '<p>Footnote content is being loaded...</p>'
         }
         
+        // Set up event handlers only once if not already set
+        if (!modal.dataset.handlersInitialized) {
+            // Set up close button
+            const closeBtn = document.getElementById('footnote-close')
+            if (closeBtn) {
+                closeBtn.onclick = () => modal.close()
+            }
+            
+            // Close on backdrop click
+            modal.onclick = (e) => {
+                if (e.target === modal) {
+                    modal.close()
+                }
+            }
+            
+            // Close on Escape key
+            modal.onkeydown = (e) => {
+                if (e.key === 'Escape') {
+                    modal.close()
+                }
+            }
+            
+            modal.dataset.handlersInitialized = 'true'
+        }
+        
         // Show the modal
         modal.showModal()
         
@@ -304,26 +329,6 @@ export class View extends HTMLElement {
             // Prevent close button from being focused, focus content instead
             content.focus()
         }, 0)
-        
-        // Set up close button
-        const closeBtn = document.getElementById('footnote-close')
-        if (closeBtn) {
-            closeBtn.onclick = () => modal.close()
-        }
-        
-        // Close on backdrop click
-        modal.onclick = (e) => {
-            if (e.target === modal) {
-                modal.close()
-            }
-        }
-        
-        // Close on Escape key
-        modal.onkeydown = (e) => {
-            if (e.key === 'Escape') {
-                modal.close()
-            }
-        }
         
         // If we have a view to extract content from, do it asynchronously
         if (options.view && !options.element && !options.htmlContent) {
