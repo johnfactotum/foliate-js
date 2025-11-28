@@ -19,8 +19,32 @@ export const makeComicBook = ({ entries, loadBlob, getSize }, file) => {
     const exts = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg', '.jxl', '.avif']
     const files = entries
         .map(entry => entry.filename)
-        .filter(name => exts.some(ext => name.endsWith(ext)))
-        .sort()
+        .filter(name => exts.some(ext => name.toLowerCase().endsWith(ext)))
+        // sort by leading numeric page number if any, else lexically (natural sorting)
+        .sort((a, b) => {
+            const aBase = a.split('/').pop()
+            const bBase = b.split('/').pop()
+            const lower = s => s.toLowerCase()
+            const makeKey = s => {
+                const base = lower(s)
+                // prefer a leading numeric page number (e.g. "1.jpg", "01.jpg", "10.png")
+                const lead = base.match(/^0*(\d+)(?:\D|$)/)
+                if (lead) return { num: parseInt(lead[1], 10), rest: base.slice(lead[0].length) }
+                // fallback to the first numeric sequence
+                const firstNum = base.match(/(\d+)/)
+                if (firstNum) return { num: parseInt(firstNum[1], 10), rest: base }
+                return null
+            }
+            const ka = makeKey(aBase), kb = makeKey(bBase)
+            if (ka && kb) {
+                if (ka.num !== kb.num) return ka.num - kb.num
+                // same numeric page, fallback to lexical on remainder
+                return aBase.localeCompare(bBase, undefined, { numeric: true, sensitivity: 'base' })
+            }
+            if (ka && !kb) return -1
+            if (!ka && kb) return 1
+            return aBase.localeCompare(bBase, undefined, { numeric: true, sensitivity: 'base' })
+        })
     if (!files.length) throw new Error('No supported image files in archive')
 
     const book = {}
