@@ -994,7 +994,7 @@ class KF8 {
             const last = arr[arr.length - 1]
             const fragStart = last?.fragEnd ?? 0, fragEnd = fragStart + skel.numFrag
             const frags = fragTable.slice(fragStart, fragEnd)
-            const length = skel.length + frags.map(f => f.length).reduce((a, b) => a + b)
+            const length = skel.length + frags.map(f => f.length).reduce((a, b) => a + b, 0)
             const totalLength = (last?.totalLength ?? 0) + length
             return arr.concat({ skel, frags, fragEnd, length, totalLength })
         }, [])
