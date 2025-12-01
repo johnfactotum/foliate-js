@@ -30,13 +30,15 @@ const getViewport = (doc, viewport) => {
 }
 
 export class FixedLayout extends HTMLElement {
-    static observedAttributes = ['zoom']
+    static observedAttributes = ['zoom','spread','odd-pages']
     #root = this.attachShadow({ mode: 'closed' })
     #observer = new ResizeObserver(() => this.#render())
     #spreads
     #index = -1
     defaultViewport
     spread
+    #rtl
+    #oddPages
     #portrait = false
     #left
     #right
@@ -57,6 +59,8 @@ export class FixedLayout extends HTMLElement {
             overflow: auto;
         }`)
 
+        this.#oddPages = this.getAttribute('odd-pages')
+
         this.#observer.observe(this)
     }
     attributeChangedCallback(name, _, value) {
@@ -65,6 +69,15 @@ export class FixedLayout extends HTMLElement {
                 this.#zoom = value !== 'fit-width' && value !== 'fit-page'
                     ? parseFloat(value) : value
                 this.#render()
+                break
+            case 'spread':
+                this.spread = value
+                this.respread()
+                break
+            case 'odd-pages':
+                this.#oddPages = value
+                this.#determineOddPages()
+                this.respread()
                 break
         }
     }
@@ -198,50 +211,85 @@ export class FixedLayout extends HTMLElement {
             return true
         }
     }
+    #determineOddPages() {
+        if (this.#oddPages !== 'recto' && this.#oddPages !== 'verso') {
+            this.#oddPages = 'recto'
+            const firstPageSpread = this.book.sections[0]?.pageSpread
+            if (this.#rtl && firstPageSpread === 'right' || !this.#rtl && firstPageSpread === 'left') {
+                this.#oddPages = 'verso'
+            }
+        }
+    }
+    #respread() {
+        if (this.spread === 'none')
+            this.#spreads = this.book.sections.map(section => ({ center: section }))
+        else {
+            const rtl = this.#rtl
+            const ltr = !this.#rtl
+            const oddPagesVerso = this.#oddPages === 'verso'
+
+            //Work out first page position based on settings and epub standard assumptions
+            let firstPageSpread = this.book.sections[0]?.pageSpread
+                    || (ltr && oddPagesVerso || rtl && !oddPagesVerso ? 'left' : 'right')
+
+            //Determine if the spread must be flipped (never flip based on just embedded pagination direction)
+            const flipSpreads = this.#oddPages === 'recto' && (ltr && firstPageSpread === 'left' || rtl && firstPageSpread === 'right')
+                    || this.#oddPages === 'verso' && (ltr && firstPageSpread === 'right' || rtl && firstPageSpread === 'left')
+
+            this.#spreads = this.book.sections.reduce((arr, section, i) => {
+                const last = arr[arr.length - 1]
+                const isFirstPage = !i
+
+                let { pageSpread } = section
+                if (!pageSpread && isFirstPage) pageSpread = firstPageSpread
+                if (flipSpreads) {
+                    if (pageSpread === 'left') pageSpread = 'right'
+                    else if (pageSpread === 'right') pageSpread = 'left'
+                }
+
+                const newSpread = () => {
+                    const spread = {}
+                    arr.push(spread)
+                    return spread
+                }
+
+                if (pageSpread === 'center') {
+                    const spread = newSpread()
+                    spread.center = section
+                }
+                else if (pageSpread === 'left') {
+                    const spread = !last || last.center || last.left || ltr ? newSpread() : last
+                    spread.left = section
+                }
+                else if (pageSpread === 'right') {
+                    const spread = !last || last.center || last.right || rtl ? newSpread() : last
+                    spread.right = section
+                }
+                else if (ltr) {
+                    if (!last || last.center || last.right) newSpread().left = section
+                    else last.right = section
+                }
+                else {
+                    if (!last || last.center || last.left) newSpread().right = section
+                    else last.left = section
+                }
+                return arr
+            }, [])
+        }
+    }
+    respread() {
+        this.#respread()
+        this.goToSpread(this.#index, this.#side, 'respread')
+    }
     open(book) {
         this.book = book
         const { rendition } = book
-        this.spread = rendition?.spread
+        this.spread = this.getAttribute('spread')
+        if (!this.spread || this.spread === 'auto') this.spread = rendition?.spread
         this.defaultViewport = rendition?.viewport
-
-        const rtl = book.dir === 'rtl'
-        const ltr = !rtl
-        this.rtl = rtl
-
-        if (rendition?.spread === 'none')
-            this.#spreads = book.sections.map(section => ({ center: section }))
-        else this.#spreads = book.sections.reduce((arr, section, i) => {
-            const last = arr[arr.length - 1]
-            const { pageSpread } = section
-            const newSpread = () => {
-                const spread = {}
-                arr.push(spread)
-                return spread
-            }
-            if (pageSpread === 'center') {
-                const spread = last.left || last.right ? newSpread() : last
-                spread.center = section
-            }
-            else if (pageSpread === 'left') {
-                const spread = last.center || last.left || ltr && i ? newSpread() : last
-                spread.left = section
-            }
-            else if (pageSpread === 'right') {
-                const spread = last.center || last.right || rtl && i ? newSpread() : last
-                spread.right = section
-            }
-            else if (ltr) {
-                if (last.center || last.right) newSpread().left = section
-                else if (last.left || !i) last.right = section
-                else last.left = section
-            }
-            else {
-                if (last.center || last.left) newSpread().right = section
-                else if (last.right || !i) last.left = section
-                else last.right = section
-            }
-            return arr
-        }, [{}])
+        this.#rtl = book.dir === 'rtl'
+        this.#determineOddPages()
+        this.#respread()
     }
     get index() {
         const spread = this.#spreads[this.#index]
@@ -264,7 +312,7 @@ export class FixedLayout extends HTMLElement {
     }
     async goToSpread(index, side, reason) {
         if (index < 0 || index > this.#spreads.length - 1) return
-        if (index === this.#index) {
+        if (index === this.#index && reason !== 'respread') {
             this.#render(side)
             return
         }
@@ -298,12 +346,12 @@ export class FixedLayout extends HTMLElement {
         await this.goToSpread(index, side)
     }
     async next() {
-        const s = this.rtl ? this.#goLeft() : this.#goRight()
-        if (!s) return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
+        const s = this.#rtl ? this.#goLeft() : this.#goRight()
+        if (!s) return this.goToSpread(this.#index + 1, this.#rtl ? 'right' : 'left', 'page')
     }
     async prev() {
-        const s = this.rtl ? this.#goRight() : this.#goLeft()
-        if (!s) return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
+        const s = this.#rtl ? this.#goRight() : this.#goLeft()
+        if (!s) return this.goToSpread(this.#index - 1, this.#rtl ? 'left' : 'right', 'page')
     }
     getContents() {
         return Array.from(this.#root.querySelectorAll('iframe'), frame => ({
