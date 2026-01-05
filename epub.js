@@ -284,6 +284,7 @@ const getMetadata = opf => {
         altIdentifier: dc.identifier?.map(makeAltIdentifier),
         source: dc.source?.map(makeAltIdentifier), // NOTE: not in webpub schema
         rights: one(dc.rights), // NOTE: not in webpub schema
+        pageBreakSource: one(properties['pageBreakSource']), // NOTE: not in webpub schema
     }
     const remapContributor = defaultKey => x => {
         const keys = new Set(x.role?.map(role => RELATORS[role] ?? defaultKey))
