@@ -55,6 +55,117 @@ export class TOCProgress {
     }
 }
 
+export class PageProgress {
+    #book
+    #cache = new Map()
+    #resolveNavigation
+
+    constructor(book, resolveNavigation) {
+        this.#book = book
+        this.#resolveNavigation = resolveNavigation
+    }
+
+    async #getCache(index) {
+        let cached = this.#cache.get(index)
+        if (cached) return cached
+
+        const section = this.#book.sections[index]
+        if (!section?.createDocument) return null
+
+        const doc = await section.createDocument()
+        const root = doc.body ?? doc.documentElement
+        const walker = doc.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+        const nodes = []
+        const offsets = []
+        let total = 0
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const len = node.nodeValue?.length ?? 0
+            nodes.push(node)
+            offsets.push(total)
+            total += len
+        }
+
+        cached = { doc, nodes, offsets, total }
+        this.#cache.set(index, cached)
+        return cached
+    }
+
+    async getProgress(cfi) {
+        try {
+            const nav = this.#resolveNavigation(cfi)
+            if (!nav) return null
+
+            const { index, anchor } = nav
+            if (index == null || !anchor) return null
+
+            const cached = await this.#getCache(index)
+            if (!cached) return null
+
+            const { doc, nodes, offsets, total } = cached
+            const frag = anchor(doc)
+            if (!frag) return null
+
+            const isRange = frag instanceof Range
+            const range = isRange ? frag : doc.createRange()
+            if (!isRange) range.selectNodeContents(frag)
+
+            const offset = this.#findOffset(range, nodes, offsets, total)
+            return {
+                fraction: total > 0 ? offset / total : 0,
+                index,
+            }
+        } catch (e) {
+            console.error(e)
+            return null
+        }
+    }
+
+    #findOffset(range, nodes, offsets, total) {
+        if (!nodes.length) return 0
+        const container = range.startContainer
+        // fast path: startContainer is a text node in the index
+        if (container.nodeType === Node.TEXT_NODE) {
+            const i = this.#bsearchNode(container, nodes)
+            if (i >= 0) return offsets[i] + range.startOffset
+        }
+        // element container: collapse to start and binary search
+        const collapsed = range.cloneRange()
+        collapsed.collapse(true)
+        const i = this.#bsearchCollapsed(collapsed, nodes)
+        return i >= 0 ? offsets[i] : total
+    }
+
+    // binary search for an exact text node by document position
+    #bsearchNode(target, nodes) {
+        let low = 0, high = nodes.length - 1
+        while (low <= high) {
+            const mid = (low + high) >> 1
+            const node = nodes[mid]
+            if (node === target) return mid
+            const pos = node.compareDocumentPosition(target)
+            if (pos & Node.DOCUMENT_POSITION_FOLLOWING) low = mid + 1
+            else high = mid - 1
+        }
+        return -1
+    }
+
+    // binary search for the first text node at or after a collapsed range point
+    // collapsed.comparePoint returns: -1 = node is before, 1 = node is at/after
+    #bsearchCollapsed(collapsed, nodes) {
+        let low = 0, high = nodes.length - 1, result = -1
+        while (low <= high) {
+            const mid = (low + high) >> 1
+            if (collapsed.comparePoint(nodes[mid], 0) > 0) {
+                result = mid
+                high = mid - 1
+            } else {
+                low = mid + 1
+            }
+        }
+        return result
+    }
+}
+
 export class SectionProgress {
     constructor(sections, sizePerLoc, sizePerTimeUnit) {
         this.sizes = sections.map(s => s.linear != 'no' && s.size > 0 ? s.size : 0)

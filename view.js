@@ -1,5 +1,5 @@
 import * as CFI from './epubcfi.js'
-import { TOCProgress, SectionProgress } from './progress.js'
+import { TOCProgress, SectionProgress, PageProgress } from './progress.js'
 import { Overlayer } from './overlayer.js'
 import { textWalker } from './text-walker.js'
 
@@ -217,6 +217,7 @@ export class View extends HTMLElement {
     #sectionProgress
     #tocProgress
     #pageProgress
+    #cfiProgress
     #searchResults = new Map()
     #cursorAutohider = new CursorAutohider(this, () =>
         this.hasAttribute('autohide-cursor'))
@@ -249,6 +250,7 @@ export class View extends HTMLElement {
             await this.#pageProgress.init({
                 toc: book.pageList ?? [], ids, splitHref, getFragment })
         }
+        this.#cfiProgress = new PageProgress(book, this.resolveNavigation.bind(this))
 
         this.isFixedLayout = this.book.rendition?.layout === 'pre-paginated'
         if (this.isFixedLayout) {
@@ -300,6 +302,7 @@ export class View extends HTMLElement {
         this.#sectionProgress = null
         this.#tocProgress = null
         this.#pageProgress = null
+        this.#cfiProgress = null
         this.#searchResults = new Map()
         this.lastLocation = null
         this.history.clear()
@@ -537,6 +540,11 @@ export class View extends HTMLElement {
         const tocItem = this.#tocProgress?.getProgress(index, range)
         const pageItem = this.#pageProgress?.getProgress(index, range)
         return { tocItem, pageItem }
+    }
+    async getCFIProgress(cfi) {
+        const progress = await this.#cfiProgress?.getProgress(cfi)
+        if (!progress || progress.index === -1) return null
+        return this.#sectionProgress?.getProgress(progress.index, progress.fraction)
     }
     async getTOCItemOf(target) {
         try {
