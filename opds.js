@@ -168,6 +168,8 @@ export const getPublication = entry => {
                 scheme: category.getAttribute('scheme'),
             })),
             rights: children.find(filter('rights'))?.textContent ?? '',
+            content: getContent(children.find(filter('content'))
+                ?? children.find(filter('summary'))),
             [SYMBOL.CONTENT]: getContent(children.find(filter('content'))
                 ?? children.find(filter('summary'))),
         },
