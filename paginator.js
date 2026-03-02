@@ -412,21 +412,42 @@ class View {
         const { width, height, marginTop, marginRight, marginBottom, marginLeft } = this.#layout
         const vertical = this.#vertical
         const doc = this.document
+        const pageFullscreen = doc.documentElement.hasAttribute('data-duokan-page-fullscreen')
         for (const el of doc.body.querySelectorAll('img, svg, video')) {
             // preserve max size if they are already set
             const { maxHeight, maxWidth } = doc.defaultView.getComputedStyle(el)
             setStylesImportant(el, {
                 'max-height': vertical
                     ? (maxHeight !== 'none' && maxHeight !== '0px' ? maxHeight : '100%')
-                    : `${height - marginTop - marginBottom }px`,
+                    : `${height - (pageFullscreen ? 0 : (marginTop + marginBottom))}px`,
                 'max-width': vertical
-                    ? `${width - marginLeft - marginRight }px`
+                    ? `${width - (pageFullscreen ? 0 : (marginLeft + marginRight))}px`
                     : (maxWidth !== 'none' && maxWidth !== '0px' ? maxWidth : '100%'),
-                'object-fit': 'contain',
+                'object-fit': pageFullscreen ? 'cover': 'contain',
                 'page-break-inside': 'avoid',
                 'break-inside': 'avoid',
                 'box-sizing': 'border-box',
             })
+            if (pageFullscreen) {
+                setStylesImportant(el, {
+                    position: 'fixed',
+                    inset: '0',
+                })
+                let ancestor = el.parentElement
+                while (ancestor && ancestor !== doc.body) {
+                    setStylesImportant(ancestor, {
+                        position: 'relative',
+                        width: '100%',
+                        height: '100%',
+                        margin: '0',
+                        padding: '0',
+                    })
+                    ancestor = ancestor.parentElement
+                }
+                if (el.localName === 'svg') {
+                    el.setAttribute('preserveAspectRatio', 'xMidYMid slice')
+                }
+            }
         }
     }
     get #zoom() {
@@ -1330,6 +1351,8 @@ export class Paginator extends HTMLElement {
                     doc.head.prepend($styleBefore)
                     const $style = doc.createElement('style')
                     doc.head.append($style)
+                    this.sections[index].spineProperties?.forEach(
+                        prop => doc.documentElement.setAttribute('data-' + prop, ''))
                     this.#styleMap.set(doc, [$styleBefore, $style])
                 }
                 onLoad?.({ doc, index })

@@ -1104,6 +1104,7 @@ ${doc.querySelector('parsererror').innerText}`)
                 size: this.getSize(item.href),
                 cfi: this.resources.cfis[index],
                 linear,
+                spineProperties: properties,
                 pageSpread: getPageSpread(properties),
                 resolveHref: href => resolveURL(href, item.href),
                 mediaOverlay: item.mediaOverlay
