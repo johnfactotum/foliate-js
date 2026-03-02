@@ -932,6 +932,7 @@ export class Paginator extends HTMLElement {
         for (let i = 0; i < columnCount; i++) {
             const column = document.createElement('div')
             column.style.background = background
+            column.style.backgroundAttachment = 'initial'
             column.style.width = '100%'
             column.style.height = '100%'
             this.#background.appendChild(column)
