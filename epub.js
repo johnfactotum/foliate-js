@@ -1182,30 +1182,14 @@ ${doc.querySelector('parsererror').innerText}`)
             return { parent, fragments }
         }
 
-        // Helper: Create grouped structure for multiple items in same section
-        const createGroupedItem = (sectionId, subitems) => {
-            const { parent, fragments } = separateParentAndFragments(sectionId, subitems)
-
-            // Use existing parent or create new one
-            const parentItem = parent ?? {
-                label: subitems[0].label || sectionId,
-                href: sectionId,
-            }
-
-            // Nest fragment items under parent
-            if (fragments.length > 0) {
-                parentItem.subitems = fragments
-            }
-
-            return parentItem
-        }
-
         for (const item of items) {
             if (!item.subitems?.length) continue
 
             const groupedBySection = groupBySection(item.subitems)
-            const newSubitems = []
+            // heuristic: only regroup if there are multiple items per section
+            if (groupedBySection.size <= 3) continue
 
+            const newSubitems = []
             for (const [sectionId, subitems] of groupedBySection.entries()) {
                 if (item.href === sectionId) {
                     // Parent already covers this section, keep subitems flat
@@ -1227,7 +1211,6 @@ ${doc.querySelector('parsererror').innerText}`)
                     }
                 }
             }
-
             item.subitems = newSubitems
         }
     }
