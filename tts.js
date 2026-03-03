@@ -21,8 +21,8 @@ const getAlphabet = el => {
     return x ? x : el.parentElement ? getAlphabet(el.parentElement) : null
 }
 
-const getSegmenter = (lang = 'en', granularity = 'word') => {
-    const segmenter = new Intl.Segmenter(lang, { granularity })
+const getSegmenter = (lang, granularity = 'word') => {
+    const segmenter = new Intl.Segmenter(lang || undefined, { granularity })
     const granularityIsWord = granularity === 'word'
     return function* (strs, makeRange) {
         const str = strs.join('').replace(/\r\n/g, '  ').replace(/\r/g, ' ').replace(/\n/g, ' ')
@@ -141,8 +141,11 @@ const getFragmentWithMarks = (range, textWalker, nodeFilter, granularity) => {
 const rangeIsEmpty = range => !range.toString().trim()
 
 function* getBlocks(doc) {
+    const root = doc.body
+        ?? doc.querySelector('body')
+        ?? doc.documentElement
     let last
-    const walker = doc.createTreeWalker(doc.body, NodeFilter.SHOW_ELEMENT)
+    const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         const name = node.tagName.toLowerCase()
         if (blockTags.has(name)) {
@@ -156,9 +159,9 @@ function* getBlocks(doc) {
     }
     if (!last) {
         last = doc.createRange()
-        last.setStart(doc.body.firstChild ?? doc.body, 0)
+        last.setStart(root.firstChild ?? root, 0)
     }
-    last.setEndAfter(doc.body.lastChild ?? doc.body)
+    last.setEndAfter(root.lastChild ?? root)
     if (!rangeIsEmpty(last)) yield last
 }
 
