@@ -262,7 +262,7 @@ const nodeToParts = (node, offset, filter) => {
     while (filter && parentNode
         && parentNode !== node.ownerDocument.documentElement
         && filter(parentNode) === NodeFilter.FILTER_SKIP)
-            parentNode = parentNode.parentNode
+        parentNode = parentNode.parentNode
     const indexed = indexChildNodes(parentNode, filter)
     const index = indexed.findIndex(x =>
         Array.isArray(x) ? x.some(x => x === node) : x === node)

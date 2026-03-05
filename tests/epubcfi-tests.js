@@ -164,7 +164,7 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
     const filter = node => node.nodeType === 1 && node.classList?.contains('SKIP')
         ? NodeFilter.FILTER_SKIP
         : NodeFilter.FILTER_ACCEPT
-    
+
     // cfi1
     const para1 = page.getElementById('test-skip-1')
     const text1 = para1.firstChild
@@ -175,7 +175,7 @@ const XHTML = str => parser.parseFromString(str, 'application/xhtml+xml')
 
     const expected1 = 'epubcfi(/4/2[test-skip-1],/1:3,/1:8)'
     console.assert(cfi1 === expected1, `expected ${expected1}, got ${cfi1}`)
-    
+
 
     // cfi2
     const para2 = page.getElementById('test-skip-2')
