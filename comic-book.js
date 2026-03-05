@@ -20,7 +20,7 @@ export const makeComicBook = ({ entries, loadBlob, getSize }, file) => {
     const files = entries
         .map(entry => entry.filename)
         .filter(name => exts.some(ext => name.endsWith(ext)))
-        .sort()
+        .sort(new Intl.Collator([], { numeric: true }).compare)
     if (!files.length) throw new Error('No supported image files in archive')
 
     const book = {}
