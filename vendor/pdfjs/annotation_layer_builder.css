@@ -14,6 +14,8 @@
  */
 
 .annotationLayer {
+  color-scheme: only light;
+
   --annotation-unfocused-field-background: url("data:image/svg+xml;charset=UTF-8,<svg width='1px' height='1px' xmlns='http://www.w3.org/2000/svg'><rect width='100%' height='100%' style='fill:rgba(0, 54, 255, 0.13);'/></svg>");
   --input-focus-border-color: Highlight;
   --input-focus-outline: 1px solid Canvas;
@@ -50,7 +52,7 @@
     }
 
     .popupAnnotation .popup {
-      outline: calc(1.5px * var(--scale-factor)) solid CanvasText !important;
+      outline: calc(1.5px * var(--total-scale-factor)) solid CanvasText !important;
       background-color: ButtonFace !important;
       color: ButtonText !important;
     }
@@ -67,7 +69,7 @@
     }
 
     .popupAnnotation.focused .popup {
-      outline: calc(3px * var(--scale-factor)) solid Highlight !important;
+      outline: calc(3px * var(--total-scale-factor)) solid Highlight !important;
     }
   }
 
@@ -108,7 +110,6 @@
       white-space: nowrap;
       font: 10px sans-serif;
       line-height: 1.35;
-      user-select: none;
     }
   }
 
@@ -118,11 +119,22 @@
     pointer-events: auto;
     box-sizing: border-box;
     transform-origin: 0 0;
+    user-select: none;
 
     &:has(div.annotationContent) {
       canvas.annotationContent {
         display: none;
       }
+    }
+
+    .overlaidText {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 0;
+      display: inline-block;
+      overflow: hidden;
     }
   }
 
@@ -143,7 +155,6 @@
     > a:hover {
     opacity: 0.2;
     background-color: rgb(255 255 0);
-    box-shadow: 0 2px 10px rgb(255 255 0);
   }
 
   .linkAnnotation.hasBorder:hover {
@@ -169,7 +180,7 @@
     background-image: var(--annotation-unfocused-field-background);
     border: 2px solid var(--input-unfocused-border-color);
     box-sizing: border-box;
-    font: calc(9px * var(--scale-factor)) sans-serif;
+    font: calc(9px * var(--total-scale-factor)) sans-serif;
     height: 100%;
     margin: 0;
     vertical-align: top;
@@ -296,7 +307,7 @@
 
   .popupAnnotation {
     position: absolute;
-    font-size: calc(9px * var(--scale-factor));
+    font-size: calc(9px * var(--total-scale-factor));
     pointer-events: none;
     width: max-content;
     max-width: 45%;
@@ -305,16 +316,18 @@
 
   .popup {
     background-color: rgb(255 255 153);
-    box-shadow: 0 calc(2px * var(--scale-factor))
-      calc(5px * var(--scale-factor)) rgb(136 136 136);
-    border-radius: calc(2px * var(--scale-factor));
+    color: black;
+    box-shadow: 0 calc(2px * var(--total-scale-factor))
+      calc(5px * var(--total-scale-factor)) rgb(136 136 136);
+    border-radius: calc(2px * var(--total-scale-factor));
     outline: 1.5px solid rgb(255 255 74);
-    padding: calc(6px * var(--scale-factor));
+    padding: calc(6px * var(--total-scale-factor));
     cursor: pointer;
     font: message-box;
     white-space: normal;
     word-wrap: break-word;
     pointer-events: auto;
+    user-select: text;
   }
 
   .popupAnnotation.focused .popup {
@@ -322,36 +335,41 @@
   }
 
   .popup * {
-    font-size: calc(9px * var(--scale-factor));
+    font-size: calc(9px * var(--total-scale-factor));
   }
 
   .popup > .header {
     display: inline-block;
   }
 
-  .popup > .header h1 {
+  .popup > .header > .title {
     display: inline;
+    font-weight: bold;
   }
 
   .popup > .header .popupDate {
     display: inline-block;
-    margin-left: calc(5px * var(--scale-factor));
+    margin-left: calc(5px * var(--total-scale-factor));
     width: fit-content;
   }
 
   .popupContent {
     border-top: 1px solid rgb(51 51 51);
-    margin-top: calc(2px * var(--scale-factor));
-    padding-top: calc(2px * var(--scale-factor));
+    margin-top: calc(2px * var(--total-scale-factor));
+    padding-top: calc(2px * var(--total-scale-factor));
   }
 
   .richText > * {
     white-space: pre-wrap;
-    font-size: calc(9px * var(--scale-factor));
+    font-size: calc(9px * var(--total-scale-factor));
   }
 
   .popupTriggerArea {
     cursor: pointer;
+
+    &:hover {
+      backdrop-filter: var(--hcm-highlight-filter);
+    }
   }
 
   section svg {

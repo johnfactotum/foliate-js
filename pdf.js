@@ -6,10 +6,10 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsPath('pdf.worker.mjs')
 
 const fetchText = async url => await (await fetch(url)).text()
 
-// https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.css
+// https://raw.githubusercontent.com/mozilla/pdf.js/refs/tags/v5.5.207/web/text_layer_builder.css
 const textLayerBuilderCSS = await fetchText(pdfjsPath('text_layer_builder.css'))
 
-// https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/annotation_layer_builder.css
+// https://raw.githubusercontent.com/mozilla/pdf.js/refs/tags/v5.5.207/web/annotation_layer_builder.css
 const annotationLayerBuilderCSS = await fetchText(pdfjsPath('annotation_layer_builder.css'))
 
 const render = async (page, doc, zoom) => {
@@ -57,14 +57,13 @@ const render = async (page, doc, zoom) => {
     container.onpointerup = () => container.classList.remove('selecting')
 
     const div = doc.querySelector('.annotationLayer')
-    await new pdfjsLib.AnnotationLayer({ page, viewport, div }).render({
-        annotations: await page.getAnnotations(),
-        linkService: {
-            goToDestination: () => {},
-            getDestinationHash: dest => JSON.stringify(dest),
-            addLinkAttributes: (link, url) => link.href = url,
-        },
-    })
+    const linkService = {
+        goToDestination: () => {},
+        getDestinationHash: dest => JSON.stringify(dest),
+        addLinkAttributes: (link, url) => link.href = url,
+    }
+    await new pdfjsLib.AnnotationLayer({ page, viewport, div, linkService })
+        .render({ annotations: await page.getAnnotations() })
 }
 
 const renderPage = async (page, getImageBlob) => {
@@ -86,6 +85,15 @@ const renderPage = async (page, getImageBlob) => {
         html, body {
             margin: 0;
             padding: 0;
+        }
+        /*
+        https://github.com/mozilla/pdf.js/commit/bd05b255fabfc313b194bfe9a17ccded4d90fb5a
+        */
+        :root {
+          --user-unit: 1;
+          --total-scale-factor: calc(var(--scale-factor) * var(--user-unit));
+          --scale-round-x: 1px;
+          --scale-round-y: 1px;
         }
         ${textLayerBuilderCSS}
         ${annotationLayerBuilderCSS}
