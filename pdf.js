@@ -26,7 +26,7 @@ const render = async (page, doc, zoom) => {
     canvas.height = viewport.height
     canvas.width = viewport.width
     const canvasContext = canvas.getContext('2d')
-    await page.render({ canvasContext, viewport }).promise
+    await page.render({ canvasContext, viewport, background: 'rgba(0,0,0,0)' }).promise
     const canvasElement = doc.querySelector('#canvas')
     if (!canvasElement) return
     canvasElement.replaceChildren(doc.adoptNode(canvas))
@@ -181,7 +181,7 @@ const renderPage = async (page, getImageBlob) => {
         canvas.height = viewport.height
         canvas.width = viewport.width
         const canvasContext = canvas.getContext('2d')
-        await page.render({ canvasContext, viewport }).promise
+        await page.render({ canvasContext, viewport, background: 'rgba(0,0,0,0)' }).promise
         return new Promise(resolve => canvas.toBlob(resolve))
     }
     // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.css
@@ -276,14 +276,59 @@ export const makePDF = async file => {
     book.toc = outline ? await Promise.all(outline.map(item => makeTOCItem(item, pdf))) : null
 
     const cache = new Map()
+    const pageCache = new Map()
+    const getPage = async (i) => {
+        const cached = pageCache.get(i)
+        if (cached) return cached
+        const page = await pdf.getPage(i + 1)
+        pageCache.set(i, page)
+        return page
+    }
     book.sections = Array.from({ length: pdf.numPages }).map((_, i) => ({
         id: i,
         load: async () => {
             const cached = cache.get(i)
             if (cached) return cached
-            const url = await renderPage(await pdf.getPage(i + 1))
+            const url = await renderPage(await getPage(i))
             cache.set(i, url)
             return url
+        },
+        createDocument: async () => {
+            const page = await getPage(i)
+            const doc = document.implementation.createHTMLDocument('')
+
+            const canvas = doc.createElement('div')
+            canvas.id = 'canvas'
+            doc.body.appendChild(canvas)
+
+            const textLayer = doc.createElement('div')
+            textLayer.className = 'textLayer'
+            doc.body.appendChild(textLayer)
+
+            const annotationLayer = doc.createElement('div')
+            annotationLayer.className = 'annotationLayer'
+            doc.body.appendChild(annotationLayer)
+
+            // TextLayer requires canvas 2d context for font metrics;
+            // fall back to manual span construction when unavailable
+            const probe = doc.createElement('canvas')
+            if (probe.getContext?.('2d')) {
+                const textLayerInstance = new pdfjsLib.TextLayer({
+                    textContentSource: await page.streamTextContent(),
+                    container: textLayer, viewport: page.getViewport({ scale: 1 }),
+                })
+                await textLayerInstance.render()
+            } else {
+                const content = await page.getTextContent()
+                for (const item of content.items) {
+                    if (item.str) {
+                        const span = doc.createElement('span')
+                        span.textContent = item.str
+                        textLayer.appendChild(span)
+                    }
+                }
+            }
+            return doc
         },
         size: 1000,
     }))
@@ -304,7 +349,7 @@ export const makePDF = async file => {
             const index = await pdf.getPageIndex(dest[0])
             return [index, null]
         } catch (e) {
-            console.warn('Error getting page index for href', href)
+            console.warn('Error getting page index for href', href, e)
             return [null, null]
         }
     }

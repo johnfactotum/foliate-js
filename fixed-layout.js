@@ -56,6 +56,7 @@ export class FixedLayout extends HTMLElement {
     #maxConcurrentPreloads = 1
     #numPrerenderedSpreads = 1
     #maxCachedSpreads = 2
+    #overlayers = new Map()
     #preloadQueue = []
     #activePreloads = 0
     constructor() {
@@ -102,6 +103,7 @@ export class FixedLayout extends HTMLElement {
         const onZoom = srcOptionIsString ? null : srcOption?.onZoom
         const element = document.createElement('div')
         element.setAttribute('dir', 'ltr')
+        element.style.position = 'relative'
         const iframe = document.createElement('iframe')
         element.append(iframe)
         Object.assign(iframe.style, {
@@ -128,6 +130,7 @@ export class FixedLayout extends HTMLElement {
         return new Promise(resolve => {
             iframe.addEventListener('load', () => {
                 const doc = iframe.contentDocument
+                iframe.dataset.sectionIndex = index
                 this.dispatchEvent(new CustomEvent('load', { detail: { doc, index } }))
                 const { width, height } = getViewport(doc, this.defaultViewport)
                 resolve({
@@ -205,6 +208,23 @@ export class FixedLayout extends HTMLElement {
                 element.style.display = 'none'
             }
 
+            // position and redraw overlayer to match the scaled iframe
+            const sectionIndex = iframe.dataset.sectionIndex != null
+                ? parseInt(iframe.dataset.sectionIndex) : undefined
+            if (sectionIndex != null) {
+                const overlayer = this.#overlayers.get(sectionIndex)
+                if (overlayer) {
+                    Object.assign(overlayer.element.style, {
+                        position: 'absolute',
+                        top: '0',
+                        left: '0',
+                        width: `${(width ?? blankWidth) * scale}px`,
+                        height: `${(height ?? blankHeight) * scale}px`,
+                    })
+                    overlayer.redraw()
+                }
+            }
+
             const container= element.parentNode.host
             const containerWidth = container.clientWidth
             const containerHeight = container.clientHeight
@@ -278,6 +298,32 @@ export class FixedLayout extends HTMLElement {
                 pointerEvents: isVisible ? 'auto' : 'none',
             })
         })
+
+        // Dispatch create-overlayer when the spread is actually shown (not at
+        // iframe load time) so preloaded frames also get overlayers.
+        const showingFrames = center
+            ? [this.#center]
+            : [this.#left, this.#right]
+        for (const frame of showingFrames) {
+            if (!frame?.iframe) continue
+            const index = frame.iframe.dataset.sectionIndex != null
+                ? parseInt(frame.iframe.dataset.sectionIndex) : undefined
+            if (index != null && !this.#overlayers.has(index)) {
+                const doc = frame.iframe.contentDocument
+                if (doc) {
+                    this.dispatchEvent(new CustomEvent('create-overlayer', {
+                        detail: {
+                            doc, index,
+                            attach: overlayer => {
+                                this.#overlayers.set(index, overlayer)
+                                frame.element.append(overlayer.element)
+                            },
+                        },
+                    }))
+                }
+            }
+        }
+
         this.#render()
     }
     #goLeft() {
@@ -364,6 +410,7 @@ export class FixedLayout extends HTMLElement {
         }
         this.#prerenderedSpreads.clear()
         this.#spreadAccessTime.clear()
+        this.#overlayers.clear()
         this.goToSpread(index, this.rtl ? 'right' : 'left', 'page')
     }
     get index() {
@@ -550,8 +597,11 @@ export class FixedLayout extends HTMLElement {
                 const frames = this.#prerenderedSpreads.get(key)
                 if (frames) {
                     if (frames.center) {
+                        this.#removeOverlayerForFrame(frames.center)
                         frames.center.element?.remove()
                     } else {
+                        this.#removeOverlayerForFrame(frames.left)
+                        this.#removeOverlayerForFrame(frames.right)
                         frames.left?.element?.remove()
                         frames.right?.element?.remove()
                     }
@@ -562,6 +612,12 @@ export class FixedLayout extends HTMLElement {
                 this.#preloadCache.delete(key)
             })
         }
+    }
+    #removeOverlayerForFrame(frame) {
+        if (!frame?.iframe) return
+        const idx = frame.iframe.dataset.sectionIndex != null
+            ? parseInt(frame.iframe.dataset.sectionIndex) : undefined
+        if (idx != null) this.#overlayers.delete(idx)
     }
     async select(target) {
         await this.goTo(target)
@@ -600,10 +656,20 @@ export class FixedLayout extends HTMLElement {
         this.#scrollLocked = false
     }
     getContents() {
-        return Array.from(this.#root.querySelectorAll('iframe'), frame => ({
-            doc: frame.contentDocument,
-            // TODO: index, overlayer
-        }))
+        return Array.from(this.#root.querySelectorAll('iframe'))
+            .filter(frame => {
+                const parent = frame.parentElement
+                return parent && parent.style.visibility !== 'hidden'
+            })
+            .map(frame => {
+                const index = frame.dataset.sectionIndex != null
+                    ? parseInt(frame.dataset.sectionIndex) : undefined
+                return {
+                    doc: frame.contentDocument,
+                    index,
+                    overlayer: index != null ? this.#overlayers.get(index) : undefined,
+                }
+            })
     }
     destroy() {
         this.#observer.unobserve(this)
@@ -618,6 +684,7 @@ export class FixedLayout extends HTMLElement {
         this.#prerenderedSpreads.clear()
         this.#preloadCache.clear()
         this.#spreadAccessTime.clear()
+        this.#overlayers.clear()
     }
 }
 

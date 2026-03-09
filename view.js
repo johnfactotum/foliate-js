@@ -391,7 +391,7 @@ export class View extends HTMLElement {
                     return
                 }
                 const range = doc ? anchor(doc) : anchor
-                overlayer.add(value, range, Overlayer.outline)
+                if (range) overlayer.add(value, range, Overlayer.outline)
             }
             return
         } else if (value.startsWith(NOTE_PREFIX)) {
@@ -405,8 +405,10 @@ export class View extends HTMLElement {
                     return
                 }
                 const range = doc ? anchor(doc) : anchor
-                const draw = (func, opts) => overlayer.add(value, range, func, opts)
-                this.#emit('draw-annotation', { draw, annotation, doc, range })
+                if (range) {
+                    const draw = (func, opts) => overlayer.add(value, range, func, opts)
+                    this.#emit('draw-annotation', { draw, annotation, doc, range })
+                }
             }
             return
         }
@@ -417,8 +419,10 @@ export class View extends HTMLElement {
             overlayer.remove(value)
             if (!remove) {
                 const range = doc ? anchor(doc) : anchor
-                const draw = (func, opts) => overlayer.add(value, range, func, opts)
-                this.#emit('draw-annotation', { draw, annotation, doc, range })
+                if (range) {
+                    const draw = (func, opts) => overlayer.add(value, range, func, opts)
+                    this.#emit('draw-annotation', { draw, annotation, doc, range })
+                }
             }
         }
         const label = this.#tocProgress.getProgress(index)?.label ?? ''
