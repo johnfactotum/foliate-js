@@ -187,11 +187,14 @@ export const compare = (a, b) => {
 
 const isTextNode = ({ nodeType }) => nodeType === 3 || nodeType === 4
 const isElementNode = ({ nodeType }) => nodeType === 1
+const isInertNode = (node) => node.hasAttribute?.('cfi-inert')
 
 const getChildNodes = (node, filter) => {
     const nodes = Array.from(node.childNodes)
         // "content other than element and character data is ignored"
         .filter(node => isTextNode(node) || isElementNode(node))
+        // always skip nodes marked with cfi-inert attribute
+        .filter(node => !isInertNode(node))
     return filter ? nodes.map(node => {
         const accept = filter(node)
         if (accept === NodeFilter.FILTER_REJECT) return null
