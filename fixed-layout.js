@@ -149,7 +149,7 @@ export class FixedLayout extends HTMLElement {
         })
     }
     #render(side = this.#side) {
-        if (!side) return
+        if (!side) return []
         const left = this.#left ?? {}
         const right = this.#center ?? this.#right ?? {}
         const target = side === 'left' ? left : right
@@ -181,10 +181,14 @@ export class FixedLayout extends HTMLElement {
         scale *= this.#scaleFactor
         this.#totalScaleFactor = scale
 
+        const renderPromises = []
         const transform = ({frame, styles}) => {
             let { element, iframe, width, height, blank, onZoom } = frame
             if (!iframe) return
-            if (onZoom) onZoom({ doc: frame.iframe.contentDocument, scale })
+            if (onZoom) {
+                const p = onZoom({ doc: frame.iframe.contentDocument, scale })
+                if (p?.then) renderPromises.push(p)
+            }
             const iframeScale = onZoom ? scale : 1
             const zoomedOut = this.#scaleFactor < 1.0
             Object.assign(iframe.style, {
@@ -250,6 +254,7 @@ export class FixedLayout extends HTMLElement {
             this.#isOverflowX = leftWidth + rightWidth > containerWidth
             this.#isOverflowY = Math.max(leftHeight, rightHeight) > containerHeight
         }
+        return renderPromises
     }
     async #showSpread({ left, right, center, side, spreadIndex }) {
         this.#left = null
@@ -299,8 +304,12 @@ export class FixedLayout extends HTMLElement {
             })
         })
 
-        // Dispatch create-overlayer when the spread is actually shown (not at
-        // iframe load time) so preloaded frames also get overlayers.
+        // Render layout and await any async onZoom callbacks (e.g. PDF text
+        // layer rendering) so the document is fully populated before overlayers
+        // try to resolve CFIs against it.
+        const renderPromises = this.#render()
+        if (renderPromises.length) await Promise.all(renderPromises)
+
         const showingFrames = center
             ? [this.#center]
             : [this.#left, this.#right]
@@ -323,8 +332,6 @@ export class FixedLayout extends HTMLElement {
                 }
             }
         }
-
-        this.#render()
     }
     #goLeft() {
         if (this.#center || this.#left?.blank) return
