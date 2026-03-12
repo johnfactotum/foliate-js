@@ -9,52 +9,18 @@ const fetchText = async url => await (await fetch(url)).text()
 let textLayerBuilderCSS = null
 let annotationLayerBuilderCSS = null
 
-const render = async (page, doc, zoom) => {
-    if (!doc) return
-    const scale = zoom * devicePixelRatio
-    doc.documentElement.style.transform = `scale(${1 / devicePixelRatio})`
-    doc.documentElement.style.transformOrigin = 'top left'
-    doc.documentElement.style.setProperty('--total-scale-factor', scale)
-    doc.documentElement.style.setProperty('--user-unit', '1')
-    doc.documentElement.style.setProperty('--scale-round-x', '1px')
-    doc.documentElement.style.setProperty('--scale-round-y', '1px')
-    const viewport = page.getViewport({ scale })
+// Track active render tasks per iframe document to cancel superseded renders
+const activeRenderTasks = new WeakMap()
+// Generation counter per document to detect stale renders after async gaps
+const renderGenerations = new WeakMap()
 
-    // the canvas must be in the `PDFDocument`'s `ownerDocument`
-    // (`globalThis.document` by default); that's where the fonts are loaded
-    const canvas = document.createElement('canvas')
-    canvas.height = viewport.height
-    canvas.width = viewport.width
-    const canvasContext = canvas.getContext('2d')
-    await page.render({ canvasContext, viewport, background: 'rgba(0,0,0,0)' }).promise
-    const canvasElement = doc.querySelector('#canvas')
-    if (!canvasElement) return
-    canvasElement.replaceChildren(doc.adoptNode(canvas))
+// Set up panning and selection event handlers once per iframe document
+const setupPanningEvents = (doc) => {
+    if (doc._readestEventsInitialized) return
+    doc._readestEventsInitialized = true
 
     const container = doc.querySelector('.textLayer')
-    const textLayer = new pdfjsLib.TextLayer({
-        textContentSource: await page.streamTextContent(),
-        container, viewport,
-    })
-    await textLayer.render()
-
-    // hide "offscreen" canvases appended to document when rendering text layer
-    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/pdf_viewer.css#L51-L58
-    for (const canvas of document.querySelectorAll('.hiddenCanvasElement'))
-        Object.assign(canvas.style, {
-            position: 'absolute',
-            top: '0',
-            left: '0',
-            width: '0',
-            height: '0',
-            display: 'none',
-        })
-
-    // fix text selection
-    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
-    const endOfContent = document.createElement('div')
-    endOfContent.className = 'endOfContent'
-    container.append(endOfContent)
+    if (!container) return
 
     let isPanning = false
     let startX = 0
@@ -101,7 +67,7 @@ const render = async (page, doc, zoom) => {
             startX = e.screenX
             startY = e.screenY
 
-            const iframe = doc.defaultView.frameElement
+            const iframe = doc.defaultView?.frameElement
             if (iframe) {
                 scrollParent = findScrollableParent(iframe)
                 if (scrollParent === window) {
@@ -162,8 +128,111 @@ const render = async (page, doc, zoom) => {
     })
 
     container.style.cursor = 'grab'
+}
 
+const render = async (page, doc, zoom) => {
+    if (!doc) return
+
+    // Increment generation to invalidate any in-progress render for this doc
+    const generation = (renderGenerations.get(doc) || 0) + 1
+    renderGenerations.set(doc, generation)
+
+    // Cancel any in-progress render task for this document
+    const existingTask = activeRenderTasks.get(doc)
+    if (existingTask) {
+        existingTask.cancel()
+        activeRenderTasks.delete(doc)
+    }
+
+    const scale = zoom * devicePixelRatio
+    doc.documentElement.style.transform = `scale(${1 / devicePixelRatio})`
+    doc.documentElement.style.transformOrigin = 'top left'
+    doc.documentElement.style.setProperty('--total-scale-factor', scale)
+    doc.documentElement.style.setProperty('--user-unit', '1')
+    doc.documentElement.style.setProperty('--scale-round-x', '1px')
+    doc.documentElement.style.setProperty('--scale-round-y', '1px')
+    const viewport = page.getViewport({ scale })
+
+    // the canvas must be in the `PDFDocument`'s `ownerDocument`
+    // (`globalThis.document` by default); that's where the fonts are loaded
+    const canvas = document.createElement('canvas')
+    canvas.height = viewport.height
+    canvas.width = viewport.width
+    const canvasContext = canvas.getContext('2d')
+    const renderTask = page.render({ canvasContext, viewport, background: 'rgba(0,0,0,0)' })
+    activeRenderTasks.set(doc, renderTask)
+
+    try {
+        await renderTask.promise
+    } catch {
+        // Render was cancelled or failed — release canvas bitmap memory
+        canvas.width = 0
+        canvas.height = 0
+        return
+    } finally {
+        if (activeRenderTasks.get(doc) === renderTask) {
+            activeRenderTasks.delete(doc)
+        }
+    }
+
+    // Bail out if a newer render has started or iframe was removed
+    if (renderGenerations.get(doc) !== generation || !doc.defaultView) {
+        canvas.width = 0
+        canvas.height = 0
+        return
+    }
+
+    const canvasElement = doc.querySelector('#canvas')
+    if (!canvasElement) {
+        canvas.width = 0
+        canvas.height = 0
+        return
+    }
+
+    // Release old canvas bitmap memory before replacing
+    const oldCanvas = canvasElement.querySelector('canvas')
+    if (oldCanvas) {
+        oldCanvas.width = 0
+        oldCanvas.height = 0
+    }
+    canvasElement.replaceChildren(doc.adoptNode(canvas))
+
+    // Clear text layer before re-rendering to prevent DOM accumulation
+    const container = doc.querySelector('.textLayer')
+    container.replaceChildren()
+    const textLayer = new pdfjsLib.TextLayer({
+        textContentSource: await page.streamTextContent(),
+        container, viewport,
+    })
+    await textLayer.render()
+
+    // Bail out if superseded after async text layer render
+    if (renderGenerations.get(doc) !== generation) return
+
+    // hide "offscreen" canvases appended to document when rendering text layer
+    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/pdf_viewer.css#L51-L58
+    for (const hiddenCanvas of document.querySelectorAll('.hiddenCanvasElement'))
+        Object.assign(hiddenCanvas.style, {
+            position: 'absolute',
+            top: '0',
+            left: '0',
+            width: '0',
+            height: '0',
+            display: 'none',
+        })
+
+    // fix text selection
+    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
+    const endOfContent = document.createElement('div')
+    endOfContent.className = 'endOfContent'
+    container.append(endOfContent)
+
+    // Set up panning/selection event handlers once per document
+    setupPanningEvents(doc)
+
+    // Clear annotation layer before re-rendering to prevent DOM accumulation
     const div = doc.querySelector('.annotationLayer')
+    div.replaceChildren()
     const linkService = {
         goToDestination: () => {},
         getDestinationHash: dest => JSON.stringify(dest),
@@ -182,7 +251,12 @@ const renderPage = async (page, getImageBlob) => {
         canvas.width = viewport.width
         const canvasContext = canvas.getContext('2d')
         await page.render({ canvasContext, viewport, background: 'rgba(0,0,0,0)' }).promise
-        return new Promise(resolve => canvas.toBlob(resolve))
+        return new Promise(resolve => canvas.toBlob(blob => {
+            // Release canvas bitmap memory after extracting the blob
+            canvas.width = 0
+            canvas.height = 0
+            resolve(blob)
+        }))
     }
     // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.css
     if (textLayerBuilderCSS == null) {
@@ -240,6 +314,8 @@ const makeTOCItem = async (item, pdf) => {
     }
 }
 
+const MAX_CACHED_PAGES = 8
+
 export const makePDF = async file => {
     const transport = new pdfjsLib.PDFDataRangeTransport(file.size, [])
     transport.requestDataRange = (begin, end) => {
@@ -255,7 +331,13 @@ export const makePDF = async file => {
         isEvalSupported: false,
     }).promise
 
-    const book = { rendition: { layout: 'pre-paginated' } }
+    // Get viewport dimensions from first page for fixed-layout rendering
+    const firstPage = await pdf.getPage(1)
+    const firstViewport = firstPage.getViewport({ scale: 1 })
+    const book = { rendition: {
+        layout: 'pre-paginated',
+        viewport: { width: firstViewport.width, height: firstViewport.height },
+    } }
 
     const { metadata, info } = await pdf.getMetadata() ?? {}
     // TODO: for better results, parse `metadata.getRaw()`
@@ -279,18 +361,46 @@ export const makePDF = async file => {
     const pageCache = new Map()
     const getPage = async (i) => {
         const cached = pageCache.get(i)
-        if (cached) return cached
+        if (cached) {
+            // Move to end for LRU ordering
+            pageCache.delete(i)
+            pageCache.set(i, cached)
+            return cached
+        }
         const page = await pdf.getPage(i + 1)
         pageCache.set(i, page)
+
+        // Evict oldest pages when over limit, freeing internal page data
+        while (pageCache.size > MAX_CACHED_PAGES) {
+            const oldestKey = pageCache.keys().next().value
+            const oldPage = pageCache.get(oldestKey)
+            pageCache.delete(oldestKey)
+            oldPage?.cleanup()
+        }
+
         return page
     }
     book.sections = Array.from({ length: pdf.numPages }).map((_, i) => ({
         id: i,
         load: async () => {
             const cached = cache.get(i)
-            if (cached) return cached
+            if (cached) {
+                // Move to end for LRU ordering
+                cache.delete(i)
+                cache.set(i, cached)
+                return cached
+            }
             const url = await renderPage(await getPage(i))
             cache.set(i, url)
+
+            // Evict oldest render results when over limit
+            while (cache.size > MAX_CACHED_PAGES) {
+                const oldestKey = cache.keys().next().value
+                const oldEntry = cache.get(oldestKey)
+                cache.delete(oldestKey)
+                if (oldEntry?.src) URL.revokeObjectURL(oldEntry.src)
+            }
+
             return url
         },
         createDocument: async () => {
@@ -355,6 +465,17 @@ export const makePDF = async file => {
     }
     book.getTOCFragment = doc => doc.documentElement
     book.getCover = async () => renderPage(await pdf.getPage(1), true)
-    book.destroy = () => pdf.destroy()
+    book.destroy = () => {
+        // Clean up all cached canvases and revoke blob URLs
+        for (const [, entry] of cache) {
+            if (entry?.src) URL.revokeObjectURL(entry.src)
+        }
+        cache.clear()
+        for (const [, page] of pageCache) {
+            page?.cleanup()
+        }
+        pageCache.clear()
+        pdf.destroy()
+    }
     return book
 }

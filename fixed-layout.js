@@ -32,7 +32,7 @@ const getViewport = (doc, viewport) => {
 }
 
 export class FixedLayout extends HTMLElement {
-    static observedAttributes = ['zoom', 'scale-factor', 'spread']
+    static observedAttributes = ['zoom', 'scale-factor', 'spread', 'flow']
     #root = this.attachShadow({ mode: 'open' })
     #observer = new ResizeObserver(() => this.#render())
     #spreads
@@ -59,6 +59,15 @@ export class FixedLayout extends HTMLElement {
     #overlayers = new Map()
     #preloadQueue = []
     #activePreloads = 0
+    // Scroll mode fields
+    #scrollMode = false
+    #scrollPages = []
+    #scrollObserver = null
+    #scrollContainer = null
+    #scrollLoadGen = new Map()
+    #scrollMaxLoaded = 8
+    #scrollIdleTimer = null
+    #scrollCurrentIndex = -1
     constructor() {
         super()
 
@@ -76,6 +85,26 @@ export class FixedLayout extends HTMLElement {
           :host {
             justify-content: safe center;
           }
+        }
+        :host([flow="scrolled"]) {
+            display: block;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+        :host([flow="scrolled"]) .scroll-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100%;
+        }
+        :host([flow="scrolled"]) .scroll-page {
+            position: relative;
+            flex-shrink: 0;
+            overflow: hidden;
+            margin: 4px 0;
+        }
+        :host([flow="scrolled"]) .scroll-page iframe {
+            pointer-events: none;
         }`)
 
         this.#observer.observe(this)
@@ -93,6 +122,18 @@ export class FixedLayout extends HTMLElement {
                 break
             case 'spread':
                 this.#respread(value)
+                break
+            case 'flow':
+                if (value === 'scrolled' && !this.#scrollMode) {
+                    // Capture index from paginated mode BEFORE setting scroll flag
+                    const savedIndex = this.index
+                    this.#scrollMode = true
+                    if (this.book) this.#initScrollMode(savedIndex)
+                } else if (value !== 'scrolled' && this.#scrollMode) {
+                    this.#destroyScrollMode()
+                    this.#scrollMode = false
+                    this.#render()
+                }
                 break
         }
     }
@@ -149,6 +190,10 @@ export class FixedLayout extends HTMLElement {
         })
     }
     #render(side = this.#side) {
+        if (this.#scrollMode) {
+            this.#renderScrollMode()
+            return []
+        }
         if (!side) return []
         const left = this.#left ?? {}
         const right = this.#center ?? this.#right ?? {}
@@ -333,6 +378,340 @@ export class FixedLayout extends HTMLElement {
             }
         }
     }
+    #initScrollMode(targetIndex = 0) {
+        const currentIndex = targetIndex
+
+        // Hide all paginated content
+        for (const child of Array.from(this.#root.children)) {
+            child.style.display = 'none'
+        }
+
+        this.#scrollContainer = document.createElement('div')
+        this.#scrollContainer.className = 'scroll-container'
+        this.#root.append(this.#scrollContainer)
+
+        const sections = this.book.sections
+        const viewport = this.defaultViewport
+        const vw = viewport?.width ?? 1000
+        const vh = viewport?.height ?? 1400
+        this.#scrollPages = sections.map((section, i) => {
+            const el = document.createElement('div')
+            el.className = 'scroll-page'
+            el.dataset.index = i
+            this.#scrollContainer.append(el)
+            return { el, index: i, section, state: 'idle', frame: null, vpWidth: vw, vpHeight: vh }
+        })
+
+        this.#renderScrollMode()
+
+        // Scroll to target position BEFORE setting up the observer
+        // so only pages near the target are observed as intersecting
+        if (currentIndex >= 0 && currentIndex < this.#scrollPages.length) {
+            this.#scrollPages[currentIndex].el.scrollIntoView()
+            this.#scrollCurrentIndex = currentIndex
+        }
+
+        this.addEventListener('scroll', this.#handleScrollEvent)
+
+        // Set up IntersectionObserver after scroll position is established.
+        // rootMargin '50%' loads ~1 page buffer above/below the viewport.
+        this.#scrollObserver = new IntersectionObserver(entries => {
+            for (const entry of entries) {
+                if (!entry.isIntersecting) continue
+                const index = parseInt(entry.target.dataset.index)
+                const pageData = this.#scrollPages[index]
+                if (pageData && pageData.state === 'idle') {
+                    this.#loadScrollPage(pageData)
+                }
+            }
+            this.#evictScrollPages()
+        }, { root: this, rootMargin: '50% 0px' })
+
+        for (const page of this.#scrollPages) {
+            this.#scrollObserver.observe(page.el)
+        }
+    }
+    #handleScrollEvent = () => {
+        // Disable iframe interaction during scroll for native smooth scrolling
+        this.#setScrollIframeInteraction(false)
+        if (this.#scrollIdleTimer) clearTimeout(this.#scrollIdleTimer)
+        this.#scrollIdleTimer = setTimeout(() => {
+            this.#setScrollIframeInteraction(true)
+            // Report location only after scroll settles to avoid
+            // expensive React re-renders on every frame
+            this.#reportScrollLocation()
+        }, 150)
+    }
+    #setScrollIframeInteraction(enabled) {
+        const value = enabled ? 'auto' : ''
+        for (const page of this.#scrollPages) {
+            if (page.frame?.iframe) {
+                page.frame.iframe.style.pointerEvents = value
+            }
+        }
+    }
+    #destroyScrollMode() {
+        // Use the cached scroll index because by the time attributeChangedCallback
+        // fires, the CSS has already switched from block/scroll to flex layout,
+        // making #getScrollIndex() return incorrect positions
+        const currentIndex = this.#scrollCurrentIndex >= 0
+            ? this.#scrollCurrentIndex : this.#getScrollIndex()
+        this.removeEventListener('scroll', this.#handleScrollEvent)
+        if (this.#scrollObserver) {
+            this.#scrollObserver.disconnect()
+            this.#scrollObserver = null
+        }
+        if (this.#scrollIdleTimer) {
+            clearTimeout(this.#scrollIdleTimer)
+            this.#scrollIdleTimer = null
+        }
+        // Clean up all scroll page frames and overlayers
+        for (const page of this.#scrollPages) {
+            this.#teardownScrollPage(page)
+        }
+        this.#scrollPages = []
+        this.#scrollLoadGen.clear()
+        this.#scrollCurrentIndex = -1
+        if (this.#scrollContainer) {
+            this.#scrollContainer.remove()
+            this.#scrollContainer = null
+        }
+
+        // Reset scroll position left over from scroll mode
+        this.scrollTop = 0
+        this.scrollLeft = 0
+
+        // Restore paginated content
+        for (const child of Array.from(this.#root.children)) {
+            child.style.display = ''
+        }
+
+        // Navigate to the page we were on
+        if (currentIndex >= 0) {
+            const section = this.book.sections[currentIndex]
+            if (section) {
+                const spread = this.getSpreadOf(section)
+                if (spread) {
+                    this.#index = -1
+                    this.goToSpread(spread.index, spread.side, 'page')
+                }
+            }
+        }
+    }
+    // Create an iframe directly inside the page placeholder (no reparenting)
+    async #createScrollFrame(pageData, srcOption) {
+        const srcOptionIsString = typeof srcOption === 'string'
+        const src = srcOptionIsString ? srcOption : srcOption?.src
+        const data = srcOptionIsString ? null : srcOption?.data
+        const onZoom = srcOptionIsString ? null : srcOption?.onZoom
+
+        const element = document.createElement('div')
+        element.setAttribute('dir', 'ltr')
+        element.style.position = 'relative'
+        const iframe = document.createElement('iframe')
+        element.append(iframe)
+        Object.assign(iframe.style, {
+            border: '0',
+            display: 'none',
+            overflow: 'hidden',
+        })
+        iframe.setAttribute('sandbox', 'allow-same-origin allow-scripts')
+        iframe.setAttribute('scrolling', 'no')
+        iframe.setAttribute('part', 'filter')
+        // Place directly in the placeholder — no root append + reparent
+        pageData.el.append(element)
+
+        if (!src) return { blank: true, element, iframe }
+        return new Promise(resolve => {
+            iframe.addEventListener('load', () => {
+                const doc = iframe.contentDocument
+                iframe.dataset.sectionIndex = pageData.index
+                this.dispatchEvent(new CustomEvent('load', { detail: { doc, index: pageData.index } }))
+                const { width, height } = getViewport(doc, this.defaultViewport)
+                resolve({
+                    element, iframe,
+                    width: parseFloat(width),
+                    height: parseFloat(height),
+                    onZoom,
+                })
+            }, { once: true })
+            if (data) {
+                iframe.srcdoc = data
+            } else {
+                iframe.src = src
+            }
+        })
+    }
+    async #loadScrollPage(pageData) {
+        if (pageData.state !== 'idle') return
+        pageData.state = 'loading'
+
+        // Generation counter to detect stale loads
+        const gen = (this.#scrollLoadGen.get(pageData.index) || 0) + 1
+        this.#scrollLoadGen.set(pageData.index, gen)
+
+        try {
+            const src = await pageData.section.load?.()
+            // Bail if cancelled or mode changed
+            if (this.#scrollLoadGen.get(pageData.index) !== gen || !this.#scrollMode) {
+                pageData.state = 'idle'
+                return
+            }
+            if (!src) { pageData.state = 'idle'; return }
+
+            const frame = await this.#createScrollFrame(pageData, src)
+            // Bail if cancelled during frame creation
+            if (this.#scrollLoadGen.get(pageData.index) !== gen || !this.#scrollMode) {
+                frame.element?.remove()
+                pageData.state = 'idle'
+                return
+            }
+
+            pageData.frame = frame
+            pageData.state = 'loaded'
+            // Update dimensions from actual page viewport
+            if (frame.width && frame.height) {
+                pageData.vpWidth = frame.width
+                pageData.vpHeight = frame.height
+            }
+            this.#renderScrollPage(pageData)
+
+            // Create overlayer
+            const doc = frame.iframe.contentDocument
+            if (doc) {
+                this.dispatchEvent(new CustomEvent('create-overlayer', {
+                    detail: {
+                        doc, index: pageData.index,
+                        attach: overlayer => {
+                            this.#overlayers.set(pageData.index, overlayer)
+                            frame.element.append(overlayer.element)
+                        },
+                    },
+                }))
+                // Forward wheel events to host when iframe has pointer-events
+                // (fallback for the brief window after scroll settles)
+                doc.addEventListener('wheel', e => {
+                    // Disable pointer-events immediately so subsequent
+                    // wheel ticks use native scroll
+                    this.#setScrollIframeInteraction(false)
+                    this.scrollBy({ top: e.deltaY, left: e.deltaX, behavior: 'instant' })
+                }, { passive: true })
+            }
+        } catch (e) {
+            console.warn('Failed to load scroll page', pageData.index, e)
+            pageData.state = 'idle'
+        }
+    }
+    // Remove a loaded scroll page's frame and overlayer
+    #teardownScrollPage(pageData) {
+        // Bump generation to cancel any in-progress load
+        const gen = (this.#scrollLoadGen.get(pageData.index) || 0) + 1
+        this.#scrollLoadGen.set(pageData.index, gen)
+
+        if (pageData.frame) {
+            const idx = pageData.index
+            this.#overlayers.delete(idx)
+            pageData.frame.element?.remove()
+        }
+        pageData.frame = null
+        pageData.state = 'idle'
+    }
+    // Evict the farthest loaded pages when over limit
+    #evictScrollPages() {
+        const loaded = this.#scrollPages.filter(p => p.state === 'loaded')
+        if (loaded.length <= this.#scrollMaxLoaded) return
+        const currentIndex = this.#getScrollIndex()
+        loaded.sort((a, b) =>
+            Math.abs(a.index - currentIndex) - Math.abs(b.index - currentIndex))
+        for (const page of loaded.slice(this.#scrollMaxLoaded)) {
+            this.#teardownScrollPage(page)
+        }
+    }
+    #renderScrollMode() {
+        const { width: hostWidth } = this.getBoundingClientRect()
+        if (!hostWidth) return
+        // Remember current page so we can restore scroll position after resize
+        const currentIndex = this.#getScrollIndex()
+        for (const page of this.#scrollPages) {
+            const scale = (hostWidth / page.vpWidth) * this.#scaleFactor
+            page.el.style.width = `${page.vpWidth * scale}px`
+            page.el.style.height = `${page.vpHeight * scale}px`
+            if (page.state === 'loaded' && page.frame) {
+                this.#renderScrollPage(page)
+            }
+        }
+        // Restore scroll position to keep current page in view after resize
+        if (currentIndex >= 0 && currentIndex < this.#scrollPages.length) {
+            this.#scrollPages[currentIndex].el.scrollIntoView()
+            this.#scrollCurrentIndex = currentIndex
+        }
+    }
+    #renderScrollPage(pageData) {
+        const { width: hostWidth } = this.getBoundingClientRect()
+        if (!hostWidth || !pageData.frame) return
+        const { vpWidth: vw, vpHeight: vh, frame } = pageData
+        const scale = (hostWidth / vw) * this.#scaleFactor
+
+        if (frame.onZoom) {
+            frame.onZoom({ doc: frame.iframe.contentDocument, scale })
+            Object.assign(frame.iframe.style, {
+                width: `${vw * scale}px`,
+                height: `${vh * scale}px`,
+                transform: 'none',
+                display: 'block',
+            })
+        } else {
+            Object.assign(frame.iframe.style, {
+                width: `${vw}px`,
+                height: `${vh}px`,
+                transform: `scale(${scale})`,
+                transformOrigin: 'top left',
+                display: 'block',
+            })
+        }
+        Object.assign(frame.element.style, {
+            width: `${vw * scale}px`,
+            height: `${vh * scale}px`,
+        })
+        // Update placeholder to match actual page dimensions
+        pageData.el.style.width = `${vw * scale}px`
+        pageData.el.style.height = `${vh * scale}px`
+
+        const overlayer = this.#overlayers.get(pageData.index)
+        if (overlayer) {
+            Object.assign(overlayer.element.style, {
+                position: 'absolute',
+                top: '0',
+                left: '0',
+                width: `${vw * scale}px`,
+                height: `${vh * scale}px`,
+            })
+            overlayer.redraw()
+        }
+    }
+    #getScrollIndex() {
+        if (!this.#scrollPages.length) return -1
+        const hostRect = this.getBoundingClientRect()
+        const midY = hostRect.top + hostRect.height / 2
+        for (const page of this.#scrollPages) {
+            const rect = page.el.getBoundingClientRect()
+            if (rect.top <= midY && rect.bottom >= midY) return page.index
+        }
+        let closest = 0, minDist = Infinity
+        for (const page of this.#scrollPages) {
+            const rect = page.el.getBoundingClientRect()
+            const dist = Math.abs(rect.top + rect.height / 2 - midY)
+            if (dist < minDist) { minDist = dist; closest = page.index }
+        }
+        return closest
+    }
+    #reportScrollLocation() {
+        const index = this.#getScrollIndex()
+        if (index < 0) return
+        this.#scrollCurrentIndex = index
+        this.dispatchEvent(new CustomEvent('relocate', { detail:
+            { reason: 'scroll', range: null, index, fraction: 0, size: 1 } }))
+    }
     #goLeft() {
         if (this.#center || this.#left?.blank) return
         if (this.#portrait && this.#left?.element?.style?.display === 'none') {
@@ -357,6 +736,7 @@ export class FixedLayout extends HTMLElement {
         this.rtl = book.dir === 'rtl'
 
         this.#spread()
+        if (this.#scrollMode) this.#initScrollMode()
     }
     #spread(mode) {
         const book = this.book
@@ -421,10 +801,17 @@ export class FixedLayout extends HTMLElement {
         this.goToSpread(index, this.rtl ? 'right' : 'left', 'page')
     }
     get index() {
+        if (this.#scrollMode) return this.#scrollCurrentIndex >= 0
+            ? this.#scrollCurrentIndex : this.#getScrollIndex()
+        if (this.#index < 0 || !this.#spreads) return -1
         const spread = this.#spreads[this.#index]
-        const section = spread?.center ?? (this.#side === 'left'
+        if (!spread) return -1
+        const section = spread.center ?? (this.#side === 'left'
             ? spread.left ?? spread.right : spread.right ?? spread.left)
         return this.book.sections.indexOf(section)
+    }
+    get scrolled() {
+        return this.#scrollMode
     }
     get scrollLocked() {
         return this.#scrollLocked
@@ -439,9 +826,11 @@ export class FixedLayout extends HTMLElement {
         return this.#isOverflowY
     }
     get atStart() {
+        if (this.#scrollMode) return this.scrollTop <= 0
         return this.#index <= 0
     }
     get atEnd() {
+        if (this.#scrollMode) return this.scrollTop + this.clientHeight >= this.scrollHeight - 2
         return this.#index >= this.#spreads.length - 1
     }
     #reportLocation(reason) {
@@ -631,22 +1020,56 @@ export class FixedLayout extends HTMLElement {
         // TODO
     }
     async goTo(target) {
-        const { book } = this
         const resolved = await target
+        if (this.#scrollMode) {
+            const page = this.#scrollPages[resolved.index]
+            if (page) {
+                page.el.scrollIntoView()
+                this.#scrollCurrentIndex = resolved.index
+            }
+            return
+        }
+        const { book } = this
         const section = book.sections[resolved.index]
         if (!section) return
         const { index, side } = this.getSpreadOf(section)
         await this.goToSpread(index, side)
     }
-    async next() {
+    async next(distance) {
+        if (this.#scrollMode) {
+            this.scrollBy({ top: distance || this.clientHeight, behavior: 'smooth' })
+            return
+        }
         const s = this.rtl ? this.#goLeft() : this.#goRight()
         if (!s) return this.goToSpread(this.#index + 1, this.rtl ? 'right' : 'left', 'page')
     }
-    async prev() {
+    async prev(distance) {
+        if (this.#scrollMode) {
+            this.scrollBy({ top: -(distance || this.clientHeight), behavior: 'smooth' })
+            return
+        }
         const s = this.rtl ? this.#goRight() : this.#goLeft()
         if (!s) return this.goToSpread(this.#index - 1, this.rtl ? 'left' : 'right', 'page')
     }
+    nextSection() {
+        if (!this.#scrollMode) return
+        const currentIndex = this.#getScrollIndex()
+        const nextIndex = Math.min(currentIndex + 1, this.#scrollPages.length - 1)
+        this.#scrollPages[nextIndex]?.el.scrollIntoView({ behavior: 'smooth' })
+        this.#scrollCurrentIndex = nextIndex
+    }
+    prevSection() {
+        if (!this.#scrollMode) return
+        const currentIndex = this.#getScrollIndex()
+        const prevIndex = Math.max(currentIndex - 1, 0)
+        this.#scrollPages[prevIndex]?.el.scrollIntoView({ behavior: 'smooth' })
+        this.#scrollCurrentIndex = prevIndex
+    }
     async pan(dx, dy) {
+        if (this.#scrollMode) {
+            this.scrollBy({ top: dy, left: dx, behavior: 'auto' })
+            return
+        }
         if (this.#scrollLocked) return
         this.#scrollLocked = true
 
@@ -663,6 +1086,15 @@ export class FixedLayout extends HTMLElement {
         this.#scrollLocked = false
     }
     getContents() {
+        if (this.#scrollMode) {
+            return this.#scrollPages
+                .filter(p => p.state === 'loaded' && p.frame?.iframe)
+                .map(p => ({
+                    doc: p.frame.iframe.contentDocument,
+                    index: p.index,
+                    overlayer: this.#overlayers.get(p.index),
+                }))
+        }
         return Array.from(this.#root.querySelectorAll('iframe'))
             .filter(frame => {
                 const parent = frame.parentElement
@@ -678,8 +1110,72 @@ export class FixedLayout extends HTMLElement {
                 }
             })
     }
+    pinchZoom(ratio) {
+        const frames = this.#center
+            ? [this.#center]
+            : [this.#left, this.#right]
+        for (const frame of frames) {
+            if (!frame?.element || frame.element.style.visibility === 'hidden') continue
+            frame.element.style.transform = `scale(${ratio})`
+            frame.element.style.transformOrigin = 'center'
+        }
+    }
+    pinchEnd() {
+        for (const frame of [this.#center, this.#left, this.#right]) {
+            if (!frame?.element) continue
+            frame.element.style.removeProperty('transform')
+            frame.element.style.removeProperty('transform-origin')
+        }
+    }
+    get size() {
+        return this.clientHeight
+    }
+    get viewSize() {
+        return this.#scrollMode ? this.scrollHeight : this.clientHeight
+    }
+    get start() {
+        return this.#scrollMode ? this.scrollTop : 0
+    }
+    get end() {
+        return this.#scrollMode ? this.scrollTop + this.clientHeight : this.clientHeight
+    }
+    get page() {
+        if (this.#scrollMode) return this.#scrollCurrentIndex >= 0
+            ? this.#scrollCurrentIndex : this.#getScrollIndex()
+        return this.#index
+    }
+    get pages() {
+        if (this.#scrollMode) return this.#scrollPages.length
+        return this.#spreads?.length ?? 0
+    }
+    get containerPosition() {
+        return 0
+    }
+    get sideProp() {
+        return this.#scrollMode ? 'height' : 'width'
+    }
     destroy() {
         this.#observer.unobserve(this)
+        if (this.#scrollMode) {
+            this.removeEventListener('scroll', this.#handleScrollEvent)
+            if (this.#scrollObserver) {
+                this.#scrollObserver.disconnect()
+                this.#scrollObserver = null
+            }
+            if (this.#scrollIdleTimer) {
+                clearTimeout(this.#scrollIdleTimer)
+                this.#scrollIdleTimer = null
+            }
+            for (const page of this.#scrollPages) {
+                this.#teardownScrollPage(page)
+            }
+            this.#scrollPages = []
+            this.#scrollLoadGen.clear()
+            if (this.#scrollContainer) {
+                this.#scrollContainer.remove()
+                this.#scrollContainer = null
+            }
+        }
         for (const frames of this.#prerenderedSpreads.values()) {
             if (frames.center) {
                 frames.center.element?.remove()
