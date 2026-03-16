@@ -658,14 +658,21 @@ export class View extends HTMLElement {
         this.#searchResults.clear()
     }
     async initTTS(granularity = 'word', nodeFilter, highlighter) {
-        const doc = this.renderer.getContents()[0].doc
+        const contents = this.renderer.getContents()
+        const primaryIndex = this.renderer.primaryIndex
+        const primary = contents.find(x => x.index === primaryIndex) ?? contents[0]
+        const doc = primary?.doc
+        if (!doc) return
         if (this.tts && this.tts.doc === doc) return
         const { TTS } = await import('./tts.js')
         this.tts = new TTS(doc, textWalker, nodeFilter, highlighter || (range =>
             this.renderer.scrollToAnchor(range, true)), granularity)
     }
     startMediaOverlay() {
-        const { index } = this.renderer.getContents()[0]
+        const contents = this.renderer.getContents()
+        const primaryIndex = this.renderer.primaryIndex
+        const primary = contents.find(x => x.index === primaryIndex) ?? contents[0]
+        const { index } = primary ?? {}
         return this.mediaOverlay.start(index)
     }
 }

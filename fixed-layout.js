@@ -96,6 +96,8 @@ export class FixedLayout extends HTMLElement {
             flex-direction: column;
             align-items: center;
             min-height: 100%;
+            background-color: var(--scroll-bg-color);
+            background-opacity: var(--scroll-bg-opacity);
         }
         :host([flow="scrolled"]) .scroll-page {
             position: relative;
