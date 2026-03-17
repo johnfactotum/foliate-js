@@ -250,7 +250,7 @@ const renderPage = async (page, getImageBlob) => {
         canvas.height = viewport.height
         canvas.width = viewport.width
         const canvasContext = canvas.getContext('2d')
-        await page.render({ canvasContext, viewport, background: 'rgba(0,0,0,0)' }).promise
+        await page.render({ canvasContext, viewport }).promise
         return new Promise(resolve => canvas.toBlob(blob => {
             // Release canvas bitmap memory after extracting the blob
             canvas.width = 0

@@ -1101,7 +1101,7 @@ export class Paginator extends HTMLElement {
     // position (e.g. before an animation starts).
     #replaceBackground(atPosition) {
         const doc = this.#primaryView?.document
-        if (!doc) return
+        if (!doc?.documentElement) return
         const htmlStyle = doc.defaultView.getComputedStyle(doc.documentElement)
         const themeBgColor = htmlStyle.getPropertyValue('--theme-bg-color')
         const overrideColor = htmlStyle.getPropertyValue('--override-color') === 'true'
