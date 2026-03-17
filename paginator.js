@@ -143,6 +143,7 @@ const getVisibleRange = (doc, start, end, mapRect) => {
         if (name === 'script' || name === 'style') return FILTER_REJECT
         if (node.nodeType === 1) {
             const { left, right } = mapRect(node.getBoundingClientRect())
+            if (left === 0 && right === 0) return FILTER_REJECT
             // no need to check child nodes if it's completely out of view
             if (right < start || left > end) return FILTER_REJECT
             // elements must be completely in view to be considered visible
@@ -159,6 +160,7 @@ const getVisibleRange = (doc, start, end, mapRect) => {
             range.selectNodeContents(node)
             const { left, right } = mapRect(range.getBoundingClientRect())
             // it's visible if any part of it is in view
+            if (left === 0 && right === 0) return FILTER_REJECT
             if (right >= start && left <= end) return FILTER_ACCEPT
         }
         return FILTER_SKIP
@@ -363,7 +365,7 @@ class View {
         })
     }
     render(layout) {
-        if (!layout || !this.document) return
+        if (!layout || !this.document?.documentElement) return
         this.#column = layout.flow !== 'scrolled'
         this.#layout = layout
         if (this.#column) this.columnize(layout)
