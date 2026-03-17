@@ -719,6 +719,16 @@ class MOBI6 {
             size: section.end - section.start,
         }))
 
+        // get list of all `filepos` references in the book,
+        // which will be used to insert anchor elements
+        // because only then can they be referenced in the DOM
+        // NOTE: must be built BEFORE getGuide()/createDocument() so that sections
+        // cached during init() already have anchor elements inserted.
+        this.#fileposList = [...new Set(
+            Array.from(str.matchAll(fileposRegex), m => m[1]))]
+            .map(filepos => ({ filepos, number: Number(filepos) }))
+            .sort((a, b) => a.number - b.number)
+
         try {
             this.landmarks = await this.getGuide()
             const tocHref = this.landmarks
@@ -764,14 +774,6 @@ class MOBI6 {
         } catch(e) {
             console.warn(e)
         }
-
-        // get list of all `filepos` references in the book,
-        // which will be used to insert anchor elements
-        // because only then can they be referenced in the DOM
-        this.#fileposList = [...new Set(
-            Array.from(str.matchAll(fileposRegex), m => m[1]))]
-            .map(filepos => ({ filepos, number: Number(filepos) }))
-            .sort((a, b) => a.number - b.number)
 
         this.metadata = this.mobi.getMetadata()
         this.getCover = this.mobi.getCover.bind(this.mobi)
