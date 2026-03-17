@@ -1320,6 +1320,21 @@ export class Paginator extends HTMLElement {
     get pages() {
         return Math.ceil(this.viewSize / this.size)
     }
+    get sectionStart() {
+        return this.start - this.#getViewOffset(this.#primaryIndex)
+    }
+    get sectionEnd() {
+        return this.end - this.#getViewOffset(this.#primaryIndex)
+    }
+    get sectionPage() {
+        return Math.floor(((this.sectionStart + this.sectionEnd) / 2) / this.size)
+    }
+    get sectionPages() {
+        const primaryView = this.#primaryView
+        if (!primaryView) return 0
+        const viewSize = primaryView.element.getBoundingClientRect()[this.sideProp]
+        return Math.ceil(viewSize / this.size)
+    }
     get containerPosition() {
         return this.#container[this.scrollProp]
     }
