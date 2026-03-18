@@ -715,7 +715,7 @@ class View {
             this.#overlayer.clearHole()
     }
     destroy() {
-        if (this.document) this.#observer.unobserve(this.document.body)
+        if (this.document?.body) this.#observer.unobserve(this.document.body)
     }
 }
 
