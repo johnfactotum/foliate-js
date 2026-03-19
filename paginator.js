@@ -723,7 +723,7 @@ class View {
 export class Paginator extends HTMLElement {
     static observedAttributes = [
         'flow', 'gap', 'margin-top', 'margin-bottom', 'margin-left', 'margin-right',
-        'max-inline-size', 'max-block-size', 'max-column-count',
+        'max-inline-size', 'max-block-size', 'max-column-count', 'no-preload',
     ]
     #root = this.attachShadow({ mode: 'open' })
     #observer = new ResizeObserver(() => this.render())
@@ -900,7 +900,7 @@ export class Paginator extends HTMLElement {
             // Don't dispatch scroll events during animation to prevent jank
             if (!this.#isAnimating) this.dispatchEvent(new Event('scroll'))
             // In scrolled mode, preload next section when near bottom edge
-            if (this.scrolled && !this.#filling && !this.#stabilizing) {
+            if (this.scrolled && !this.noPreload && !this.#filling && !this.#stabilizing) {
                 const threshold = this.size // ~1 viewport height
                 if (this.viewSize - this.end < threshold) {
                     const sorted = this.#sortedViews
@@ -927,7 +927,7 @@ export class Paginator extends HTMLElement {
                 // Load previous section when user scrolls near the top.
                 // Done in debounced handler (not instant) to avoid cascade
                 // from rapid DOM insertions breaking scroll anchoring.
-                if (!this.#filling && this.start < this.size) {
+                if (!this.noPreload && !this.#filling && this.start < this.size) {
                     const sorted = this.#sortedViews
                     const firstIndex = sorted[0]?.[0]
                     if (firstIndex != null) {
@@ -1289,6 +1289,9 @@ export class Paginator extends HTMLElement {
     }
     get scrolled() {
         return this.getAttribute('flow') === 'scrolled'
+    }
+    get noPreload() {
+        return this.hasAttribute('no-preload')
     }
     get scrollProp() {
         const { scrolled } = this
@@ -1660,6 +1663,7 @@ export class Paginator extends HTMLElement {
     // Does NOT re-scroll to avoid fighting with the user's current
     // scroll position.
     async #preloadNext() {
+        if (this.noPreload) return
         this.#filling = true
         try {
             // Load next 2 sections forward
@@ -1761,7 +1765,7 @@ export class Paginator extends HTMLElement {
         // - Scrolled mode with anchor in top half — so the user can
         //   scroll backward into the previous section immediately
         const primaryView = this.#primaryView
-        if (primaryView) {
+        if (!this.noPreload && primaryView) {
             const needsPrev = (primaryView.contentPages > 0 && primaryView.contentPages < this.columnCount)
             if (needsPrev || this.scrolled) {
                 const sorted = this.#sortedViews
@@ -1831,7 +1835,7 @@ export class Paginator extends HTMLElement {
     // When reanchor is false (background pre-loading), skip re-scrolling
     // to avoid fighting with the user's current scroll position.
     async #fillVisibleArea({ reanchor = true } = {}) {
-        if (this.#filling) return
+        if (this.noPreload || this.#filling) return
         this.#filling = true
         try {
             const { size } = this
@@ -1934,7 +1938,7 @@ export class Paginator extends HTMLElement {
             this.#trimDistantViews()
             // Handle short section alignment
             const primaryView = this.#primaryView
-            if (primaryView && primaryView.contentPages > 0
+            if (!this.noPreload && primaryView && primaryView.contentPages > 0
                 && primaryView.contentPages < this.columnCount) {
                 const sorted = this.#sortedViews
                 const firstIndex = sorted[0]?.[0]
