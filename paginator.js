@@ -590,7 +590,7 @@ class View {
     #loupeCursor = null
     // Show a magnifier loupe inside the iframe document.
     // winX/winY are in main-window (screen) coordinates.
-    showLoupe(winX, winY, { isVertical, color, radius }) {
+    showLoupe(winX, winY, { isVertical, color, gap, margin, radius, magnification }) {
         const doc = this.document
         if (!doc) return
 
@@ -605,24 +605,34 @@ class View {
         const docX = vpX + scrollX
         const docY = vpY + scrollY
 
-        const MAGNIFICATION = 1.2
-        const diameter = radius * 2
-        const MARGIN = 8
+        const MAGNIFICATION = magnification
+        const MARGIN = margin
+
+        // Capsule dimensions: elongated along the reading direction.
+        // For horizontal text the capsule is wider; for vertical it is taller.
+        const shortSide = radius * 2
+        const longSide  = Math.round(radius * 3.6)
+        const loupeW = isVertical ? shortSide : longSide
+        const loupeH = isVertical ? longSide  : shortSide
+        const halfW = loupeW / 2
+        const halfH = loupeH / 2
+        const borderRadius = shortSide / 2  // fully rounded ends
 
         // Position loupe above the cursor (or to the left for vertical text).
-        const loupeOffset = radius + 16
-        let loupeLeft = isVertical ? vpX - loupeOffset - diameter : vpX - radius
-        let loupeTop  = isVertical ? vpY - radius : vpY - loupeOffset - diameter
-        loupeLeft = Math.max(MARGIN, Math.min(loupeLeft, frameRect.width  - diameter - MARGIN))
-        loupeTop  = Math.max(MARGIN, Math.min(loupeTop,  frameRect.height - diameter - MARGIN))
+        const GAP = gap
+        let loupeLeft = isVertical ? vpX - loupeW - GAP : vpX - halfW
+        let loupeTop  = isVertical ? vpY - halfH        : vpY - loupeH - GAP
+        loupeLeft = Math.max(MARGIN, Math.min(loupeLeft, frameRect.width  - loupeW - MARGIN))
+        loupeTop  = Math.max(MARGIN, Math.min(loupeTop,  frameRect.height - loupeH - MARGIN))
 
-        // CSS-transform math: map document point (docX, docY) to loupe centre (radius, radius).
-        //   visual_pos = offset + coord × MAGNIFICATION = radius
-        //   ⟹ offset = radius − coord × MAGNIFICATION
-        const offsetX = radius - docX * MAGNIFICATION
-        const offsetY = radius - docY * MAGNIFICATION
+        // CSS-transform math: map document point (docX, docY) to loupe centre.
+        //   visual_pos = offset + coord × MAGNIFICATION = halfW (or halfH)
+        //   ⟹ offset = half − coord × MAGNIFICATION
+        const offsetX = halfW - docX * MAGNIFICATION
+        const offsetY = halfH - docY * MAGNIFICATION
 
-        // Build loupe DOM structure once; subsequent calls only update positions.
+        // Build loupe DOM structure once; cache it across hide/show cycles so
+        // the expensive body clone is not repeated on every drag start.
         if (!this.#loupeEl || !this.#loupeEl.isConnected) {
             this.#loupeEl = doc.createElement('div')
 
@@ -647,7 +657,7 @@ class View {
             this.#loupeScaler = doc.createElement('div')
             this.#loupeScaler.appendChild(htmlWrapper)
 
-            const cursorLen = Math.round(diameter * 0.24)
+            const cursorLen = Math.round(shortSide * 0.24)
             this.#loupeCursor = doc.createElement('div')
             this.#loupeCursor.style.cssText = isVertical
                 ? `position:absolute;left:calc(50% - ${cursorLen / 2}px);top:50%;`
@@ -662,9 +672,9 @@ class View {
             // Static loupe shell styles (set once).
             this.#loupeEl.style.cssText = `
                 position: absolute;
-                width: ${diameter}px;
-                height: ${diameter}px;
-                border-radius: 50%;
+                width: ${loupeW}px;
+                height: ${loupeH}px;
+                border-radius: ${borderRadius}px;
                 overflow: hidden;
                 border: 2.5px solid ${color};
                 box-shadow: 0 6px 24px rgba(0,0,0,0.28);
@@ -673,38 +683,53 @@ class View {
                 pointer-events: none;
                 user-select: none;
                 box-sizing: border-box;
+                contain: strict;
+            `
+
+            // Static scaler styles (set once; only left/top change per move).
+            this.#loupeScaler.style.cssText = `
+                position: absolute;
+                transform: scale(${MAGNIFICATION});
+                transform-origin: 0 0;
+                pointer-events: none;
             `
         }
 
+        // Ensure visible (hideLoupe hides via CSS instead of removing).
+        this.#loupeEl.style.display = ''
+
         // Update only the dynamic position values (fast path on every move).
-        this.#loupeScaler.style.cssText = `
-            position: absolute;
-            left: ${offsetX}px;
-            top: ${offsetY}px;
-            width: ${doc.documentElement.scrollWidth}px;
-            height: ${doc.documentElement.scrollHeight}px;
-            transform: scale(${MAGNIFICATION});
-            transform-origin: 0 0;
-            pointer-events: none;
-        `
+        this.#loupeScaler.style.left = `${offsetX}px`
+        this.#loupeScaler.style.top = `${offsetY}px`
+        this.#loupeScaler.style.width = `${doc.documentElement.scrollWidth}px`
+        this.#loupeScaler.style.height = `${doc.documentElement.scrollHeight}px`
         this.#loupeEl.style.left = `${loupeLeft + scrollX}px`
         this.#loupeEl.style.top = `${loupeTop + scrollY}px`
 
-        // Cut a circular hole in the overlayer so highlights don't paint
+        // Cut a capsule-shaped hole in the overlayer so highlights don't paint
         // over the loupe.
         if (this.#overlayer) {
             const overlayerRect = this.#overlayer.element.getBoundingClientRect()
             const dx = frameRect.left - overlayerRect.left
             const dy = frameRect.top - overlayerRect.top
 
-            const cx = loupeLeft + radius + dx
-            const cy = loupeTop + radius + dy
-            const maskRadius = radius + 3
+            const pad = 3
+            const cx = loupeLeft + halfW + dx
+            const cy = loupeTop + halfH + dy
 
-            this.#overlayer.setHole(cx, cy, maskRadius)
+            this.#overlayer.setHole(cx, cy, loupeW + pad * 2, loupeH + pad * 2, borderRadius + pad)
         }
     }
     hideLoupe() {
+        // Hide via CSS instead of removing — keeps the cached body clone so
+        // the next showLoupe call skips the expensive cloneNode(true).
+        if (this.#loupeEl) {
+            this.#loupeEl.style.display = 'none'
+        }
+        if (this.#overlayer)
+            this.#overlayer.clearHole()
+    }
+    destroyLoupe() {
         if (this.#loupeEl) {
             this.#loupeEl.remove()
             this.#loupeEl = null
@@ -716,6 +741,7 @@ class View {
     }
     destroy() {
         if (this.document?.body) this.#observer.unobserve(this.document.body)
+        this.destroyLoupe()
     }
 }
 
@@ -2114,11 +2140,14 @@ export class Paginator extends HTMLElement {
     focusView() {
         this.#primaryView?.document?.defaultView?.focus()
     }
-    showLoupe(winX, winY, { isVertical, color, radius }) {
-        this.#primaryView?.showLoupe(winX, winY, { isVertical, color, radius })
+    showLoupe(winX, winY, { isVertical, color, gap, margin, radius, magnification }) {
+        this.#primaryView?.showLoupe(winX, winY, { isVertical, color, gap, margin, radius, magnification })
     }
     hideLoupe() {
         this.#primaryView?.hideLoupe()
+    }
+    destroyLoupe() {
+        this.#primaryView?.destroyLoupe()
     }
     destroy() {
         this.#observer.unobserve(this)

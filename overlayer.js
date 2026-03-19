@@ -37,12 +37,21 @@ export class Overlayer {
         this.#svg.append(defs)
     }
 
-    setHole(x, y, r) {
-        // Define a path with a large outer rect and a circular hole
-        // "Infinite" outer rect coverage is safe for userSpaceOnUse
-        // (20,000px limit was too small for long scrolls; use 2,000,000px)
+    setHole(cx, cy, w, h, r) {
+        // Define a path with a large outer rect and a capsule-shaped hole.
+        // The capsule is a rounded rectangle (stadium shape) centred at (cx, cy).
         const outer = 'M -2000000 -2000000 H 4000000 V 4000000 H -2000000 Z'
-        const inner = `M ${x} ${y} m -${r} 0 a ${r} ${r} 0 1 0 ${2*r} 0 a ${r} ${r} 0 1 0 -${2*r} 0`
+        const hw = w / 2, hh = h / 2
+        const cr = Math.min(r, hw, hh) // clamp corner radius
+        const inner = `M ${cx - hw + cr} ${cy - hh}`
+            + ` H ${cx + hw - cr}`
+            + ` A ${cr} ${cr} 0 0 1 ${cx + hw} ${cy - hh + cr}`
+            + ` V ${cy + hh - cr}`
+            + ` A ${cr} ${cr} 0 0 1 ${cx + hw - cr} ${cy + hh}`
+            + ` H ${cx - hw + cr}`
+            + ` A ${cr} ${cr} 0 0 1 ${cx - hw} ${cy + hh - cr}`
+            + ` V ${cy - hh + cr}`
+            + ` A ${cr} ${cr} 0 0 1 ${cx - hw + cr} ${cy - hh} Z`
         this.#clipPathPath.setAttribute('d', `${outer} ${inner}`)
 
         this.#svg.setAttribute('clip-path', `url(#${this.#clipPathId})`)
