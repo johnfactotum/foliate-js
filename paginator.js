@@ -657,7 +657,7 @@ class View {
             this.#loupeScaler = doc.createElement('div')
             this.#loupeScaler.appendChild(htmlWrapper)
 
-            const cursorLen = Math.round(shortSide * 0.24)
+            const cursorLen = Math.round(shortSide * 0.44)
             this.#loupeCursor = doc.createElement('div')
             this.#loupeCursor.style.cssText = isVertical
                 ? `position:absolute;left:calc(50% - ${cursorLen / 2}px);top:50%;`
