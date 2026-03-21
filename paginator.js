@@ -928,7 +928,7 @@ export class Paginator extends HTMLElement {
             // In scrolled mode, preload next section when near bottom edge
             if (this.scrolled && !this.noPreload && !this.#filling && !this.#stabilizing) {
                 const threshold = this.size // ~1 viewport height
-                if (this.viewSize - this.end < threshold) {
+                if (this.#renderedViewSize - this.#renderedEnd < threshold) {
                     const sorted = this.#sortedViews
                     const lastIndex = sorted[sorted.length - 1]?.[0]
                     if (lastIndex != null) {
@@ -953,7 +953,7 @@ export class Paginator extends HTMLElement {
                 // Load previous section when user scrolls near the top.
                 // Done in debounced handler (not instant) to avoid cascade
                 // from rapid DOM insertions breaking scroll anchoring.
-                if (!this.noPreload && !this.#filling && this.start < this.size) {
+                if (!this.noPreload && !this.#filling && this.#renderedStart < this.size) {
                     const sorted = this.#sortedViews
                     const firstIndex = sorted[0]?.[0]
                     if (firstIndex != null) {
@@ -1157,7 +1157,7 @@ export class Paginator extends HTMLElement {
         this.#background.style.display = 'grid'
         this.#background.style.gridTemplateColumns = `repeat(${cc}, 1fr)`
 
-        const scrollPos = atPosition ?? this.start
+        const scrollPos = atPosition ?? this.#renderedStart
         for (let i = 0; i < cc; i++) {
             const columnMid = Math.abs(scrollPos) + (i + 0.5) * columnSize
             let bg = fallbackBg
@@ -1333,34 +1333,20 @@ export class Paginator extends HTMLElement {
         return this.#container.getBoundingClientRect()[this.sideProp]
     }
     get viewSize() {
-        if (this.#views.size === 0) return 0
-        let total = 0
-        for (const [, view] of this.#views)
-            total += view.element.getBoundingClientRect()[this.sideProp]
-        return total
+        const primaryView = this.#primaryView
+        if (!primaryView) return 0
+        return primaryView.element.getBoundingClientRect()[this.sideProp]
     }
     get start() {
-        return Math.abs(this.#container[this.scrollProp])
+        return this.#renderedStart - this.#getViewOffset(this.#primaryIndex)
     }
     get end() {
-        return this.start + this.size
+        return this.#renderedEnd - this.#getViewOffset(this.#primaryIndex)
     }
     get page() {
         return Math.floor(((this.start + this.end) / 2) / this.size)
     }
     get pages() {
-        return Math.ceil(this.viewSize / this.size)
-    }
-    get sectionStart() {
-        return this.start - this.#getViewOffset(this.#primaryIndex)
-    }
-    get sectionEnd() {
-        return this.end - this.#getViewOffset(this.#primaryIndex)
-    }
-    get sectionPage() {
-        return Math.floor(((this.sectionStart + this.sectionEnd) / 2) / this.size)
-    }
-    get sectionPages() {
         const primaryView = this.#primaryView
         if (!primaryView) return 0
         const viewSize = primaryView.element.getBoundingClientRect()[this.sideProp]
@@ -1374,6 +1360,25 @@ export class Paginator extends HTMLElement {
     }
     get isOverflowY() {
         return false
+    }
+    get #renderedViewSize() {
+        if (this.#views.size === 0) return 0
+        let total = 0
+        for (const [, view] of this.#views)
+            total += view.element.getBoundingClientRect()[this.sideProp]
+        return total
+    }
+    get #renderedStart() {
+        return Math.abs(this.#container[this.scrollProp])
+    }
+    get #renderedEnd() {
+        return this.#renderedStart + this.size
+    }
+    get #renderedPage() {
+        return Math.floor(((this.#renderedStart + this.#renderedEnd) / 2) / this.size)
+    }
+    get #renderedPages() {
+        return Math.ceil(this.#renderedViewSize / this.size)
     }
     set containerPosition(newVal) {
         this.#container[this.scrollProp] = newVal
@@ -1401,7 +1406,10 @@ export class Paginator extends HTMLElement {
         const horizontal = Math.abs(vx) * 2 > Math.abs(vy)
         const orthogonal = this.#vertical ? !horizontal : horizontal
         const [offset, a, b] = this.#scrollBounds
-        const { start, end, pages, size } = this
+        const size = this.size
+        const start = this.#renderedStart
+        const end = this.#renderedEnd
+        const pages = this.#renderedPages
         const min = Math.abs(offset) - a
         const max = Math.abs(offset) + b
         const snapping = this.hasAttribute('animated') && !this.hasAttribute('eink')
@@ -1498,7 +1506,7 @@ export class Paginator extends HTMLElement {
     // allows one to process rects as if they were LTR and horizontal
     #getRectMapper(view) {
         if (this.scrolled) {
-            const size = view ? view.element.getBoundingClientRect()[this.sideProp] : this.viewSize
+            const size = view ? view.element.getBoundingClientRect()[this.sideProp] : this.#renderedViewSize
             const marginTop = this.#marginTop
             const marginBottom = this.#marginBottom
             return this.#vertical
@@ -1506,7 +1514,7 @@ export class Paginator extends HTMLElement {
                     ({ left: size - right - marginTop, right: size - left - marginBottom })
                 : ({ top, bottom }) => ({ left: top - marginTop, right: bottom - marginBottom })
         }
-        const pxSize = this.pages * this.size
+        const pxSize = this.#renderedPages * this.size
         return this.#rtl
             ? ({ left, right }) =>
                 ({ left: pxSize - right, right: pxSize - left })
@@ -1608,7 +1616,7 @@ export class Paginator extends HTMLElement {
             const primaryOffset = this.#getViewOffset(this.#primaryIndex)
             const primaryView = this.#primaryView
             const primarySize = primaryView
-                ? primaryView.element.getBoundingClientRect()[this.sideProp] : this.viewSize
+                ? primaryView.element.getBoundingClientRect()[this.sideProp] : this.#renderedViewSize
             await this.#scrollTo(primaryOffset + anchor * primarySize, reason, smooth)
             return
         }
@@ -1649,9 +1657,9 @@ export class Paginator extends HTMLElement {
                 const off = this.#getViewOffset(index)
                 const vSize = v.element.getBoundingClientRect()[this.sideProp]
                 // Skip views entirely outside the viewport
-                if (off + vSize <= this.start || off >= this.end) continue
+                if (off + vSize <= this.#renderedStart || off >= this.#renderedEnd) continue
                 const range = getVisibleRange(v.document,
-                    this.start - off, this.end - off,
+                    this.#renderedStart - off, this.#renderedEnd - off,
                     this.#getRectMapper(v))
                 if (range && !range.collapsed) return { range, index }
             }
@@ -1660,15 +1668,15 @@ export class Paginator extends HTMLElement {
         // In paginated mode, also account for before-padding
         const beforePad = targetView.padding.before * this.size
         const range = getVisibleRange(targetView.document,
-            this.start - viewOffset - beforePad,
-            this.end - viewOffset - beforePad,
+            this.#renderedStart - viewOffset - beforePad,
+            this.#renderedEnd - viewOffset - beforePad,
             this.#getRectMapper(targetView))
         return range ? { range, index: this.#primaryIndex } : undefined
     }
     // Determine which view is primary based on scroll position
     #detectPrimaryView() {
         if (this.#views.size <= 1) return
-        const visibleStart = this.start
+        const visibleStart = this.#renderedStart
         let offset = 0
         for (const [index, view] of this.#sortedViews) {
             const viewSize = view.element.getBoundingClientRect()[this.sideProp]
@@ -1738,11 +1746,11 @@ export class Paginator extends HTMLElement {
         if (this.scrolled) {
             const primaryOffset = this.#getViewOffset(index)
             const primarySize = primaryView
-                ? primaryView.element.getBoundingClientRect()[this.sideProp] : this.viewSize
+                ? primaryView.element.getBoundingClientRect()[this.sideProp] : this.#renderedViewSize
             detail.fraction = primarySize > 0
-                ? Math.max(0, Math.min(1, (this.start - primaryOffset) / primarySize)) : 0
-        } else if (this.pages > 0 && primaryView) {
-            const { page } = this
+                ? Math.max(0, Math.min(1, (this.#renderedStart - primaryOffset) / primarySize)) : 0
+        } else if (this.#renderedPages > 0 && primaryView) {
+            const page = this.#renderedPage
             const pagesBeforePrimary = this.#getPagesBeforeView(index)
             const beforePad = primaryView.padding.before
             const textPages = primaryView.contentPages
@@ -1897,7 +1905,7 @@ export class Paginator extends HTMLElement {
                 // Always pre-load at least 3 next sections;
                 // only check threshold for additional ones beyond that
                 if (iterations > 3) {
-                    const totalSize = this.viewSize
+                    const totalSize = this.#renderedViewSize
                     if (totalSize >= size * 3) break
                 }
                 const nextIdx = this.#adjacentIndex(1, lastIndex)
@@ -2019,37 +2027,37 @@ export class Paginator extends HTMLElement {
     #scrollPrev(distance) {
         if (this.#views.size === 0) return true
         if (this.scrolled) {
-            if (this.start > 0) return this.#scrollTo(
-                Math.max(0, this.start - (distance ?? this.size)), null, true)
+            if (this.#renderedStart > 0) return this.#scrollTo(
+                Math.max(0, this.#renderedStart - (distance ?? this.size)), null, true)
             return !this.atStart
         }
         if (this.atStart) return
-        const page = this.page - 1
+        const page = this.#renderedPage - 1
         return this.#scrollToPage(page, 'page', true).then(() => page <= 0)
     }
     #scrollNext(distance) {
         if (this.#views.size === 0) return true
         if (this.scrolled) {
-            if (this.viewSize - this.end > 2) return this.#scrollTo(
-                Math.min(this.viewSize, distance ? this.start + distance : this.end), null, true)
+            if (this.#renderedViewSize - this.#renderedEnd > 2) return this.#scrollTo(
+                Math.min(this.#renderedViewSize, distance ? this.#renderedStart + distance : this.#renderedEnd), null, true)
             return !this.atEnd
         }
         if (this.atEnd) return
-        const page = this.page + 1
-        const pages = this.pages
+        const page = this.#renderedPage + 1
+        const pages = this.#renderedPages
         return this.#scrollToPage(page, 'page', true).then(() => page >= pages - 1)
     }
     get atStart() {
         const sorted = this.#sortedViews
         const firstIndex = sorted[0]?.[0] ?? this.#primaryIndex
-        if (this.scrolled) return this.#adjacentIndex(-1, firstIndex) == null && this.start <= 0
-        return this.#adjacentIndex(-1, firstIndex) == null && this.page <= 1
+        if (this.scrolled) return this.#adjacentIndex(-1, firstIndex) == null && this.#renderedStart <= 0
+        return this.#adjacentIndex(-1, firstIndex) == null && this.#renderedPage <= 1
     }
     get atEnd() {
         const sorted = this.#sortedViews
         const lastIndex = sorted[sorted.length - 1]?.[0] ?? this.#primaryIndex
-        if (this.scrolled) return this.#adjacentIndex(1, lastIndex) == null && this.viewSize - this.end <= 2
-        return this.#adjacentIndex(1, lastIndex) == null && this.page >= this.pages - 2
+        if (this.scrolled) return this.#adjacentIndex(1, lastIndex) == null && this.#renderedViewSize - this.#renderedEnd <= 2
+        return this.#adjacentIndex(1, lastIndex) == null && this.#renderedPage >= this.#renderedPages - 2
     }
     #adjacentIndex(dir, fromIndex) {
         if (fromIndex === undefined) fromIndex = this.#primaryIndex
