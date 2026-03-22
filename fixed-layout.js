@@ -276,7 +276,8 @@ export class FixedLayout extends HTMLElement {
                 }
             }
 
-            const container= element.parentNode.host
+            const container= element.parentNode?.host
+            if (!container) return
             const containerWidth = container.clientWidth
             const containerHeight = container.clientHeight
             container.scrollLeft = (element.clientWidth - containerWidth) / 2
@@ -290,12 +291,14 @@ export class FixedLayout extends HTMLElement {
         }
         if (this.#center) {
             const dimensions = transform({frame: this.#center, styles: { marginInline: 'auto' }})
+            if (!dimensions) return renderPromises
             const {width, height, containerWidth, containerHeight} = dimensions
             this.#isOverflowX = width > containerWidth
             this.#isOverflowY = height > containerHeight
         } else {
             const leftDimensions = transform({frame: left, styles: { marginInlineStart: 'auto' }})
             const rightDimensions = transform({frame: right, styles: { marginInlineEnd: 'auto' }})
+            if (!leftDimensions || !rightDimensions) return renderPromises
             const {width: leftWidth, height: leftHeight, containerWidth, containerHeight} = leftDimensions
             const {width: rightWidth, height: rightHeight} = rightDimensions
             this.#isOverflowX = leftWidth + rightWidth > containerWidth
@@ -336,8 +339,8 @@ export class FixedLayout extends HTMLElement {
             }
         }
 
-        this.#side = center ? 'center' : this.#left.blank ? 'right'
-            : this.#right.blank ? 'left' : side
+        this.#side = center ? 'center' : this.#left?.blank ? 'right'
+            : this.#right?.blank ? 'left' : side
         const visibleFrames = center
             ? [this.#center?.element]
             : [this.#left?.element, this.#right?.element]
