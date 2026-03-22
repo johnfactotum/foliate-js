@@ -384,8 +384,8 @@ class View {
         const availableHeight = Math.trunc(height - marginTop - marginBottom)
         setStyles(doc.documentElement, {
             'padding': vertical
-                ? `${marginTop * 1.5}px ${marginRight}px ${marginBottom * 1.5}px ${marginLeft}px`
-                : `${marginTop}px ${gap / 2 + marginRight / 2}px ${marginBottom}px ${gap / 2 + marginLeft / 2}px`,
+                ? `${marginTop * 1.5}px 0px ${marginBottom * 1.5}px 0px`
+                : `0px ${gap / 2 + marginRight / 2}px 0px ${gap / 2 + marginLeft / 2}px`,
             '--page-margin-top': `${vertical ? marginTop * 1.5 : marginTop}px`,
             '--page-margin-right': `${vertical ? marginRight : marginRight + gap /2}px`,
             '--page-margin-bottom': `${vertical ? marginBottom * 1.5 : marginBottom}px`,
@@ -397,6 +397,7 @@ class View {
         })
         setStylesImportant(doc.body, {
             [vertical ? 'max-height' : 'max-width']: `${columnWidth}px`,
+            ...(vertical ? { 'width': `${availableWidth}px` } : {}),
             'margin': 'auto',
         })
         this.setImageSize(availableWidth, availableHeight)
@@ -561,7 +562,11 @@ class View {
         } else {
             const side = this.#vertical ? 'width' : 'height'
             const otherSide = this.#vertical ? 'height' : 'width'
-            const contentSize = documentElement.getBoundingClientRect()[side]
+            const contentSize = this.#vertical
+                ? this.#contentRange.getBoundingClientRect().width
+                    + parseFloat(getComputedStyle(documentElement).paddingLeft || 0)
+                    + parseFloat(getComputedStyle(documentElement).paddingRight || 0)
+                : documentElement.getBoundingClientRect()[side]
             const expandedSize = contentSize
             this.#element.style.padding = '0'
             this.#iframe.style[side] = `${expandedSize}px`
@@ -874,7 +879,7 @@ export class Paginator extends HTMLElement {
             flex-direction: column;
         }
         :host([flow="scrolled"]) #container.vertical {
-            flex-direction: row-reverse;
+            flex-direction: row;
         }
         #header {
             grid-column: 3 / 4;
