@@ -57,6 +57,7 @@ export class FixedLayout extends HTMLElement {
     #numPrerenderedSpreads = 1
     #maxCachedSpreads = 2
     #overlayers = new Map()
+    #pageColors = {}
     #preloadQueue = []
     #activePreloads = 0
     // Scroll mode fields
@@ -233,7 +234,7 @@ export class FixedLayout extends HTMLElement {
             let { element, iframe, width, height, blank, onZoom } = frame
             if (!iframe) return
             if (onZoom) {
-                const p = onZoom({ doc: frame.iframe.contentDocument, scale })
+                const p = onZoom({ doc: frame.iframe.contentDocument, scale, pageColors: this.#pageColors })
                 if (p?.then) renderPromises.push(p)
             }
             const iframeScale = onZoom ? scale : 1
@@ -658,7 +659,7 @@ export class FixedLayout extends HTMLElement {
         const scale = (hostWidth / vw) * this.#scaleFactor
 
         if (frame.onZoom) {
-            frame.onZoom({ doc: frame.iframe.contentDocument, scale })
+            frame.onZoom({ doc: frame.iframe.contentDocument, scale, pageColors: this.#pageColors })
             Object.assign(frame.iframe.style, {
                 width: `${vw * scale}px`,
                 height: `${vh * scale}px`,
@@ -815,6 +816,13 @@ export class FixedLayout extends HTMLElement {
             ? spread.left ?? spread.right : spread.right ?? spread.left)
         return this.book.sections.indexOf(section)
     }
+    get pageColors() {
+        return this.#pageColors
+    }
+    set pageColors(value) {
+        this.#pageColors = value
+        this.#render()
+    }
     get scrolled() {
         return this.#scrollMode
     }
@@ -943,7 +951,7 @@ export class FixedLayout extends HTMLElement {
                         this.#spreadAccessTime.set(cacheKey, Date.now())
                         if (frame.onZoom) {
                             const doc = frame.iframe.contentDocument
-                            frame.onZoom({ doc, scale: this.#totalScaleFactor })
+                            frame.onZoom({ doc, scale: this.#totalScaleFactor, pageColors: this.#pageColors })
                         }
                     } else {
                         const srcL = await spread.left?.load?.()
@@ -960,11 +968,11 @@ export class FixedLayout extends HTMLElement {
 
                         if (leftFrame.onZoom) {
                             const docL = leftFrame.iframe.contentDocument
-                            leftFrame.onZoom({ doc: docL, scale: this.#totalScaleFactor })
+                            leftFrame.onZoom({ doc: docL, scale: this.#totalScaleFactor, pageColors: this.#pageColors })
                         }
                         if (rightFrame.onZoom) {
                             const docR = rightFrame.iframe.contentDocument
-                            rightFrame.onZoom({ doc: docR, scale: this.#totalScaleFactor })
+                            rightFrame.onZoom({ doc: docR, scale: this.#totalScaleFactor, pageColors: this.#pageColors })
                         }
                     }
                 } catch {

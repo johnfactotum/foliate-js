@@ -130,7 +130,7 @@ const setupPanningEvents = (doc) => {
     container.style.cursor = 'grab'
 }
 
-const render = async (page, doc, zoom) => {
+const render = async (page, doc, zoom, pageColors) => {
     if (!doc) return
 
     // Increment generation to invalidate any in-progress render for this doc
@@ -159,7 +159,7 @@ const render = async (page, doc, zoom) => {
     canvas.height = viewport.height
     canvas.width = viewport.width
     const canvasContext = canvas.getContext('2d')
-    const renderTask = page.render({ canvasContext, viewport, background: 'rgba(0,0,0,0)' })
+    const renderTask = page.render({ canvasContext, viewport, pageColors })
     activeRenderTasks.set(doc, renderTask)
 
     try {
@@ -284,7 +284,7 @@ const renderPage = async (page, getImageBlob) => {
         <div class="annotationLayer"></div>
     `
     const src = URL.createObjectURL(new Blob([data], { type: 'text/html' }))
-    const onZoom = ({ doc, scale }) => render(page, doc, scale)
+    const onZoom = ({ doc, scale, pageColors }) => render(page, doc, scale, pageColors)
     return { src, data, onZoom }
 }
 
