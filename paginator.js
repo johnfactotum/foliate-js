@@ -273,6 +273,7 @@ class View {
     #padding = { before: 1, after: 1 }
     #alignColumns = 0
     #contentPages = 0
+    #bgImageSize = null
     fontReady = Promise.resolve()
     constructor({ container, onExpand }) {
         this.container = container
@@ -339,6 +340,21 @@ class View {
                 const { vertical, rtl } = getDirection(doc)
                 this.docBackground = getBackground(doc)
                 doc.body.style.background = 'none'
+                // Preload background image to get natural dimensions;
+                // in scrolled mode the view expands to fit the image.
+                const bgUrl = this.docBackground
+                    ?.match(/url\(["']?([^"')]+)["']?\)/)?.[1]
+                if (bgUrl) {
+                    const img = new Image()
+                    img.onload = () => {
+                        this.#bgImageSize = {
+                            width: img.naturalWidth,
+                            height: img.naturalHeight,
+                        }
+                        if (!this.#column) this.expand()
+                    }
+                    img.src = bgUrl
+                }
                 this.#iframe.style.display = 'none'
 
                 this.#vertical = vertical
@@ -567,7 +583,19 @@ class View {
                     + parseFloat(getComputedStyle(documentElement).paddingLeft || 0)
                     + parseFloat(getComputedStyle(documentElement).paddingRight || 0)
                 : documentElement.getBoundingClientRect()[side]
-            const expandedSize = contentSize
+            let expandedSize = contentSize
+            // If the section has a background image, ensure the view is
+            // at least as large as the image scaled to fit the cross axis
+            if (this.#bgImageSize) {
+                const crossSize = this.#element.getBoundingClientRect()[otherSide]
+                if (crossSize > 0) {
+                    const { width: imgW, height: imgH } = this.#bgImageSize
+                    const scaledSize = this.#vertical
+                        ? imgW * crossSize / imgH
+                        : imgH * crossSize / imgW
+                    expandedSize = Math.max(expandedSize, scaledSize)
+                }
+            }
             this.#element.style.padding = '0'
             this.#iframe.style[side] = `${expandedSize}px`
             this.#element.style[side] = `${expandedSize}px`
@@ -1153,6 +1181,19 @@ export class Paginator extends HTMLElement {
                 return parsed.join(' ')
             }
             return background
+        }
+
+        if (this.scrolled) {
+            // In scrolled mode, set background directly on each view element
+            // so it scrolls with the content. The static #background provides
+            // the fallback color for margins and gaps between views.
+            this.#background.innerHTML = ''
+            this.#background.style.display = ''
+            this.#background.style.background = fallbackBg
+            for (const [, view] of this.#sortedViews) {
+                view.element.style.background = resolveBackground(view.docBackground)
+            }
+            return
         }
 
         const cc = this.columnCount
