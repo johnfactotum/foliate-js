@@ -585,12 +585,37 @@ class MediaOverlay extends EventTarget {
     }
 }
 
-const isUUID = /([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})/
+const isUUID = /([0-9a-f]{8})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{4})-([0-9a-f]{12})/i
 
 const getUUID = opf => {
-    for (const el of opf.getElementsByTagNameNS(NS.DC, 'identifier')) {
-        const [id] = getElementText(el).split(':').slice(-1)
-        if (isUUID.test(id)) return id
+    const extractUUID = el => {
+        const text = getElementText(el)
+        const id = text.split(':').slice(-1)[0]
+        const match = isUUID.exec(id)
+        return match ? match[0] : null
+    }
+    const identifiers = Array.from(opf.getElementsByTagNameNS(NS.DC, 'identifier'))
+    // 1. Prefer the unique-identifier (used by Adobe font obfuscation)
+    const uniqueIdAttr = opf.documentElement.getAttribute('unique-identifier')
+    if (uniqueIdAttr) {
+        const el = identifiers.find(el => el.getAttribute('id') === uniqueIdAttr)
+        if (el) {
+            const uuid = extractUUID(el)
+            if (uuid) return uuid
+        }
+    }
+    // 2. Prefer urn:uuid: identifiers (standard UUID URN per RFC 4122)
+    for (const el of identifiers) {
+        const text = getElementText(el)
+        if (/^urn:uuid:/i.test(text)) {
+            const uuid = extractUUID(el)
+            if (uuid) return uuid
+        }
+    }
+    // 3. Fall back to any identifier containing a UUID
+    for (const el of identifiers) {
+        const uuid = extractUUID(el)
+        if (uuid) return uuid
     }
     return ''
 }
