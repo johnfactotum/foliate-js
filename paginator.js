@@ -413,8 +413,10 @@ class View {
         })
         setStylesImportant(doc.body, {
             [vertical ? 'max-height' : 'max-width']: `${columnWidth}px`,
-            ...(vertical ? { 'width': `${availableWidth}px` } : {}),
             'margin': 'auto',
+            // Prevent position:absolute/fixed on body from coupling its
+            // size to the iframe, which causes diverging expand() loops
+            'position': 'static',
         })
         this.setImageSize(availableWidth, availableHeight)
         this.expand()
@@ -462,6 +464,9 @@ class View {
             'max-height': 'none',
             'max-width': 'none',
             'margin': '0',
+            // Prevent position:absolute/fixed on body from coupling its
+            // size to the iframe, which causes diverging expand() loops
+            'position': 'static',
         })
         this.setImageSize(availableWidth, availableHeight)
         this.expand()
@@ -578,11 +583,7 @@ class View {
         } else {
             const side = this.#vertical ? 'width' : 'height'
             const otherSide = this.#vertical ? 'height' : 'width'
-            const contentSize = this.#vertical
-                ? this.#contentRange.getBoundingClientRect().width
-                    + parseFloat(getComputedStyle(documentElement).paddingLeft || 0)
-                    + parseFloat(getComputedStyle(documentElement).paddingRight || 0)
-                : documentElement.getBoundingClientRect()[side]
+            const contentSize = documentElement.getBoundingClientRect()[side]
             let expandedSize = contentSize
             // If the section has a background image, ensure the view is
             // at least as large as the image scaled to fit the cross axis
