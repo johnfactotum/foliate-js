@@ -215,17 +215,20 @@ export const getFeed = doc => {
         else groupedItems.set(groupLink.href, [item])
     }
     const [items, ...groups] = Array.from(groupedItems, ([key, items]) => {
-        const itemsKey = items[0]?.metadata ? 'publications' : 'navigation'
-        if (key == null) return { [itemsKey]: items }
-        const link = groupLinkMap.get(key)
-        return {
-            metadata: {
+        const publications = items.filter(item => item.metadata)
+        const navigation = items.filter(item => !item.metadata)
+        const result = {}
+        if (publications.length) result.publications = publications
+        if (navigation.length) result.navigation = navigation
+        if (key != null) {
+            const link = groupLinkMap.get(key)
+            result.metadata = {
                 title: link.title,
                 numberOfItems: link.properties.numberOfItems,
-            },
-            links: [{ rel: 'self', href: link.href, type: link.type }],
-            [itemsKey]: items,
+            }
+            result.links = [{ rel: 'self', href: link.href, type: link.type }]
         }
+        return result
     })
     return {
         metadata: {
