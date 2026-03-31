@@ -1600,7 +1600,7 @@ export class Paginator extends HTMLElement {
                 + primaryView.alignColumns * (this.size / this.columnCount)
             : 0
         const containerOffset = viewOffset + beforePad + localOffset
-        return this.#scrollToPage(Math.floor(containerOffset / this.size), reason)
+        return this.#scrollToPage(Math.round(containerOffset / this.size), reason)
     }
     async #scrollTo(offset, reason, smooth) {
         const { size } = this
@@ -1702,7 +1702,7 @@ export class Paginator extends HTMLElement {
     }
     // Get number of pages (spreads) before a given view, using pixel offsets
     #getPagesBeforeView(index) {
-        return Math.floor(this.#getViewOffset(index) / this.size)
+        return Math.round(this.#getViewOffset(index) / this.size)
     }
     #getVisibleRange() {
         const targetView = this.#primaryView
@@ -1740,7 +1740,7 @@ export class Paginator extends HTMLElement {
         let offset = 0
         for (const [index, view] of this.#sortedViews) {
             const viewSize = view.element.getBoundingClientRect()[this.sideProp]
-            if (visibleStart < offset + viewSize) {
+            if (visibleStart < offset + viewSize - 1) {
                 if (index !== this.#primaryIndex) {
                     this.#primaryIndex = index
                     this.#trimDistantViews()
