@@ -477,7 +477,11 @@ class View {
         const doc = this.document
         const pageFullscreen = doc.documentElement.hasAttribute('data-duokan-page-fullscreen')
         for (const el of doc.body.querySelectorAll('img, svg, video')) {
-            // preserve max size if they are already set
+            // clear previous inline constraints so we read CSS-authored values,
+            // not stale pixel values from a previous resize (#3634)
+            el.style.removeProperty('max-width')
+            el.style.removeProperty('max-height')
+            // preserve max size if they are already set in CSS
             let { maxHeight, maxWidth } = doc.defaultView.getComputedStyle(el)
             if (parseInt(maxWidth) > availableWidth) {
                 maxWidth = `${availableWidth}px`
@@ -1335,11 +1339,7 @@ export class Paginator extends HTMLElement {
         if (this.#views.size === 0) return
         const primaryView = this.#primaryView
         if (!primaryView) return
-        const needsStabilize = !this.#stabilizing
-        if (needsStabilize) {
-            this.#stabilizing = true
-            if (!this.#rendered) this.#container.style.opacity = '0'
-        }
+        this.#stabilizing = true
         const layout = this.#beforeRender({
             vertical: this.#vertical,
             rtl: this.#rtl,
@@ -1348,27 +1348,12 @@ export class Paginator extends HTMLElement {
             if (view.document) view.render(layout)
         }
         this.#updateViewPadding()
-        if (needsStabilize) {
-            // Defer scrollToAnchor to RAF for mode switches — the browser
-            // needs a frame to compute the new layout (e.g. CSS multi-column
-            // positions) before getClientRects() returns correct values
-            requestAnimationFrame(() => {
-                this.#scrollToAnchor(this.#anchor)
-                this.#container.style.opacity = '1'
-                this.dispatchEvent(new Event('stabilized'))
-                // In scrolled mode, keep #stabilizing true until any
-                // pending fill completes to prevent backward cascade
-                if (this.scrolled && this.#fillPromise) {
-                    this.#fillPromise.then(() => { this.#stabilizing = false })
-                } else {
-                    this.#stabilizing = false
-                }
-            })
-        } else {
-            // Same-mode re-render (e.g. resize within stabilization) —
-            // scroll immediately in paginated mode
-            if (!this.scrolled) this.#scrollToAnchor(this.#anchor)
-        }
+        // Scroll synchronously to prevent visible layout shift during resize.
+        // RAF deferral is only needed for initial display and mode switches
+        // (handled by #display), not for resize re-renders.
+        this.#scrollToAnchor(this.#anchor)
+        this.#stabilizing = false
+        this.dispatchEvent(new Event('stabilized'))
     }
     get scrolled() {
         return this.getAttribute('flow') === 'scrolled'
