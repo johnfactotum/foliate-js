@@ -270,8 +270,6 @@ class View {
     #size
     #columnCount = 1
     #layout = {}
-    #padding = { before: 1, after: 1 }
-    #alignColumns = 0
     #contentPages = 0
     #bgImageSize = null
     fontReady = Promise.resolve()
@@ -309,23 +307,6 @@ class View {
     }
     get contentPages() {
         return this.#contentPages
-    }
-    set padding(val) {
-        if (this.#padding.before === val.before && this.#padding.after === val.after) return
-        this.#padding = val
-        this.expand()
-    }
-    get padding() {
-        return this.#padding
-    }
-    set alignColumns(val) {
-        if (this.#alignColumns !== val) {
-            this.#alignColumns = val
-            this.expand()
-        }
-    }
-    get alignColumns() {
-        return this.#alignColumns
     }
     async load(src, data, afterLoad, beforeRender) {
         if (typeof src !== 'string') throw new Error(`${src} is not string`)
@@ -549,38 +530,18 @@ class View {
             const columnSize = this.#size / this.#columnCount
             const pageCount = Math.ceil(contentSize / columnSize)
             this.#contentPages = pageCount
-            const { before, after } = this.#padding
             const expandedSize = pageCount * columnSize
-            // Use CSS padding on the element to position the iframe after
-            // the before-padding space. With content-box sizing, total
-            // rendered size = padding + content width.
-            // alignColumns adds blank columns before the content to push
-            // short sections to the end of a spread.
-            const alignPx = this.#alignColumns * columnSize
-            const beforePx = this.#size * before + alignPx
-            const afterPx = this.#size * after
             this.#element.style.padding = '0'
-            if (this.#vertical) {
-                this.#element.style.paddingTop = `${beforePx}px`
-                this.#element.style.paddingBottom = `${afterPx}px`
-            } else if (this.#rtl) {
-                this.#element.style.paddingRight = `${beforePx}px`
-                this.#element.style.paddingLeft = `${afterPx}px`
-            } else {
-                this.#element.style.paddingLeft = `${beforePx}px`
-                this.#element.style.paddingRight = `${afterPx}px`
-            }
             this.#iframe.style[side] = `${expandedSize}px`
             this.#element.style[side] = `${expandedSize}px`
             this.#iframe.style[otherSide] = '100%'
             this.#element.style[otherSide] = '100%'
             // One column per "page" — overflow columns extend into adjacent pages
             documentElement.style[side] = `${columnSize}px`
-            const beforeOffset = beforePx
             if (this.#overlayer) {
                 this.#overlayer.element.style.margin = '0'
-                this.#overlayer.element.style.left = this.#vertical ? '0' : `${beforeOffset}px`
-                this.#overlayer.element.style.top = this.#vertical ? `${beforeOffset}px` : '0'
+                this.#overlayer.element.style.left = '0'
+                this.#overlayer.element.style.top = '0'
                 this.#overlayer.element.style[side] = `${expandedSize}px`
                 this.#overlayer.redraw()
             }
@@ -962,28 +923,7 @@ export class Paginator extends HTMLElement {
         this.#footer = this.#root.getElementById('footer')
 
         this.#observer.observe(this.#container)
-        this.#container.addEventListener('scroll', () => {
-            // Don't dispatch scroll events during animation to prevent jank
-            if (!this.#isAnimating) this.dispatchEvent(new Event('scroll'))
-            // In scrolled mode, preload next section when near bottom edge
-            if (this.scrolled && !this.noPreload && !this.noContinuousScroll && !this.#filling && !this.#stabilizing) {
-                const threshold = this.size // ~1 viewport height
-                if (this.#renderedViewSize - this.#renderedEnd < threshold) {
-                    const sorted = this.#sortedViews
-                    const lastIndex = sorted[sorted.length - 1]?.[0]
-                    if (lastIndex != null) {
-                        const nextIdx = this.#adjacentIndex(1, lastIndex)
-                        if (nextIdx != null && !this.#views.has(nextIdx)) {
-                            this.#filling = true
-                            this.#loadAdjacentSection(nextIdx)
-                                .then(() => this.#updateViewPadding())
-                                .finally(() => { this.#filling = false })
-                        }
-                    }
-                }
-            }
-        })
-        this.#container.addEventListener('scroll', debounce(() => {
+        const debouncedScroll = debounce(() => {
             if (this.scrolled && !this.#isAnimating) {
                 // Skip entirely while stabilizing — preserve #justAnchored
                 // so the first post-stabilization fire still sees it.
@@ -1001,13 +941,35 @@ export class Paginator extends HTMLElement {
                         if (prevIdx != null && !this.#views.has(prevIdx)) {
                             this.#filling = true
                             this.#loadAdjacentSection(prevIdx)
-                                .then(() => this.#updateViewPadding())
                                 .finally(() => { this.#filling = false })
                         }
                     }
                 }
             }
-        }, 250))
+        }, 250)
+        this.#container.addEventListener('scroll', () => {
+            if (!this.#isAnimating) this.dispatchEvent(new Event('scroll'))
+            // Preload forward when fewer than minPages ahead
+            if (!this.noPreload && !this.noContinuousScroll && !this.#filling && !this.#stabilizing) {
+                const minPages = 5
+                const pagesAhead = this.size > 0
+                    ? Math.floor((this.#renderedViewSize - this.#renderedEnd) / this.size)
+                    : 0
+                if (pagesAhead < minPages) {
+                    const sorted = this.#sortedViews
+                    const lastIndex = sorted[sorted.length - 1]?.[0]
+                    if (lastIndex != null) {
+                        const nextIdx = this.#adjacentIndex(1, lastIndex)
+                        if (nextIdx != null && !this.#views.has(nextIdx)) {
+                            this.#filling = true
+                            this.#loadAdjacentSection(nextIdx)
+                                .finally(() => { this.#filling = false })
+                        }
+                    }
+                }
+            }
+            debouncedScroll()
+        })
 
         const opts = { passive: false }
         this.addEventListener('touchstart', this.#onTouchStart.bind(this), opts)
@@ -1110,7 +1072,6 @@ export class Paginator extends HTMLElement {
                     for (const [i] of this.#views) {
                         if (i !== this.#primaryIndex) this.#destroyView(i)
                     }
-                    this.#updateViewPadding()
                 }
                 break
         }
@@ -1228,9 +1189,7 @@ export class Paginator extends HTMLElement {
             for (const [, view] of sorted) {
                 const viewSize = view.element.getBoundingClientRect()[this.sideProp]
                 if (columnMid < offset + viewSize) {
-                    const beforePad = view.padding.before * this.size
-                        + view.alignColumns * columnSize
-                    const contentStart = offset + beforePad
+                    const contentStart = offset
                     const contentEnd = contentStart + view.contentPages * columnSize
                     if (columnMid >= contentStart && columnMid < contentEnd) {
                         bg = resolveBackground(view.docBackground)
@@ -1347,7 +1306,6 @@ export class Paginator extends HTMLElement {
         for (const [, view] of this.#views) {
             if (view.document) view.render(layout)
         }
-        this.#updateViewPadding()
         // Scroll synchronously to prevent visible layout shift during resize.
         // RAF deferral is only needed for initial display and mode switches
         // (handled by #display), not for resize re-renders.
@@ -1462,19 +1420,21 @@ export class Paginator extends HTMLElement {
         const d = v * (this.#rtl ? -size : size) * (orthogonal ? 1 : 0)
         const snapOffset = (isNaN(d) ? 0 : snapping ? d * 2 : d * 10)
         const page = Math.floor(Math.max(min, Math.min(max, (start + end) / 2 + snapOffset)) / size)
-        this.#scrollToPage(page, 'snap').then(() => {
-            const dir = page <= 0 ? -1 : page >= pages - 1 ? 1 : null
-            if (dir) {
-                const sorted = this.#sortedViews
-                const edgeIndex = dir < 0
-                    ? sorted[0]?.[0] ?? this.#primaryIndex
-                    : sorted[sorted.length - 1]?.[0] ?? this.#primaryIndex
-                return this.#goTo({
-                    index: this.#adjacentIndex(dir, edgeIndex),
-                    anchor: dir < 0 ? () => 1 : () => 0,
-                })
-            }
-        })
+        const dir = page < 0 ? -1 : page >= pages ? 1 : null
+        const doGoTo = () => {
+            if (!dir) return
+            const sorted = this.#sortedViews
+            const edgeIndex = dir < 0
+                ? sorted[0]?.[0] ?? this.#primaryIndex
+                : sorted[sorted.length - 1]?.[0] ?? this.#primaryIndex
+            return this.#goTo({
+                index: this.#adjacentIndex(dir, edgeIndex),
+                anchor: dir < 0 ? () => 1 : () => 0,
+            })
+        }
+        // Out of range — skip animation, go straight to adjacent section
+        if (dir) return doGoTo()
+        this.#scrollToPage(page, 'snap')
     }
     #onTouchStart(e) {
         const touch = e.changedTouches[0]
@@ -1579,13 +1539,8 @@ export class Paginator extends HTMLElement {
         // coordinates by adding the primary view's offset.
         const localOffset = this.#getRectMapper()(rect).left
         const viewOffset = this.#getViewOffset(this.#primaryIndex)
-        const primaryView = this.#primaryView
-        const beforePad = primaryView
-            ? primaryView.padding.before * this.size
-                + primaryView.alignColumns * (this.size / this.columnCount)
-            : 0
-        const containerOffset = viewOffset + beforePad + localOffset
-        return this.#scrollToPage(Math.round(containerOffset / this.size), reason)
+        const containerOffset = viewOffset + localOffset
+        return this.#scrollToPage(Math.floor(containerOffset / this.size + 0.01), reason)
     }
     async #scrollTo(offset, reason, smooth) {
         const { size } = this
@@ -1674,7 +1629,7 @@ export class Paginator extends HTMLElement {
         // textPages is in column units; convert to spread page for scrolling
         const newColumn = Math.round(anchor * (textPages - 1))
         const newSpreadPage = Math.floor(newColumn / this.columnCount)
-        await this.#scrollToPage(pagesBeforePrimary + primaryView.padding.before + newSpreadPage, reason, smooth)
+        await this.#scrollToPage(pagesBeforePrimary + newSpreadPage, reason, smooth)
     }
     // Get the pixel offset of a view within the container
     #getViewOffset(index) {
@@ -1685,9 +1640,13 @@ export class Paginator extends HTMLElement {
         }
         return offset
     }
-    // Get number of pages (spreads) before a given view, using pixel offsets
+    // Get number of full pages (spreads) before a given view.
+    // Uses floor so the view's first column is always on or after
+    // the returned page — never rounded past it. The 0.01 tolerance
+    // absorbs sub-pixel drift on fractional-DPR devices where
+    // getBoundingClientRect() accumulates ~0.0001px errors.
     #getPagesBeforeView(index) {
-        return Math.round(this.#getViewOffset(index) / this.size)
+        return Math.floor(this.#getViewOffset(index) / this.size + 0.01)
     }
     #getVisibleRange() {
         const targetView = this.#primaryView
@@ -1710,11 +1669,9 @@ export class Paginator extends HTMLElement {
             }
             return
         }
-        // In paginated mode, also account for before-padding
-        const beforePad = targetView.padding.before * this.size
         const range = getVisibleRange(targetView.document,
-            this.#renderedStart - viewOffset - beforePad,
-            this.#renderedEnd - viewOffset - beforePad,
+            this.#renderedStart - viewOffset,
+            this.#renderedEnd - viewOffset,
             this.#getRectMapper(targetView))
         return range ? { range, index: this.#primaryIndex } : undefined
     }
@@ -1745,28 +1702,28 @@ export class Paginator extends HTMLElement {
         if (this.noPreload || this.noContinuousScroll) return
         this.#filling = true
         try {
-            // Load next 2 sections forward
-            let fromIndex = this.#primaryIndex
-            for (let i = 0; i < 2; i++) {
-                const nextIdx = this.#adjacentIndex(1, fromIndex)
+            const { size } = this
+            const minPages = 5
+            const maxSections = 8
+            // Load forward sections until we have enough pages ahead
+            let iterations = 0
+            while (this.#views.size < maxSections && iterations < maxSections) {
+                iterations++
+                const pagesAhead = size > 0
+                    ? Math.floor((this.#renderedViewSize - this.#renderedEnd) / size)
+                    : 0
+                if (pagesAhead >= minPages) break
+                const sorted = this.#sortedViews
+                const lastIndex = sorted[sorted.length - 1]?.[0]
+                if (lastIndex == null) break
+                const nextIdx = this.#adjacentIndex(1, lastIndex)
                 if (nextIdx == null) break
                 await this.#loadAdjacentSection(nextIdx)
-                fromIndex = nextIdx
+                if (!this.#views.has(nextIdx)) break
             }
-            // In scrolled mode, DON'T preload previous sections here —
-            // inserting content above the viewport during background
-            // loading can break scroll anchoring and cause a cascade
-            // back to section 0. Previous sections are loaded on-demand
-            // by the scroll event handler when the user nears the top.
-            // Only update padding (to set correct first/last markers).
-            // Do NOT trim distant views here — removing elements during
-            // background pre-loading shifts scroll position without
-            // re-scrolling, causing the visible content to jump.
-            // Trimming happens in #goTo / #fillVisibleArea instead.
-            this.#updateViewPadding()
-            // Wait a frame so ResizeObserver callbacks from padding
-            // updates fire while #filling is still true, preventing
-            // onExpand from re-scrolling to a stale anchor position.
+            // Wait a frame so ResizeObserver callbacks fire while
+            // #filling is still true, preventing onExpand from
+            // re-scrolling to a stale anchor position.
             await new Promise(r => requestAnimationFrame(r))
         } finally {
             this.#filling = false
@@ -1797,11 +1754,10 @@ export class Paginator extends HTMLElement {
         } else if (this.#renderedPages > 0 && primaryView) {
             const page = this.#renderedPage
             const pagesBeforePrimary = this.#getPagesBeforeView(index)
-            const beforePad = primaryView.padding.before
             const textPages = primaryView.contentPages
-            this.#header.style.visibility = page > 1 ? 'visible' : 'hidden'
+            this.#header.style.visibility = page > 0 ? 'visible' : 'hidden'
             // page is in spread units, textPages is in column units
-            const localPage = page - pagesBeforePrimary - beforePad
+            const localPage = page - pagesBeforePrimary
             const localColumn = localPage * this.columnCount
             detail.fraction = textPages > 0 ? Math.max(0, Math.min(1, localColumn / textPages)) : 0
             detail.size = textPages > 0 ? this.columnCount / textPages : 1
@@ -1856,7 +1812,6 @@ export class Paginator extends HTMLElement {
                     }
                 }
             }
-            this.#updateViewPadding()
         }
         const resolvedAnchor = (typeof anchor === 'function'
             ? anchor(primaryView.document) : anchor) ?? 0
@@ -1911,7 +1866,9 @@ export class Paginator extends HTMLElement {
             console.warn(new Error(`Failed to load adjacent section ${index}`))
         }
     }
-    // Fill remaining visible space with adjacent sections.
+    // Fill adjacent sections until at least `minPages` pages exist
+    // beyond the current viewport in each direction (forward always,
+    // backward only when the primary section is short).
     // When reanchor is false (background pre-loading), skip re-scrolling
     // to avoid fighting with the user's current scroll position.
     async #fillVisibleArea({ reanchor = true } = {}) {
@@ -1920,7 +1877,8 @@ export class Paginator extends HTMLElement {
         try {
             const { size } = this
             if (!size) return
-            const maxSections = 5
+            const minPages = 5
+            const maxSections = 8
 
             // If the primary section is shorter than one spread and
             // there's no section already loaded before it, load the
@@ -1938,70 +1896,40 @@ export class Paginator extends HTMLElement {
                 }
             }
 
-            // Load sections after the last loaded section.
-            // Always load at least two next sections: one to fill the
-            // current spread's remaining columns, and one more so the
-            // next section is pre-loaded for instant page turns.
+            // Load forward sections until we have enough pages ahead
             let iterations = 0
-            while (this.#views.size < maxSections && iterations < 6) {
+            while (this.#views.size < maxSections && iterations < maxSections) {
                 iterations++
+                const pagesAhead = Math.floor(
+                    (this.#renderedViewSize - this.#renderedEnd) / size)
+                if (pagesAhead >= minPages) break
                 const sorted = this.#sortedViews
                 const lastIndex = sorted[sorted.length - 1]?.[0]
                 if (lastIndex == null) break
-                // Always pre-load at least 3 next sections;
-                // only check threshold for additional ones beyond that
-                if (iterations > 3) {
-                    const totalSize = this.#renderedViewSize
-                    if (totalSize >= size * 3) break
-                }
                 const nextIdx = this.#adjacentIndex(1, lastIndex)
                 if (nextIdx == null) break
                 await this.#loadAdjacentSection(nextIdx)
                 if (!this.#views.has(nextIdx)) break
             }
-            // Do NOT trim views here — removing elements shifts scroll
-            // position without re-scrolling, causing visible content jumps.
-            // Trimming happens in #goTo when the user explicitly navigates.
-            this.#updateViewPadding()
             if (reanchor) this.#scrollToAnchor(this.#anchor)
         } finally {
             this.#filling = false
         }
     }
-    // Assign padding based on view position
-    #updateViewPadding() {
-        if (this.scrolled) {
-            // In scrolled mode, no blank padding pages needed
-            for (const [, view] of this.#views) {
-                view.padding = { before: 0, after: 0 }
-                view.alignColumns = 0
-            }
-            return
-        }
-        const sorted = this.#sortedViews
-        if (sorted.length === 0) return
-        if (sorted.length === 1) {
-            sorted[0][1].padding = { before: 1, after: 1 }
-            sorted[0][1].alignColumns = 0
-            return
-        }
-        for (let i = 0; i < sorted.length; i++) {
-            const [, view] = sorted[i]
-            const before = i === 0 ? 1 : 0
-            const after = i === sorted.length - 1 ? 1 : 0
-            view.padding = { before, after }
-            view.alignColumns = 0
-        }
-    }
-    // Trim distant views. Only destroys views AFTER primary+3 —
-    // never removes views before the primary, as that would shift
-    // scroll position and cause visible layout jumps.
+    // Trim views whose content is entirely more than 10 pages away
+    // from the current viewport. Only removes views AFTER the primary
+    // — removing views before would shift scroll position.
     #trimDistantViews() {
-        const sorted = this.#sortedViews.map(([i]) => i)
-        const primaryPos = sorted.indexOf(this.#primaryIndex)
-        if (primaryPos < 0) return
-        for (let i = sorted.length - 1; i > primaryPos + 3; i--) {
-            this.#destroyView(sorted[i])
+        const { size } = this
+        if (!size) return
+        const maxDistance = size * 10
+        const viewportEnd = this.#renderedEnd
+        for (const [index, view] of this.#sortedViews) {
+            if (index <= this.#primaryIndex) continue
+            const offset = this.#getViewOffset(index)
+            if (offset - viewportEnd > maxDistance) {
+                this.#destroyView(index)
+            }
         }
     }
     #canGoToIndex(index) {
@@ -2036,7 +1964,6 @@ export class Paginator extends HTMLElement {
                     if (i !== index) this.#destroyView(i)
                 }
             }
-            this.#updateViewPadding()
             await this.scrollToAnchor((typeof anchor === 'function'
                 ? anchor(primaryView.document) : anchor) ?? 0, select)
             this.#container.style.opacity = '1'
@@ -2088,7 +2015,9 @@ export class Paginator extends HTMLElement {
         }
         if (this.atStart) return
         const page = this.#renderedPage - 1
-        return this.#scrollToPage(page, 'page', true).then(() => page <= 0)
+        // Out of range — skip animation, go straight to previous section
+        if (page < 0) return true
+        return this.#scrollToPage(page, 'page', true)
     }
     #scrollNext(distance) {
         if (this.#views.size === 0) return true
@@ -2100,19 +2029,21 @@ export class Paginator extends HTMLElement {
         if (this.atEnd) return
         const page = this.#renderedPage + 1
         const pages = this.#renderedPages
-        return this.#scrollToPage(page, 'page', true).then(() => page >= pages - 1)
+        // Out of range — skip animation, go straight to next section
+        if (page >= pages) return true
+        return this.#scrollToPage(page, 'page', true)
     }
     get atStart() {
         const sorted = this.#sortedViews
         const firstIndex = sorted[0]?.[0] ?? this.#primaryIndex
         if (this.scrolled) return this.#adjacentIndex(-1, firstIndex) == null && this.#renderedStart <= 0
-        return this.#adjacentIndex(-1, firstIndex) == null && this.#renderedPage <= 1
+        return this.#adjacentIndex(-1, firstIndex) == null && this.#renderedPage <= 0
     }
     get atEnd() {
         const sorted = this.#sortedViews
         const lastIndex = sorted[sorted.length - 1]?.[0] ?? this.#primaryIndex
         if (this.scrolled) return this.#adjacentIndex(1, lastIndex) == null && this.#renderedViewSize - this.#renderedEnd <= 2
-        return this.#adjacentIndex(1, lastIndex) == null && this.#renderedPage >= this.#renderedPages - 2
+        return this.#adjacentIndex(1, lastIndex) == null && this.#renderedPage >= this.#renderedPages - 1
     }
     #adjacentIndex(dir, fromIndex) {
         if (fromIndex === undefined) fromIndex = this.#primaryIndex
