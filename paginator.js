@@ -437,7 +437,7 @@ class View {
             // fix glyph clipping in WebKit
             '-webkit-line-box-contain': 'block glyphs replaced',
         })
-        const availableWidth = Math.trunc(columnWidth - marginLeft - marginRight - gap)
+        const availableWidth = Math.trunc(width - marginLeft / 2 - marginRight / 2 - gap)
         const availableHeight = Math.trunc(height - marginTop - marginBottom)
         setStyles(doc.documentElement, {
             'padding': vertical
