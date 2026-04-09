@@ -4,6 +4,9 @@ const NS = {
     THR: 'http://purl.org/syndication/thread/1.0',
     DC: 'http://purl.org/dc/elements/1.1/',
     DCTERMS: 'http://purl.org/dc/terms/',
+    FH: 'http://purl.org/syndication/history/1.0',
+    PSE: 'http://vaemendis.net/opds-pse/ns',
+    OS: 'http://a9.com/-/spec/opensearch/1.1/',
 }
 
 const MIME = {
@@ -23,6 +26,7 @@ export const REL = {
         'http://opds-spec.org/image/thumbnail',
         'http://opds-spec.org/thumbnail',
     ],
+    STREAM: 'http://vaemendis.net/opds-pse/stream',
 }
 
 export const SYMBOL = {
@@ -93,18 +97,39 @@ const getTextContent = el => {
 
 const getSummary = (a, b) => getTextContent(a) ?? getTextContent(b)
 
+// Fetch only direct children to avoid polluting with nested deep indirect acquisitions
+const getDirectChildren = (el, ns, localName, tagName) => {
+    return Array.from(el.childNodes).filter(node =>
+        node.nodeType === 1 &&
+        (
+            (node.namespaceURI === ns && node.localName === localName) ||
+            (node.tagName === tagName)
+        )
+    )
+}
+
 const getPrice = link => {
-    const price = link.getElementsByTagNameNS(NS.OPDS, 'price')[0]
-    return price ? {
+    const prices = getDirectChildren(link, NS.OPDS, 'price', 'opds:price')
+    if (!prices.length) return null
+    const parsed = prices.map(price => ({
         currency: price.getAttribute('currencycode'),
-        value: price.textContent,
-    } : null
+        value: parseFloat(price.textContent),
+    }))
+    // Although OPDS 2.0 schema defines price as a single object, OPDS 1.x allows multiple.
+    // Returning an array ensures no data loss, or a single object if there's only one.
+    return parsed.length === 1 ? parsed[0] : parsed
 }
 
 const getIndirectAcquisition = el => {
-    const ia = el.getElementsByTagNameNS(NS.OPDS, 'indirectAcquisition')[0]
-    if (!ia) return []
-    return [{ type: ia.getAttribute('type') }, ...getIndirectAcquisition(ia)]
+    const ias = getDirectChildren(el, NS.OPDS, 'indirectAcquisition', 'opds:indirectAcquisition')
+    if (!ias.length) return []
+    return ias.map(ia => {
+        const type = ia.getAttribute('type')
+        const child = getIndirectAcquisition(ia)
+        const res = { type }
+        if (child.length > 0) res.child = child
+        return res
+    })
 }
 
 const getLink = link => {
@@ -113,15 +138,58 @@ const getLink = link => {
         href: link.getAttribute('href'),
         type: link.getAttribute('type'),
         title: link.getAttribute('title'),
-        properties: {
-            price: getPrice(link),
-            indirectAcquisition: getIndirectAcquisition(link),
-            numberOfItems: link.getAttributeNS(NS.THR, 'count'),
-        },
-        [FACET_GROUP]: link.getAttributeNS(NS.OPDS, 'facetGroup'),
+        properties: {},
     }
-    if (link.getAttributeNS(NS.OPDS, 'activeFacet') === 'true')
+
+    // --- Prices & Indirect Acquisitions ---
+    const price = getPrice(link)
+    if (price) obj.properties.price = price
+
+    const indirectAcquisition = getIndirectAcquisition(link)
+    if (indirectAcquisition.length) obj.properties.indirectAcquisition = indirectAcquisition
+
+    // --- Facet Grouping ---
+    const facetGroup = link.getAttributeNS(NS.OPDS, 'facetGroup') || link.getAttribute('opds:facetGroup')
+    if (facetGroup) obj[FACET_GROUP] = facetGroup
+
+    // Map OPDS 1.x active facets to OPDS 2.0 "self" link
+    const activeFacet = link.getAttributeNS(NS.OPDS, 'activeFacet') || link.getAttribute('opds:activeFacet')
+    if (activeFacet === 'true') {
         obj.rel = [obj.rel ?? []].flat().concat('self')
+    }
+
+    // --- Pagination / Facet Counters ---
+    // Maps OPDS 1.x thr:count seamlessly to OPDS 2.0 properties.numberOfItems
+    const thrCount = link.getAttributeNS(NS.THR, 'count') || link.getAttribute('thr:count')
+    const fallbackCount = link.getAttribute('count')
+    const isStream = obj.rel?.includes(REL.STREAM)
+
+    if (thrCount != null) {
+        obj.properties.numberOfItems = Number(thrCount)
+    } else if (!isStream && fallbackCount != null) {
+        // Support for systems that incorrectly use standard `count` for facet hints
+        obj.properties.numberOfItems = Number(fallbackCount)
+    }
+
+    // --- OPDS-PSE Extensions ---
+    // Kept explicitly inside properties to map to OPDS 2.x standard extension mechanism
+    const pseCount = link.getAttributeNS(NS.PSE, 'count') || link.getAttribute('pse:count')
+    if (pseCount != null) {
+        obj.properties['pse:count'] = Number(pseCount)
+    } else if (isStream && fallbackCount != null) {
+        obj.properties['pse:count'] = Number(fallbackCount)
+    }
+
+    const pseLastRead = link.getAttributeNS(NS.PSE, 'lastRead') || link.getAttribute('pse:lastRead')
+    if (pseLastRead != null) obj.properties['pse:lastRead'] = Number(pseLastRead)
+
+    const pseLastReadDate = link.getAttributeNS(NS.PSE, 'lastReadDate') || link.getAttribute('pse:lastReadDate')
+    if (pseLastReadDate != null) obj.properties['pse:lastReadDate'] = pseLastReadDate
+    // ---------------------------
+
+    // Clean up empty properties
+    if (Object.keys(obj.properties).length === 0) delete obj.properties
+
     return obj
 }
 
@@ -178,6 +246,9 @@ export const getFeed = doc => {
     const links = children.filter(filter('link')).map(getLink)
     const linksByRel = groupByArray(links, link => link.rel)
 
+    const filterFH = filterNS(NS.FH)
+    const filterOS = filterNS(NS.OS)
+
     const groupedItems = new Map([[null, []]])
     const groupLinkMap = new Map()
     for (const entry of entries) {
@@ -185,7 +256,7 @@ export const getFeed = doc => {
         const links = children.filter(filter('link')).map(getLink)
         const linksByRel = groupByArray(links, link => link.rel)
         const isPub = [...linksByRel.keys()]
-            .some(rel => rel?.startsWith(REL.ACQ) || rel === 'preview')
+            .some(rel => rel?.startsWith(REL.ACQ) || rel === 'preview' || rel === REL.STREAM)
 
         const groupLinks = linksByRel.get(REL.GROUP) ?? linksByRel.get('collection')
         const groupLink = groupLinks?.length
@@ -212,18 +283,41 @@ export const getFeed = doc => {
         return {
             metadata: {
                 title: link.title,
-                numberOfItems: link.properties.numberOfItems,
+                numberOfItems: link.properties?.numberOfItems,
             },
             links: [{ rel: 'self', href: link.href, type: link.type }],
             [itemsKey]: items,
         }
     })
+
+    const metadata = {
+        title: children.find(filter('title'))?.textContent,
+        subtitle: children.find(filter('subtitle'))?.textContent,
+    }
+
+    // --- OPDS 2.0 Pagination (derived from OpenSearch / RFC 5005) ---
+    const totalResults = children.find(filterOS('totalResults'))?.textContent
+    const itemsPerPage = children.find(filterOS('itemsPerPage'))?.textContent
+    const startIndex = children.find(filterOS('startIndex'))?.textContent
+
+    if (totalResults != null) metadata.numberOfItems = Number(totalResults)
+    if (itemsPerPage != null) metadata.itemsPerPage = Number(itemsPerPage)
+    if (startIndex != null && itemsPerPage != null) {
+        const start = Number(startIndex)
+        const items = Number(itemsPerPage)
+        // Resolves typical 1-based offset to a page number
+        metadata.currentPage = Math.floor((start > 0 ? start - 1 : 0) / items) + 1
+    }
+
+    const isComplete = !!children.find(filterFH('complete'))
+    const isArchive = !!children.find(filterFH('archive'))
+    // ----------------------------------------------------------------
+
     return {
-        metadata: {
-            title: children.find(filter('title'))?.textContent,
-            subtitle: children.find(filter('subtitle'))?.textContent,
-        },
+        metadata,
         links,
+        isComplete,
+        isArchive,
         ...items,
         groups,
         facets: Array.from(
