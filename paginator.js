@@ -1364,7 +1364,7 @@ export class Paginator extends HTMLElement {
         const primaryView = this.#primaryView
         if (!primaryView) return 0
         const viewSize = primaryView.element.getBoundingClientRect()[this.sideProp]
-        return Math.ceil(viewSize / this.size)
+        return Math.round(viewSize / this.size)
     }
     get containerPosition() {
         return this.#container[this.scrollProp]
@@ -1392,7 +1392,7 @@ export class Paginator extends HTMLElement {
         return Math.floor(((this.#renderedStart + this.#renderedEnd) / 2) / this.size)
     }
     get #renderedPages() {
-        return Math.ceil(this.#renderedViewSize / this.size)
+        return Math.round(this.#renderedViewSize / this.size)
     }
     set containerPosition(newVal) {
         this.#container[this.scrollProp] = newVal
