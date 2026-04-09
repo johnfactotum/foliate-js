@@ -140,10 +140,82 @@ const getFragmentWithMarks = (range, textWalker, nodeFilter, granularity) => {
 
 const rangeIsEmpty = range => !range.toString().trim()
 
+// For PDF text layers, split content into sentence-level blocks so TTS
+// reads one sentence at a time instead of the whole page in one block.
+// Text nodes are split at sentence boundaries so that every block range
+// aligns with node edges — this prevents the text walker from including
+// text outside the sentence in word marks.
+function* getPDFSentenceBlocks(doc, textLayer) {
+    const collectNodes = () => {
+        const w = doc.createTreeWalker(textLayer, NodeFilter.SHOW_TEXT)
+        const res = []
+        for (let n = w.nextNode(); n; n = w.nextNode()) res.push(n)
+        return res
+    }
+
+    let nodes = collectNodes()
+    if (!nodes.length) return
+
+    const fullText = nodes.map(n => n.nodeValue).join('')
+    if (!fullText.trim()) return
+
+    // Find sentence boundary positions
+    const lang = getLang(textLayer) || undefined
+    const segmenter = new Intl.Segmenter(lang, { granularity: 'sentence' })
+    const boundaries = new Set()
+    for (const { index } of segmenter.segment(fullText))
+        if (index > 0) boundaries.add(index)
+
+    // Split text nodes at sentence boundaries so ranges align with node edges.
+    // Process in reverse order to preserve earlier character positions.
+    let cum = 0
+    const nodeStarts = nodes.map(n => { const s = cum; cum += n.nodeValue.length; return s })
+
+    for (const pos of [...boundaries].sort((a, b) => b - a)) {
+        for (let i = 0; i < nodes.length; i++) {
+            const start = nodeStarts[i]
+            const end = start + nodes[i].nodeValue.length
+            if (pos > start && pos < end) {
+                nodes[i].splitText(pos - start)
+                break
+            }
+        }
+    }
+
+    // Re-collect nodes after splits and group into sentence blocks
+    nodes = collectNodes()
+    cum = 0
+    let groupStart = 0
+    let blockCount = 0
+
+    for (let i = 0; i < nodes.length; i++) {
+        cum += nodes[i].nodeValue.length
+        const isEnd = i === nodes.length - 1 || boundaries.has(cum)
+        if (isEnd) {
+            const range = doc.createRange()
+            range.setStart(nodes[groupStart], 0)
+            range.setEnd(nodes[i], nodes[i].nodeValue.length)
+            if (!rangeIsEmpty(range)) {
+                blockCount++
+                yield range
+            }
+            groupStart = i + 1
+        }
+    }
+}
+
 function* getBlocks(doc) {
     const root = doc.body
         ?? doc.querySelector('body')
         ?? doc.documentElement
+
+    // For PDF text layers, yield sentence-level blocks
+    const textLayer = root.querySelector?.('.textLayer')
+    if (textLayer) {
+        yield* getPDFSentenceBlocks(doc, textLayer)
+        return
+    }
+
     let last
     const walker = doc.createTreeWalker(root, NodeFilter.SHOW_ELEMENT)
     for (let node = walker.nextNode(); node; node = walker.nextNode()) {
