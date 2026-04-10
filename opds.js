@@ -138,7 +138,6 @@ const getLink = link => {
 
     const isAcquisition = rel?.some(r => r.startsWith(REL.ACQ) || r === 'preview')
     const isStream = rel?.includes(REL.STREAM)
-    const isFacet = rel?.includes(REL.FACET)
 
     // Map OPDS 1.x active facets to OPDS 2.0 "self" link
     const activeFacet = link.getAttributeNS(NS.OPDS, 'activeFacet') || link.getAttribute('opds:activeFacet')
@@ -165,7 +164,7 @@ const getLink = link => {
             price: (isAcquisition || isStream) ? getPrice(link) : undefined,
             indirectAcquisition: (isAcquisition || isStream) ? getIndirectAcquisition(link) : undefined,
             // --- Pagination / Facet Counters ---
-            numberOfItems: thrCount != null ? Number(thrCount) : (isFacet && fallbackCount != null) ? Number(fallbackCount) : undefined,
+            numberOfItems: thrCount != null ? Number(thrCount) : (!isStream && fallbackCount != null) ? Number(fallbackCount) : undefined,
             'pse:count': isStream && (pseCount ?? fallbackCount) != null ? Number(pseCount ?? fallbackCount) : undefined,
             'pse:lastRead': isStream && pseLastRead != null ? Number(pseLastRead) : undefined,
             'pse:lastReadDate': isStream ? pseLastReadDate ?? undefined : undefined,
