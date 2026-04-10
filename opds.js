@@ -112,11 +112,10 @@ const getPrice = link => {
     const prices = getDirectChildren(link, NS.OPDS, 'price', 'opds:price')
     if (!prices.length) return
     const parsed = prices.map(price => ({
-        currency: price.getAttribute('currencycode'),
+        currency: price.getAttribute('currencycode') ?? undefined,
         value: parseFloat(price.textContent),
     }))
-    // Although OPDS 2.0 schema defines price as a single object, OPDS 1.x allows multiple.
-    // Returning an array ensures no data loss, or a single object if there's only one.
+    // OPDS 1.x allows multiple prices, OPDS 2.0 schema defines price as a single object
     return parsed.length === 1 ? parsed[0] : parsed
 }
 
@@ -125,11 +124,12 @@ const getIndirectAcquisition = el => {
     if (!ias.length) return []
     return ias.map(ia => {
         const type = ia.getAttribute('type')
-        const child = getIndirectAcquisition(ia)
-        const res = { type }
-        if (child.length > 0) res.child = child
-        return res
-    })
+        if (!type) return undefined
+        return {
+            type,
+            child: getIndirectAcquisition(ia),
+        }
+    }).filter(Boolean)
 }
 
 const getLink = link => {
@@ -156,19 +156,19 @@ const getLink = link => {
 
     const obj = {
         rel: mappedRel,
-        href: link.getAttribute('href'),
-        type: link.getAttribute('type'),
-        title: link.getAttribute('title'),
+        href: link.getAttribute('href') ?? undefined,
+        type: link.getAttribute('type') ?? undefined,
+        title: link.getAttribute('title') ?? undefined,
         // --- Facet Grouping ---
-        [FACET_GROUP]: link.getAttributeNS(NS.OPDS, 'facetGroup') || link.getAttribute('opds:facetGroup'),
+        [FACET_GROUP]: link.getAttributeNS(NS.OPDS, 'facetGroup') || link.getAttribute('opds:facetGroup') || undefined,
         properties: {
             price: (isAcquisition || isStream) ? getPrice(link) : undefined,
-            indirectAcquisition: (isAcquisition || isStream) ? getIndirectAcquisition(link) : [],
+            indirectAcquisition: (isAcquisition || isStream) ? getIndirectAcquisition(link) : undefined,
             // --- Pagination / Facet Counters ---
             numberOfItems: thrCount != null ? Number(thrCount) : (isFacet && fallbackCount != null) ? Number(fallbackCount) : undefined,
-            'pse:count': isStream ? Number(pseCount || fallbackCount) || undefined : undefined,
+            'pse:count': isStream && (pseCount ?? fallbackCount) != null ? Number(pseCount ?? fallbackCount) : undefined,
             'pse:lastRead': isStream && pseLastRead != null ? Number(pseLastRead) : undefined,
-            'pse:lastReadDate': isStream ? pseLastReadDate : undefined,
+            'pse:lastReadDate': isStream ? pseLastReadDate ?? undefined : undefined,
         },
     }
 
@@ -181,7 +181,7 @@ const getPerson = person => {
     const NS = person.namespaceURI
     const uri = person.getElementsByTagNameNS(NS, 'uri')[0]?.textContent
     return {
-        name: person.getElementsByTagNameNS(NS, 'name')[0]?.textContent ?? '',
+        name: person.getElementsByTagNameNS(NS, 'name')[0]?.textContent ?? undefined,
         links: uri ? [{ href: uri }] : [],
     }
 }
@@ -191,32 +191,29 @@ export const getPublication = entry => {
     const children = Array.from(entry.children)
     const filterDCEL = filterNS(NS.DC)
     const filterDCTERMS = filterNS(NS.DCTERMS)
-    const filterDC = x => {
-        const a = filterDCEL(x), b = filterDCTERMS(x)
-        return y => a(y) || b(y)
-    }
+    const filterDC = x => y => filterDCEL(x)(y) || filterDCTERMS(x)(y)
     const links = children.filter(filter('link')).map(getLink)
     const linksByRel = groupByArray(links, link => link.rel)
     return {
         metadata: {
-            title: children.find(filter('title'))?.textContent ?? '',
+            title: children.find(filter('title'))?.textContent ?? undefined,
             author: children.filter(filter('author')).map(getPerson),
             contributor: children.filter(filter('contributor')).map(getPerson),
-            publisher: children.find(filterDC('publisher'))?.textContent,
-            published: (children.find(filterDCTERMS('issued')) ?? children.find(filterDC('date')))?.textContent,
-            language: children.find(filterDC('language'))?.textContent,
-            identifier: children.find(filterDC('identifier'))?.textContent,
+            publisher: children.find(filterDC('publisher'))?.textContent ?? undefined,
+            published: (children.find(filterDCTERMS('issued')) ?? children.find(filterDC('date')))?.textContent ?? undefined,
+            language: children.find(filterDC('language'))?.textContent ?? undefined,
+            identifier: children.find(filterDC('identifier'))?.textContent ?? undefined,
             subject: children.filter(filter('category')).map(category => ({
-                name: category.getAttribute('label'),
-                code: category.getAttribute('term'),
-                scheme: category.getAttribute('scheme'),
+                name: category.getAttribute('label') ?? undefined,
+                code: category.getAttribute('term') ?? undefined,
+                scheme: category.getAttribute('scheme') ?? undefined,
             })),
-            rights: children.find(filter('rights'))?.textContent ?? '',
-            [SYMBOL.CONTENT]: getContent(children.find(filter('content')) ?? children.find(filter('summary'))),
+            rights: children.find(filter('rights'))?.textContent ?? undefined,
+            [SYMBOL.CONTENT]: getContent(children.find(filter('content')) ?? children.find(filter('summary'))) ?? undefined,
         },
         links,
         images: REL.COVER.concat(REL.THUMBNAIL)
-            .map(R => linksByRel.get(R)?.[0]).filter(x => x),
+            .map(R => linksByRel.get(R)?.[0]).filter(Boolean),
     }
 }
 
@@ -249,9 +246,9 @@ export const getFeed = doc => {
         const item = isPub
             ? getPublication(entry)
             : Object.assign(links.find(link => isOPDSCatalog(link.type)) ?? links[0] ?? {}, {
-                title: children.find(filter('title'))?.textContent,
+                title: children.find(filter('title'))?.textContent ?? undefined,
                 [SYMBOL.SUMMARY]: getSummary(children.find(filter('summary')),
-                    children.find(filter('content'))),
+                    children.find(filter('content'))) ?? undefined,
             })
 
         const arr = groupedItems.get(groupLink?.href)
@@ -287,20 +284,20 @@ export const getFeed = doc => {
 
     return {
         metadata: {
-            title: children.find(filter('title'))?.textContent,
-            subtitle: children.find(filter('subtitle'))?.textContent,
+            title: children.find(filter('title'))?.textContent ?? undefined,
+            subtitle: children.find(filter('subtitle'))?.textContent ?? undefined,
             numberOfItems: totalResults != null ? Number(totalResults) : undefined,
             itemsPerPage: itemsPerPage != null ? Number(itemsPerPage) : undefined,
             currentPage,
         },
         links,
-        isComplete: !!children.find(filterFH('complete')),
-        isArchive: !!children.find(filterFH('archive')),
+        isComplete: !!children.find(filterFH('complete')) || undefined,
+        isArchive: !!children.find(filterFH('archive')) || undefined,
         ...items,
-        groups,
+        groups: groups.length ? groups : undefined,
         facets: Array.from(
             groupByArray(linksByRel.get(REL.FACET) ?? [], link => link[FACET_GROUP]),
-            ([facet, links]) => ({ metadata: { title: facet }, links }),
+            ([facet, links]) => ({ metadata: { title: facet ?? undefined }, links }),
         ),
     }
 }
@@ -309,7 +306,7 @@ export const getSearch = async link => {
     const { replace, getVariables } = await import('./uri-template.js')
     return {
         metadata: {
-            title: link.title,
+            title: link.title ?? undefined,
         },
         search: map => replace(link.href, map.get(undefined)),
         params: Array.from(getVariables(link.href), name => ({ name })),
@@ -338,22 +335,23 @@ export const getOpenSearch = doc => {
     const template = $url.getAttribute('template')
     return {
         metadata: {
-            title: (children.find(filter('LongName')) ?? children.find(filter('ShortName')))?.textContent,
-            description: children.find(filter('Description'))?.textContent,
+            title: (children.find(filter('LongName')) ?? children.find(filter('ShortName')))?.textContent ?? undefined,
+            description: children.find(filter('Description'))?.textContent ?? undefined,
         },
         search: map => template.replace(regex, (_, prefix, param) => {
             const namespace = prefix ? $url.lookupNamespaceURI(prefix) : undefined
             const ns = namespace === defaultNS ? undefined : namespace
             const val = map.get(ns)?.get(param)
-            return encodeURIComponent(val ? val : (!ns ? defaultMap.get(param) ?? '' : ''))
+            return encodeURIComponent(val ?? (!ns ? defaultMap.get(param) ?? '' : ''))
         }),
         params: Array.from(template.matchAll(regex), ([, prefix, param, optional]) => {
             const namespace = prefix ? $url.lookupNamespaceURI(prefix) : undefined
             const ns = namespace === defaultNS ? undefined : namespace
             return {
-                ns, name: param,
+                ns,
+                name: param,
                 required: !optional,
-                value: ns && ns !== defaultNS ? '' : defaultMap.get(param) ?? '',
+                value: ns && ns !== defaultNS ? undefined : (defaultMap.get(param) ?? undefined),
             }
         }),
     }
