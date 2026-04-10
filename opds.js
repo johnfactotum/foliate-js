@@ -17,11 +17,13 @@ export const REL = {
     GROUP: 'http://opds-spec.org/group',
     COVER: [
         'http://opds-spec.org/image',
-        'http://opds-spec.org/cover',
+        'http://opds-spec.org/cover', // ManyBooks legacy, not in spec
+        'x-stanza-cover-image', // Lexcycle Stanza legacy
     ],
     THUMBNAIL: [
         'http://opds-spec.org/image/thumbnail',
-        'http://opds-spec.org/thumbnail',
+        'http://opds-spec.org/thumbnail', // ManyBooks legacy, not in spec
+        'x-stanza-cover-image-thumbnail', // Lexcycle Stanza legacy
     ],
 }
 
