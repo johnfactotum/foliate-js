@@ -53,7 +53,7 @@ const groupByArray = (arr, f) => {
 
 // https://www.rfc-editor.org/rfc/rfc7231#section-3.1.1
 const parseMediaType = str => {
-    if (!str) return null
+    if (!str) return
     const [mediaType, ...ps] = str.split(/ *; */)
     return {
         mediaType: mediaType.toLowerCase(),
@@ -74,7 +74,7 @@ export const isOPDSCatalog = str => {
 
 // ignore the namespace if it doesn't appear in document at all
 const useNS = (doc, ns) =>
-    doc.lookupNamespaceURI(null) === ns || doc.lookupPrefix(ns) ? ns : null
+    doc.lookupNamespaceURI(null) === ns || doc.lookupPrefix(ns) ? ns : undefined
 
 const filterNS = ns => ns
     ? name => el => el.namespaceURI === ns && el.localName === name
@@ -94,7 +94,7 @@ const getContent = el => {
 
 const getTextContent = el => {
     const content = getContent(el)
-    if (content?.type === 'text') return content?.value
+    if (content?.type === 'text') return content.value
 }
 
 const getSummary = (a, b) => getTextContent(a) ?? getTextContent(b)
@@ -106,13 +106,13 @@ const getDirectChildren = (el, ns, localName, tagName) => {
         (
             (node.namespaceURI === ns && node.localName === localName) ||
             (node.tagName === tagName)
-        )
+        ),
     )
 }
 
 const getPrice = link => {
     const prices = getDirectChildren(link, NS.OPDS, 'price', 'opds:price')
-    if (!prices.length) return null
+    if (!prices.length) return
     const parsed = prices.map(price => ({
         currency: price.getAttribute('currencycode'),
         value: parseFloat(price.textContent),
@@ -135,61 +135,45 @@ const getIndirectAcquisition = el => {
 }
 
 const getLink = link => {
-    const obj = {
-        rel: link.getAttribute('rel')?.split(/ +/),
-        href: link.getAttribute('href'),
-        type: link.getAttribute('type'),
-        title: link.getAttribute('title'),
-        properties: {},
-    }
+    const relAttr = link.getAttribute('rel')
+    const rel = relAttr ? relAttr.split(/ +/) : undefined
 
-    // --- Prices & Indirect Acquisitions ---
-    const price = getPrice(link)
-    if (price) obj.properties.price = price
-
-    const indirectAcquisition = getIndirectAcquisition(link)
-    if (indirectAcquisition.length) obj.properties.indirectAcquisition = indirectAcquisition
-
-    // --- Facet Grouping ---
-    const facetGroup = link.getAttributeNS(NS.OPDS, 'facetGroup') || link.getAttribute('opds:facetGroup')
-    if (facetGroup) obj[FACET_GROUP] = facetGroup
+    const isAcquisition = rel?.some(r => r.startsWith(REL.ACQ) || r === 'preview')
+    const isStream = rel?.includes(REL.STREAM)
+    const isFacet = rel?.includes(REL.FACET)
 
     // Map OPDS 1.x active facets to OPDS 2.0 "self" link
     const activeFacet = link.getAttributeNS(NS.OPDS, 'activeFacet') || link.getAttribute('opds:activeFacet')
-    if (activeFacet === 'true') {
-        obj.rel = [obj.rel ?? []].flat().concat('self')
-    }
+    const mappedRel = activeFacet === 'true' ? [rel ?? []].flat().concat('self') : rel
 
-    // --- Pagination / Facet Counters ---
     // Maps OPDS 1.x thr:count seamlessly to OPDS 2.0 properties.numberOfItems
     const thrCount = link.getAttributeNS(NS.THR, 'count') || link.getAttribute('thr:count')
+    // Support for systems that incorrectly use standard `count` for facet hints
     const fallbackCount = link.getAttribute('count')
-    const isStream = obj.rel?.includes(REL.STREAM)
-
-    if (thrCount != null) {
-        obj.properties.numberOfItems = Number(thrCount)
-    } else if (!isStream && fallbackCount != null) {
-        // Support for systems that incorrectly use standard `count` for facet hints
-        obj.properties.numberOfItems = Number(fallbackCount)
-    }
 
     // --- OPDS-PSE Extensions ---
-    // Kept explicitly inside properties to map to OPDS 2.x standard extension mechanism
     const pseCount = link.getAttributeNS(NS.PSE, 'count') || link.getAttribute('pse:count')
-    if (pseCount != null) {
-        obj.properties['pse:count'] = Number(pseCount)
-    } else if (isStream && fallbackCount != null) {
-        obj.properties['pse:count'] = Number(fallbackCount)
+    const pseLastRead = link.getAttributeNS(NS.PSE, 'lastRead') || link.getAttribute('pse:lastRead')
+    const pseLastReadDate = link.getAttributeNS(NS.PSE, 'lastReadDate') || link.getAttribute('pse:lastReadDate')
+
+    const obj = {
+        rel: mappedRel,
+        href: link.getAttribute('href'),
+        type: link.getAttribute('type'),
+        title: link.getAttribute('title'),
+        // --- Facet Grouping ---
+        [FACET_GROUP]: link.getAttributeNS(NS.OPDS, 'facetGroup') || link.getAttribute('opds:facetGroup'),
+        properties: {
+            price: (isAcquisition || isStream) ? getPrice(link) : undefined,
+            indirectAcquisition: (isAcquisition || isStream) ? getIndirectAcquisition(link) : [],
+            // --- Pagination / Facet Counters ---
+            numberOfItems: thrCount != null ? Number(thrCount) : (isFacet && fallbackCount != null) ? Number(fallbackCount) : undefined,
+            'pse:count': isStream ? Number(pseCount || fallbackCount) || undefined : undefined,
+            'pse:lastRead': isStream && pseLastRead != null ? Number(pseLastRead) : undefined,
+            'pse:lastReadDate': isStream ? pseLastReadDate : undefined,
+        },
     }
 
-    const pseLastRead = link.getAttributeNS(NS.PSE, 'lastRead') || link.getAttribute('pse:lastRead')
-    if (pseLastRead != null) obj.properties['pse:lastRead'] = Number(pseLastRead)
-
-    const pseLastReadDate = link.getAttributeNS(NS.PSE, 'lastReadDate') || link.getAttribute('pse:lastReadDate')
-    if (pseLastReadDate != null) obj.properties['pse:lastReadDate'] = pseLastReadDate
-    // ---------------------------
-
-    // Clean up empty properties
     if (Object.keys(obj.properties).length === 0) delete obj.properties
 
     return obj
@@ -221,8 +205,7 @@ export const getPublication = entry => {
             author: children.filter(filter('author')).map(getPerson),
             contributor: children.filter(filter('contributor')).map(getPerson),
             publisher: children.find(filterDC('publisher'))?.textContent,
-            published: (children.find(filterDCTERMS('issued'))
-                ?? children.find(filterDC('date')))?.textContent,
+            published: (children.find(filterDCTERMS('issued')) ?? children.find(filterDC('date')))?.textContent,
             language: children.find(filterDC('language'))?.textContent,
             identifier: children.find(filterDC('identifier'))?.textContent,
             subject: children.filter(filter('category')).map(category => ({
@@ -231,8 +214,7 @@ export const getPublication = entry => {
                 scheme: category.getAttribute('scheme'),
             })),
             rights: children.find(filter('rights'))?.textContent ?? '',
-            [SYMBOL.CONTENT]: getContent(children.find(filter('content'))
-                ?? children.find(filter('summary'))),
+            [SYMBOL.CONTENT]: getContent(children.find(filter('content')) ?? children.find(filter('summary'))),
         },
         links,
         images: REL.COVER.concat(REL.THUMBNAIL)
@@ -251,7 +233,7 @@ export const getFeed = doc => {
     const filterFH = filterNS(NS.FH)
     const filterOS = filterNS(NS.OS)
 
-    const groupedItems = new Map([[null, []]])
+    const groupedItems = new Map([[undefined, []]])
     const groupLinkMap = new Map()
     for (const entry of entries) {
         const children = Array.from(entry.children)
@@ -262,7 +244,7 @@ export const getFeed = doc => {
 
         const groupLinks = linksByRel.get(REL.GROUP) ?? linksByRel.get('collection')
         const groupLink = groupLinks?.length
-            ? groupLinks.find(link => groupedItems.has(link.href)) ?? groupLinks[0] : null
+            ? groupLinks.find(link => groupedItems.has(link.href)) ?? groupLinks[0] : undefined
         if (groupLink && !groupLinkMap.has(groupLink.href))
             groupLinkMap.set(groupLink.href, groupLink)
 
@@ -274,13 +256,13 @@ export const getFeed = doc => {
                     children.find(filter('content'))),
             })
 
-        const arr = groupedItems.get(groupLink?.href ?? null)
+        const arr = groupedItems.get(groupLink?.href)
         if (arr) arr.push(item)
         else groupedItems.set(groupLink.href, [item])
     }
     const [items, ...groups] = Array.from(groupedItems, ([key, items]) => {
         const itemsKey = items[0]?.metadata ? 'publications' : 'navigation'
-        if (key == null) return { [itemsKey]: items }
+        if (key === undefined) return { [itemsKey]: items }
         const link = groupLinkMap.get(key)
         return {
             metadata: {
@@ -292,39 +274,36 @@ export const getFeed = doc => {
         }
     })
 
-    const metadata = {
-        title: children.find(filter('title'))?.textContent,
-        subtitle: children.find(filter('subtitle'))?.textContent,
-    }
-
     // --- OPDS 2.0 Pagination (derived from OpenSearch / RFC 5005) ---
     const totalResults = children.find(filterOS('totalResults'))?.textContent
     const itemsPerPage = children.find(filterOS('itemsPerPage'))?.textContent
     const startIndex = children.find(filterOS('startIndex'))?.textContent
 
-    if (totalResults != null) metadata.numberOfItems = Number(totalResults)
-    if (itemsPerPage != null) metadata.itemsPerPage = Number(itemsPerPage)
+    let currentPage
     if (startIndex != null && itemsPerPage != null) {
         const start = Number(startIndex)
         const items = Number(itemsPerPage)
         // Resolves typical 1-based offset to a page number
-        metadata.currentPage = Math.floor((start > 0 ? start - 1 : 0) / items) + 1
+        currentPage = Math.floor((start > 0 ? start - 1 : 0) / items) + 1
     }
 
-    const isComplete = !!children.find(filterFH('complete'))
-    const isArchive = !!children.find(filterFH('archive'))
-    // ----------------------------------------------------------------
-
     return {
-        metadata,
+        metadata: {
+            title: children.find(filter('title'))?.textContent,
+            subtitle: children.find(filter('subtitle'))?.textContent,
+            numberOfItems: totalResults != null ? Number(totalResults) : undefined,
+            itemsPerPage: itemsPerPage != null ? Number(itemsPerPage) : undefined,
+            currentPage,
+        },
         links,
-        isComplete,
-        isArchive,
+        isComplete: !!children.find(filterFH('complete')),
+        isArchive: !!children.find(filterFH('archive')),
         ...items,
         groups,
         facets: Array.from(
             groupByArray(linksByRel.get(REL.FACET) ?? [], link => link[FACET_GROUP]),
-            ([facet, links]) => ({ metadata: { title: facet }, links })),
+            ([facet, links]) => ({ metadata: { title: facet }, links }),
+        ),
     }
 }
 
@@ -334,7 +313,7 @@ export const getSearch = async link => {
         metadata: {
             title: link.title,
         },
-        search: map => replace(link.href, map.get(null)),
+        search: map => replace(link.href, map.get(undefined)),
         params: Array.from(getVariables(link.href), name => ({ name })),
     }
 }
@@ -365,14 +344,14 @@ export const getOpenSearch = doc => {
             description: children.find(filter('Description'))?.textContent,
         },
         search: map => template.replace(regex, (_, prefix, param) => {
-            const namespace = prefix ? $url.lookupNamespaceURI(prefix) : null
-            const ns = namespace === defaultNS ? null : namespace
+            const namespace = prefix ? $url.lookupNamespaceURI(prefix) : undefined
+            const ns = namespace === defaultNS ? undefined : namespace
             const val = map.get(ns)?.get(param)
             return encodeURIComponent(val ? val : (!ns ? defaultMap.get(param) ?? '' : ''))
         }),
         params: Array.from(template.matchAll(regex), ([, prefix, param, optional]) => {
-            const namespace = prefix ? $url.lookupNamespaceURI(prefix) : null
-            const ns = namespace === defaultNS ? null : namespace
+            const namespace = prefix ? $url.lookupNamespaceURI(prefix) : undefined
+            const ns = namespace === defaultNS ? undefined : namespace
             return {
                 ns, name: param,
                 required: !optional,
