@@ -865,9 +865,6 @@ export class Paginator extends HTMLElement {
             -webkit-perspective: 1000px;
             transition: opacity 50ms ease-in;
         }
-        :host([dir="rtl"]) #container {
-            flex-direction: row-reverse;
-        }
         #container.vertical {
             flex-direction: column;
         }
