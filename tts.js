@@ -22,7 +22,12 @@ const getAlphabet = el => {
 }
 
 const getSegmenter = (lang = 'en', granularity = 'word') => {
-    const segmenter = new Intl.Segmenter(lang, { granularity })
+    // `lang` may be explicitly null when getLang() walks to the document
+    // root without finding a language attribute — common for PDFs, which
+    // almost never declare a language. The default parameter above only
+    // applies when the argument is `undefined`, not `null`, so we need a
+    // separate fallback here to avoid `Intl.Segmenter(null, ...)` throwing.
+    const segmenter = new Intl.Segmenter(lang || 'en', { granularity })
     const granularityIsWord = granularity === 'word'
     return function* (strs, makeRange) {
         const str = strs.join('')
