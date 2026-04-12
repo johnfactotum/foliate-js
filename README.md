@@ -3,7 +3,7 @@
 Library for rendering e-books in the browser.
 
 Features:
-- Supports EPUB, MOBI, KF8 (AZW3), FB2, CBZ, PDF (experimental; requires PDF.js)
+- Supports EPUB, MOBI, KF8 (AZW3), FB2, CBZ, CBR, CBT, CB7, PDF (experimental; requires PDF.js)
 - Add support for other formats yourself by implementing the book interface
 - Pure JavaScript
 - Small and modular
@@ -32,7 +32,7 @@ This project uses native ES modules. There's no build step, and you can import t
 There are mainly three kinds of modules:
 
 - Modules that parse and load books, implementing the "book" interface
-    - `comic-book.js`, for comic book archives (CBZ)
+    - `comic-book.js`, for comic book archives (CBZ, CBR, CBT, CB7)
     - `epub.js` and `epubcfi.js`, for EPUB
     - `fb2.js`, for FictionBook 2
     - `mobi.js`, for both Mobipocket files and KF8 (commonly known as AZW3) files
@@ -139,7 +139,7 @@ Note that KF8 files can contain fonts that are zlib-compressed. They need to be 
 
 There is a proof-of-concept, highly experimental adapter for [PDF.js](https://mozilla.github.io/pdf.js/), with which you can show PDFs using the same fixed-layout renderer for EPUBs.
 
-CBZs are similarly handled like fixed-layout EPUBs.
+CBZs and other comic book formats are similarly handled like fixed-layout EPUBs.
 
 ### The Renderers
 
