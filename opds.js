@@ -153,7 +153,7 @@ const getLink = link => {
     const pseLastRead = link.getAttributeNS(NS.PSE, 'lastRead') || link.getAttribute('pse:lastRead')
     const pseLastReadDate = link.getAttributeNS(NS.PSE, 'lastReadDate') || link.getAttribute('pse:lastReadDate')
 
-    const obj = {
+    return {
         rel: mappedRel,
         href: link.getAttribute('href') ?? undefined,
         type: link.getAttribute('type') ?? undefined,
@@ -170,10 +170,6 @@ const getLink = link => {
             'pse:lastReadDate': isStream ? pseLastReadDate ?? undefined : undefined,
         },
     }
-
-    if (Object.keys(obj.properties).length === 0) delete obj.properties
-
-    return obj
 }
 
 const getPerson = person => {
