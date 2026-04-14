@@ -1313,13 +1313,15 @@ ${doc.querySelector('parsererror').innerText}`)
         if (cached) return cached
 
         const content = await section.loadText()
-        if (content) contentCache.set(section.id, content)
+        const doc = await section.createDocument()
+        const data = { content, doc }
+        if (content) contentCache.set(section.id, data)
 
-        return content
+        return data
     }
 
     // Helper: Create section subitems from fragments
-    #createSectionSubitems(fragments, base, content, section) {
+    #createSectionSubitems(fragments, base, content, doc, section) {
         const subitems = []
         for (let i = 0; i < fragments.length; i++) {
             const fragment = fragments[i]
@@ -1330,12 +1332,14 @@ ${doc.querySelector('parsererror').innerText}`)
                 ? this.splitTOCHref(prevFragment.href)
                 : [null, null]
 
+            const fragmentElement = getHTMLFragment(doc, fragmentId)
+            const cfi = CFI.joinIndir(section.cfi, fragmentElement ? CFI.fromElements([fragmentElement])[0] : '')
             const size = this.#calculateFragmentSize(content, fragmentId, prevFragmentId)
 
             subitems.push({
                 id: fragment.href,
                 href: fragment.href,
-                cfi: fragment.cfi,
+                cfi,
                 size,
                 linear: section.linear,
             })
@@ -1365,11 +1369,11 @@ ${doc.querySelector('parsererror').innerText}`)
             if (!section || fragments.length === 0) continue
 
             // Load HTML content for this section
-            const content = await this.#loadSectionContent(section, contentCache)
-            if (!content) continue
+            const { content, doc } = await this.#loadSectionContent(section, contentCache)
+            if (!content || !doc) continue
 
             // Create subitems from fragments
-            const subitems = this.#createSectionSubitems(fragments, base, content, section)
+            const subitems = this.#createSectionSubitems(fragments, base, content, doc, section)
 
             // Assign to section
             if (subitems.length > 0) {
