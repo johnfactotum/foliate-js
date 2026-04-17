@@ -288,8 +288,12 @@ export class FixedLayout extends HTMLElement {
       cursorY,
       dragOffsetX: this.dragOffset.x,
       dragOffsetY: this.dragOffset.y,
+      scrollLeft: this.scrollLeft,
+      scrollTop: this.scrollTop,
       newScrollX,
       newScrollY,
+      source,
+      leftWidth,
     });
     // Apply zoom
     this.setAttribute("zoom", newScale);
