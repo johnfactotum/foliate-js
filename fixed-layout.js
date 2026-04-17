@@ -308,8 +308,8 @@ export class FixedLayout extends HTMLElement {
       if (this.#dragState.isPotentialDrag) {
         console.log("[FixedLayout Debug] ✋ DRAG MODE ACTIVATED (timeout)");
         this.#dragState.isDragging = true;
-        this.dragOffset.x = this.scrollLeft;
-        this.dragOffset.y = this.scrollTop;
+        this.dragOffset.x = 0;
+        this.dragOffset.y = 0;
         this.style.cursor = "grabbing";
 
         // Prevent text selection while dragging
@@ -340,8 +340,8 @@ export class FixedLayout extends HTMLElement {
         clearTimeout(this.#dragState.dragTimeout);
         this.#dragState.isPotentialDrag = false;
         this.#dragState.isDragging = true;
-        this.dragOffset.x = this.scrollLeft;
-        this.dragOffset.y = this.scrollTop;
+        this.dragOffset.x = 0;
+        this.dragOffset.y = 0;
         this.style.cursor = "grabbing";
       }
     }
@@ -361,11 +361,14 @@ export class FixedLayout extends HTMLElement {
       });
 
       // Update drag offset instead of scrolling
-      this.dragOffset.x -= dx;
-      this.dragOffset.y -= dy;
+      this.dragOffset.x += dx;
+      this.dragOffset.y += dy;
 
       // Re-render with new drag offset
-      this.#render();
+      const newScrollX = this.#dragState.scrollLeft - this.dragOffset.x;
+      const newScrollY = this.#dragState.scrollTop - this.dragOffset.y;
+      this.scrollLeft = newScrollX;
+      this.scrollTop = newScrollY;
     }
   }
 
@@ -386,7 +389,8 @@ export class FixedLayout extends HTMLElement {
     this.#dragState.isDragging = false;
     this.#dragState.isPotentialDrag = false;
     this.style.cursor = "";
-
+    this.dragOffset.x = 0;
+    this.dragOffset.y = 0;
     // NEW: Reset drag offset when drag completes
     if (wasDragging) {
       console.log("[FixedLayout Debug] ✅ Drag completed");
