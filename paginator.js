@@ -136,6 +136,7 @@ const getBoundingClientRect = target => {
 }
 
 const getVisibleRange = (doc, start, end, mapRect) => {
+    if (!doc.body) return null
     // first get all visible nodes
     const acceptNode = node => {
         const name = node.localName?.toLowerCase()
@@ -323,47 +324,56 @@ class View {
         if (typeof src !== 'string') throw new Error(`${src} is not string`)
         return new Promise(resolve => {
             this.#iframe.addEventListener('load', () => {
-                const doc = this.document
-                afterLoad?.(doc)
+                try {
+                    const doc = this.document
+                    afterLoad?.(doc)
 
-                this.#iframe.setAttribute('aria-label', doc.title)
-                // it needs to be visible for Firefox to get computed style
-                this.#iframe.style.display = 'block'
-                const { vertical, rtl } = getDirection(doc)
-                this.docBackground = getBackground(doc)
-                doc.body.style.background = 'none'
-                // Preload background image to get natural dimensions;
-                // in scrolled mode the view expands to fit the image.
-                const bgUrl = this.docBackground
-                    ?.match(/url\(["']?([^"')]+)["']?\)/)?.[1]
-                if (bgUrl) {
-                    const img = new Image()
-                    img.onload = () => {
-                        this.#bgImageSize = {
-                            width: img.naturalWidth,
-                            height: img.naturalHeight,
+                    this.#iframe.setAttribute('aria-label', doc.title)
+                    // it needs to be visible for Firefox to get computed style
+                    this.#iframe.style.display = 'block'
+                    const { vertical, rtl } = getDirection(doc)
+                    this.docBackground = getBackground(doc)
+                    doc.body.style.background = 'none'
+                    // Preload background image to get natural dimensions;
+                    // in scrolled mode the view expands to fit the image.
+                    const bgUrl = this.docBackground
+                        ?.match(/url\(["']?([^"')]+)["']?\)/)?.[1]
+                    if (bgUrl) {
+                        const img = new Image()
+                        img.onload = () => {
+                            this.#bgImageSize = {
+                                width: img.naturalWidth,
+                                height: img.naturalHeight,
+                            }
+                            if (!this.#column) this.expand()
                         }
-                        if (!this.#column) this.expand()
+                        img.src = bgUrl
                     }
-                    img.src = bgUrl
+                    this.#iframe.style.display = 'none'
+
+                    this.#vertical = vertical
+                    this.#rtl = rtl
+
+                    // Create the range from the iframe's document so it is in
+                    // the same node tree as doc.body. Using the outer document's
+                    // range throws WrongDocumentError in Firefox (spec-compliant),
+                    // which previously prevented resolve() from being called.
+                    this.#contentRange = doc.createRange()
+                    this.#contentRange.selectNodeContents(doc.body)
+                    const layout = beforeRender?.({ vertical, rtl })
+                    this.#iframe.style.display = 'block'
+                    this.render(layout)
+                    this.#observer.observe(doc.body)
+
+                    // the resize observer above doesn't work in Firefox
+                    // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
+                    // until the bug is fixed we can at least account for font load
+                    this.fontReady = doc.fonts.ready.then(() => this.expand())
+                } catch (e) {
+                    console.warn('iframe load handler error:', e)
+                } finally {
+                    resolve()
                 }
-                this.#iframe.style.display = 'none'
-
-                this.#vertical = vertical
-                this.#rtl = rtl
-
-                this.#contentRange.selectNodeContents(doc.body)
-                const layout = beforeRender?.({ vertical, rtl })
-                this.#iframe.style.display = 'block'
-                this.render(layout)
-                this.#observer.observe(doc.body)
-
-                // the resize observer above doesn't work in Firefox
-                // (see https://bugzilla.mozilla.org/show_bug.cgi?id=1832939)
-                // until the bug is fixed we can at least account for font load
-                this.fontReady = doc.fonts.ready.then(() => this.expand())
-
-                resolve()
             }, { once: true })
             if (data) {
                 this.#iframe.srcdoc = data
@@ -1023,7 +1033,7 @@ export class Paginator extends HTMLElement {
                 const range = this.#lastVisibleRange
                 if (!range) return
                 const sel = doc.getSelection()
-                if (!sel.rangeCount) return
+                if (!sel || !sel.rangeCount) return
                 // FIXME: this won't work on Android WebView, disable for now
                 if (!isPointerSelecting && isPointerSelecting && sel.type === 'Range')
                     checkPointerSelection(range, sel)

@@ -316,10 +316,20 @@ const makeTOCItem = async (item, pdf) => {
 
 const MAX_CACHED_PAGES = 8
 
-export const makePDF = async file => {
+export const makePDF = async (file, cachedData) => {
+    let rangeCount = 0
+    let rangeTotalBytes = 0
+    let rangeIdleMs = 0
+    let lastRangeEnd = performance.now()
+
     const transport = new pdfjsLib.PDFDataRangeTransport(file.size, [])
     transport.requestDataRange = (begin, end) => {
+        const requestedAt = performance.now()
+        rangeIdleMs += requestedAt - lastRangeEnd
+        rangeCount++
+        rangeTotalBytes += end - begin
         file.slice(begin, end).arrayBuffer().then(chunk => {
+            lastRangeEnd = performance.now()
             transport.onDataRange(begin, chunk)
         })
     }
@@ -330,32 +340,50 @@ export const makePDF = async file => {
         standardFontDataUrl: pdfjsPath('standard_fonts/'),
         isEvalSupported: false,
     }).promise
+    performance.mark(`[pdf-open] getDocument-done (${rangeCount} ranges, ${(rangeTotalBytes / 1024).toFixed(1)} KB, ${rangeIdleMs.toFixed(0)} ms idle)`)
 
-    // Get viewport dimensions from first page for fixed-layout rendering
-    const firstPage = await pdf.getPage(1)
-    const firstViewport = firstPage.getViewport({ scale: 1 })
-    const book = { rendition: {
-        layout: 'pre-paginated',
-        viewport: { width: firstViewport.width, height: firstViewport.height },
-    } }
+    let viewport, metadata, toc
 
-    const { metadata, info } = await pdf.getMetadata() ?? {}
-    // TODO: for better results, parse `metadata.getRaw()`
-    book.metadata = {
-        title: metadata?.get('dc:title') ?? info?.Title,
-        author: metadata?.get('dc:creator') ?? info?.Author,
-        contributor: metadata?.get('dc:contributor'),
-        description: metadata?.get('dc:description') ?? info?.Subject,
-        language: metadata?.get('dc:language'),
-        publisher: metadata?.get('dc:publisher'),
-        subject: metadata?.get('dc:subject'),
-        identifier: metadata?.get('dc:identifier'),
-        source: metadata?.get('dc:source'),
-        rights: metadata?.get('dc:rights'),
+    if (cachedData) {
+        // Fast path: skip getPage(1), getMetadata(), and getOutline() calls
+        viewport = cachedData.viewport
+        metadata = cachedData.metadata
+        toc = cachedData.toc
+        performance.mark('[pdf-open] cache-applied')
+    } else {
+        // Get viewport dimensions from first page for fixed-layout rendering
+        const firstPage = await pdf.getPage(1)
+        const firstViewport = firstPage.getViewport({ scale: 1 })
+        viewport = { width: firstViewport.width, height: firstViewport.height }
+        performance.mark('[pdf-open] getPage1-done')
+
+        const { metadata: meta, info } = await pdf.getMetadata() ?? {}
+        // TODO: for better results, parse `metadata.getRaw()`
+        metadata = {
+            title: meta?.get('dc:title') ?? info?.Title,
+            author: meta?.get('dc:creator') ?? info?.Author,
+            contributor: meta?.get('dc:contributor'),
+            description: meta?.get('dc:description') ?? info?.Subject,
+            language: meta?.get('dc:language'),
+            publisher: meta?.get('dc:publisher'),
+            subject: meta?.get('dc:subject'),
+            identifier: meta?.get('dc:identifier'),
+            source: meta?.get('dc:source'),
+            rights: meta?.get('dc:rights'),
+        }
+        performance.mark('[pdf-open] getMetadata-done')
+
+        const outline = await pdf.getOutline()
+        toc = outline ? await Promise.all(outline.map(item => makeTOCItem(item, pdf))) : null
+        performance.mark('[pdf-open] getOutline-done')
     }
 
-    const outline = await pdf.getOutline()
-    book.toc = outline ? await Promise.all(outline.map(item => makeTOCItem(item, pdf))) : null
+    const book = { rendition: {
+        layout: 'pre-paginated',
+        viewport,
+    } }
+    book.metadata = metadata
+    book.toc = toc
 
     const cache = new Map()
     const pageCache = new Map()
