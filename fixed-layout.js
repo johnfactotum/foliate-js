@@ -59,6 +59,7 @@ export class FixedLayout extends HTMLElement {
     startY: 0,
     scrollLeft: 0,
     scrollTop: 0,
+    draggable: true,
   };
   dragOffset = { x: 0, y: 0 };
   #magnifier = {
@@ -235,12 +236,31 @@ export class FixedLayout extends HTMLElement {
     const delta = event.deltaY;
     const rect = this.getBoundingClientRect();
 
+    // DETERMINE WHICH IFRAME SENT THE EVENT
+    const source = event.sourceIframe || "right"; // Default to right
+    const leftWidth = this.#left?.element?.offsetWidth || 0;
+
+    // ADJUST CURSOR POSITION BASED ON SOURCE IFRAME
+    const rawCursorX = event.clientX - rect.left;
+    const rawCursorY = event.clientY - rect.top;
+
+    // For both pages, calculate cursor position relative to the spread's viewport
+    // The cursor position is already relative to the container, not individual pages
+    const cursorX = rawCursorX;
+    const cursorY = rawCursorY;
     // Current zoom level (default to fit-page if not set)
     const oldScale =
       this.#zoom === "fit-page" || this.#zoom === "fit-width"
         ? 1
         : this.#zoom || 1;
-
+    console.log("[FixedLayout Debug] 📍 Cursor calculation:", {
+      source,
+      leftWidth,
+      rawCursorX,
+      cursorX,
+      rectLeft: rect.left,
+      clientX: event.clientX,
+    });
     // Calculate new scale
     const zoomFactor =
       delta > 0 ? 1 - this.#zoomState.zoomStep : 1 + this.#zoomState.zoomStep;
@@ -249,11 +269,9 @@ export class FixedLayout extends HTMLElement {
       Math.max(this.#zoomState.minScale, oldScale * zoomFactor),
     );
 
-    // Zoom toward cursor position
-    const cursorX = event.clientX - rect.left;
-    const cursorY = event.clientY - rect.top;
-
     const scaleChange = newScale / oldScale;
+
+    // Calculate new scroll position (same calculation for both pages)
     const newScrollX =
       (this.scrollLeft + this.dragOffset.x + cursorX) * scaleChange -
       cursorX -
@@ -308,12 +326,10 @@ export class FixedLayout extends HTMLElement {
       if (this.#dragState.isPotentialDrag) {
         console.log("[FixedLayout Debug] ✋ DRAG MODE ACTIVATED (timeout)");
         this.#dragState.isDragging = true;
+        this.#dragState.isPotentialDrag = false;
         this.dragOffset.x = 0;
         this.dragOffset.y = 0;
         this.style.cursor = "grabbing";
-
-        // Prevent text selection while dragging
-        event.preventDefault();
       }
     }, this.#dragState.pressDelay);
   }
@@ -325,18 +341,8 @@ export class FixedLayout extends HTMLElement {
       const dy = event.clientY - this.#dragState.startY;
       const moved = Math.sqrt(dx * dx + dy * dy);
 
-      console.log("[FixedLayout Debug] 📐 Measuring movement:", {
-        dx,
-        dy,
-        moved: moved.toFixed(2),
-        threshold: 3,
-      });
-
       // If moved more than 3 pixels, start dragging immediately
       if (moved > 3) {
-        console.log(
-          "[FixedLayout Debug] ✋ DRAG MODE ACTIVATED (movement > 3px)",
-        );
         clearTimeout(this.#dragState.dragTimeout);
         this.#dragState.isPotentialDrag = false;
         this.#dragState.isDragging = true;
@@ -347,28 +353,40 @@ export class FixedLayout extends HTMLElement {
     }
 
     // Handle actual drag
-    if (this.#dragState.isDragging) {
-      event.preventDefault();
+    if (!this.#dragState.isDragging) return;
+    const dx = event.clientX - this.#dragState.startX;
+    const dy = event.clientY - this.#dragState.startY;
+    if (this.#zoom === "fit-page") {
+      // Track how far user has dragged
+      this.dragOffset.x -= dx;
+      this.dragOffset.y -= dy;
+      this.#render();
+      return;
+    }
+    if (
+      this.#zoom !== "fit-page" &&
+      this.#zoom !== "fit-width" &&
+      this.#zoom !== 1 &&
+      this.#dragState.draggable
+    ) {
+      // Calculate new scroll position directly from mouse movement
+      const newScrollX = this.#dragState.scrollLeft - dx;
+      const newScrollY = this.#dragState.scrollTop - dy;
 
-      const dx = event.clientX - this.#dragState.startX;
-      const dy = event.clientY - this.#dragState.startY;
-
-      console.log("[FixedLayout Debug] 🎯 Dragging:", {
-        dx,
-        dy,
-        from: `(${this.dragOffset.x}, ${this.dragOffset.y})`,
-        to: `(${this.dragOffset.x - dx}, ${this.dragOffset.y - dy})`,
-      });
-
-      // Update drag offset instead of scrolling
-      this.dragOffset.x += dx;
-      this.dragOffset.y += dy;
-
-      // Re-render with new drag offset
-      const newScrollX = this.#dragState.scrollLeft - this.dragOffset.x;
-      const newScrollY = this.#dragState.scrollTop - this.dragOffset.y;
+      // Apply scroll (browser will automatically clamp to valid range)
       this.scrollLeft = newScrollX;
       this.scrollTop = newScrollY;
+    } else {
+      const reason = !this.#dragState.draggable
+        ? "draggable is false"
+        : this.#zoom === "fit-page"
+          ? "zoom is fit-page"
+          : this.#zoom === "fit-width"
+            ? "zoom is fit-width"
+            : this.#zoom === 1
+              ? "zoom is 1"
+              : "unknown";
+      console.log(`[FixedLayout Debug] ⛔ Drag ignored - ${reason}`);
     }
   }
 
@@ -377,6 +395,7 @@ export class FixedLayout extends HTMLElement {
       wasDragging: this.#dragState.isDragging,
       wasPotentialDrag: this.#dragState.isPotentialDrag,
       hasTimeout: !!this.#dragState.dragTimeout,
+      isDraggingBeforeReset: this.#dragState.isDragging, // ADD THIS
     });
     // Clear any pending drag timeout
     if (this.#dragState.dragTimeout) {
@@ -400,7 +419,7 @@ export class FixedLayout extends HTMLElement {
     }
   }
 
-  async #createFrame({ index, src: srcOption }) {
+  async #createFrame({ index, src: srcOption }, frameId) {
     const srcOptionIsString = typeof srcOption === "string";
     const src = srcOptionIsString ? srcOption : srcOption?.src;
     const onZoom = srcOptionIsString ? null : srcOption?.onZoom;
@@ -419,7 +438,7 @@ export class FixedLayout extends HTMLElement {
     iframe.setAttribute("scrolling", "no");
     iframe.setAttribute("part", "filter");
     this.#root.append(element);
-    if (!src) return { blank: true, element, iframe };
+    if (!src) return { blank: true, element, iframe, frameId };
     return new Promise((resolve) => {
       iframe.addEventListener(
         "load",
@@ -431,7 +450,7 @@ export class FixedLayout extends HTMLElement {
           const { width, height } = getViewport(doc, this.defaultViewport);
 
           // NEW: Attach event listeners INSIDE the iframe document
-          this.#attachEventListenersToIframe(doc);
+          this.#attachEventListenersToIframe(doc, frameId, { element, iframe });
 
           resolve({
             element,
@@ -439,6 +458,7 @@ export class FixedLayout extends HTMLElement {
             width: parseFloat(width),
             height: parseFloat(height),
             onZoom,
+            frameId,
           });
         },
         { once: true },
@@ -446,7 +466,7 @@ export class FixedLayout extends HTMLElement {
       iframe.src = src;
     });
   }
-  #attachEventListenersToIframe(doc) {
+  #attachEventListenersToIframe(doc, frameId, frame) {
     if (!doc) {
       console.log("[FixedLayout Debug] ⏸️ No document to attach listeners");
       return;
@@ -454,6 +474,17 @@ export class FixedLayout extends HTMLElement {
 
     console.log(
       "[FixedLayout Debug] 🔧 Attaching event listeners to iframe document",
+    );
+
+    const images = doc.querySelectorAll("img");
+    images.forEach((img) => {
+      img.setAttribute("draggable", "false");
+      img.style.userSelect = "none";
+      img.style.webkitUserDrag = "none";
+      img.style.WebkitUserDrag = "none";
+    });
+    console.log(
+      `[FixedLayout Debug] 🔒 Disabled native drag on ${images.length} images`,
     );
 
     // Attach wheel event listener for zoom to the iframe's document
@@ -475,6 +506,10 @@ export class FixedLayout extends HTMLElement {
           bubbles: true,
           cancelable: true,
         });
+
+        // TAG EVENT WITH SOURCE IFRAME
+        fixedLayoutEvent.sourceIframe = frameId;
+        fixedLayoutEvent.sourceFrame = frame;
 
         // Call our handler with the event
         this.#handleWheel(fixedLayoutEvent);
@@ -512,7 +547,11 @@ export class FixedLayout extends HTMLElement {
         cancelable: true,
       });
 
+      // TAG EVENT WITH SOURCE IFRAME
+      mouseEvent.sourceIframe = frameId;
+      mouseEvent.sourceFrame = frame;
       this.#handleMouseDown(mouseEvent);
+      event.preventDefault();
     });
 
     doc.addEventListener("mousemove", (event) => {
@@ -528,7 +567,11 @@ export class FixedLayout extends HTMLElement {
         cancelable: true,
       });
 
+      // TAG EVENT WITH SOURCE IFRAME
+      mouseEvent.sourceIframe = frameId;
+      mouseEvent.sourceFrame = frame;
       this.#handleMouseMove(mouseEvent);
+      event.preventDefault();
     });
 
     doc.addEventListener("mouseup", (event) => {
@@ -544,7 +587,11 @@ export class FixedLayout extends HTMLElement {
         cancelable: true,
       });
 
+      // TAG EVENT WITH SOURCE IFRAME
+      mouseEvent.sourceIframe = frameId;
+      mouseEvent.sourceFrame = frame;
       this.#handleMouseUp(mouseEvent);
+      event.preventDefault();
     });
 
     console.log(
@@ -624,12 +671,12 @@ export class FixedLayout extends HTMLElement {
     this.#right = null;
     this.#center = null;
     if (center) {
-      this.#center = await this.#createFrame(center);
+      this.#center = await this.#createFrame(center, "center");
       this.#side = "center";
       this.#render();
     } else {
-      this.#left = await this.#createFrame(left);
-      this.#right = await this.#createFrame(right);
+      this.#left = await this.#createFrame(left, "left");
+      this.#right = await this.#createFrame(right, "right");
       this.#side = this.#left.blank
         ? "right"
         : this.#right.blank
