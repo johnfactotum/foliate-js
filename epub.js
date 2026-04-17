@@ -1083,9 +1083,83 @@ export class EPUB {
 ${doc.querySelector('parsererror').innerText}`)
         return doc
     }
-    async init() {
+    async init({ cachedTOC, cachedOPF } = {}) {
+        // Fast path: reconstruct from disk cache, skip all XML parsing
+        if (cachedOPF) {
+            const { manifest, spine, cfis, navPath, ncxPath,
+                pageProgressionDirection, guide, coverId } = cachedOPF
+            const manifestById = new Map(manifest.map(item => [item.id, item]))
+            this.resources = {
+                manifest, assets: manifest, manifestById, spine, cfis,
+                navPath, ncxPath, guide, pageProgressionDirection,
+                cover: manifest.find(m => m.id === coverId),
+                getItemByID: id => manifestById.get(id),
+                getItemByHref: href => manifest.find(m => m.href === href),
+                getItemByProperty: prop => manifest.find(m => m.properties?.includes(prop)),
+                resolveCFI: cfi => {
+                    const parts = CFI.parse(cfi)
+                    const top = (parts.parent ?? parts).shift()
+                    const step = top.at(-1)
+                    let index = step?.id != null
+                        ? spine.findIndex(s => s.id === step.id || s.idref === step.id)
+                        : -1
+                    if (index < 0 && step?.offset != null) index = (step.offset / 2) - 1
+                    return { index, anchor: doc => CFI.toRange(doc, parts) }
+                },
+            }
+            const $encryption = await this.#loadXML('META-INF/encryption.xml')
+            await this.#encryption.init($encryption, null)
+            performance?.mark?.('[epub-open] container-loaded')
+            performance?.mark?.('[epub-open] opf-loaded')
+
+            this.#loader = new Loader({
+                loadText: this.loadText,
+                loadBlob: uri => Promise.resolve(this.loadBlob(uri))
+                    .then(this.#encryption.getDecoder(uri)),
+                resources: this.resources,
+                entries: this.entries,
+            })
+            this.transformTarget = this.#loader.eventTarget
+            this.sections = spine.map((spineItem, index) => {
+                const { idref, linear, properties = [] } = spineItem
+                const item = this.resources.getItemByID(idref)
+                if (!item) return null
+                return {
+                    id: item.href,
+                    load: () => this.#loader.loadItem(item),
+                    unload: () => this.#loader.unloadItem(item),
+                    loadText: () => this.#loader.loadText(item.href),
+                    loadContent: () => this.#loader.loadItemXHTMLContent(item),
+                    createDocument: () => this.loadDocument(item),
+                    size: this.getSize(item.href),
+                    cfi: cfis[index],
+                    linear,
+                    spineProperties: properties,
+                    pageSpread: getPageSpread(properties),
+                    resolveHref: href => resolveURL(href, item.href),
+                    mediaOverlay: item.mediaOverlay
+                        ? this.resources.getItemByID(item.mediaOverlay) : null,
+                }
+            }).filter(s => s)
+            performance?.mark?.('[epub-open] spine-mapped')
+
+            this.toc = cachedOPF.toc ?? null
+            this.pageList = cachedOPF.pageList ?? null
+            this.landmarks = cachedOPF.landmarks ?? null
+            performance?.mark?.('[epub-open] toc-loaded')
+
+            this.landmarks ??= this.resources.guide
+            this.metadata = cachedOPF.metadata
+            this.rendition = cachedOPF.rendition
+            this.media = cachedOPF.media
+            this.dir = cachedOPF.dir
+            return this
+        }
+
+        // Slow path: parse all XML files
         const $container = await this.#loadXML('META-INF/container.xml')
         if (!$container) throw new Error('Failed to load container file')
+        performance?.mark?.('[epub-open] container-loaded')
 
         const opfs = Array.from(
             $container.getElementsByTagNameNS(NS.CONTAINER, 'rootfile'),
@@ -1099,6 +1173,7 @@ ${doc.querySelector('parsererror').innerText}`)
 
         const $encryption = await this.#loadXML('META-INF/encryption.xml')
         await this.#encryption.init($encryption, opf)
+        performance?.mark?.('[epub-open] opf-loaded')
 
         this.resources = new Resources({
             opf,
@@ -1136,25 +1211,33 @@ ${doc.querySelector('parsererror').innerText}`)
                     ? this.resources.getItemByID(item.mediaOverlay) : null,
             }
         }).filter(s => s)
+        performance?.mark?.('[epub-open] spine-mapped')
 
         const { navPath, ncxPath } = this.resources
-        if (navPath) try {
-            const resolve = url => resolveURL(url, navPath)
-            const nav = parseNav(await this.#loadXML(navPath), resolve)
-            this.toc = nav.toc
-            this.pageList = nav.pageList
-            this.landmarks = nav.landmarks
-        } catch(e) {
-            console.warn(e)
+        if (cachedTOC) {
+            this.toc = cachedTOC.toc ?? null
+            this.pageList = cachedTOC.pageList ?? null
+            this.landmarks = cachedTOC.landmarks ?? null
+        } else {
+            if (navPath) try {
+                const resolve = url => resolveURL(url, navPath)
+                const nav = parseNav(await this.#loadXML(navPath), resolve)
+                this.toc = nav.toc
+                this.pageList = nav.pageList
+                this.landmarks = nav.landmarks
+            } catch(e) {
+                console.warn(e)
+            }
+            if (!this.toc && ncxPath) try {
+                const resolve = url => resolveURL(url, ncxPath)
+                const ncx = parseNCX(await this.#loadXML(ncxPath), resolve)
+                this.toc = ncx.toc
+                this.pageList = ncx.pageList
+            } catch(e) {
+                console.warn(e)
+            }
         }
-        if (!this.toc && ncxPath) try {
-            const resolve = url => resolveURL(url, ncxPath)
-            const ncx = parseNCX(await this.#loadXML(ncxPath), resolve)
-            this.toc = ncx.toc
-            this.pageList = ncx.pageList
-        } catch(e) {
-            console.warn(e)
-        }
+        performance?.mark?.('[epub-open] toc-loaded')
 
         this.landmarks ??= this.resources.guide
 
@@ -1163,6 +1246,7 @@ ${doc.querySelector('parsererror').innerText}`)
         this.rendition = rendition
         this.media = media
         this.dir = this.resources.pageProgressionDirection
+        this.opfPath = opfPath
         const displayOptions = getDisplayOptions(
             await this.#loadXML('META-INF/com.apple.ibooks.display-options.xml')
             ?? await this.#loadXML('META-INF/com.kobobooks.display-options.xml'))
