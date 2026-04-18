@@ -204,9 +204,12 @@ export class FixedLayout extends HTMLElement {
   #updateFrameScales(scale) {
     const left = this.#left ?? {};
     const right = this.#center ?? this.#right ?? {};
-    const { width: hostWidth, height: hostHeight } = this.getBoundingClientRect();
+    const { width: hostWidth, height: hostHeight } =
+      this.getBoundingClientRect();
     const portrait =
-      this.spread !== "both" && this.spread !== "portrait" && hostHeight > hostWidth;
+      this.spread !== "both" &&
+      this.spread !== "portrait" &&
+      hostHeight > hostWidth;
     const target = this.#side === "left" ? left : right;
     const blankWidth = left.width ?? right.width ?? 0;
     const blankHeight = left.height ?? right.height ?? 0;
@@ -245,9 +248,12 @@ export class FixedLayout extends HTMLElement {
   #getContentSize() {
     const left = this.#left ?? {};
     const right = this.#center ?? this.#right ?? {};
-    const { width: hostWidth, height: hostHeight } = this.getBoundingClientRect();
+    const { width: hostWidth, height: hostHeight } =
+      this.getBoundingClientRect();
     const portrait =
-      this.spread !== "both" && this.spread !== "portrait" && hostHeight > hostWidth;
+      this.spread !== "both" &&
+      this.spread !== "portrait" &&
+      hostHeight > hostWidth;
     const target = this.#side === "left" ? left : right;
     const blankWidth = left.width ?? right.width ?? 0;
     const blankHeight = left.height ?? right.height ?? 0;
@@ -334,6 +340,14 @@ export class FixedLayout extends HTMLElement {
     if (!this.#dragState.isDragging) return;
     this.#dragState.isDragging = false;
     this.style.cursor = "";
+
+    // sync #side with the frame the user actually panned to
+    if (!this.#center && !this.#left?.blank && !this.#right?.blank) {
+      const leftWidth = (this.#left.width ?? 0) * this.#transform.scale;
+      const viewportCenterInWrapper =
+        this.getBoundingClientRect().width / 2 - this.#transform.x;
+      this.#side = viewportCenterInWrapper < leftWidth ? "left" : "right";
+    }
   }
 
   async #createFrame({ index, src: srcOption }, frameId) {
@@ -386,7 +400,8 @@ export class FixedLayout extends HTMLElement {
       const iframeRect = frame.iframe.getBoundingClientRect();
       const flRect = this.getBoundingClientRect();
       const scaleX = iframeRect.width / (doc.documentElement.clientWidth || 1);
-      const scaleY = iframeRect.height / (doc.documentElement.clientHeight || 1);
+      const scaleY =
+        iframeRect.height / (doc.documentElement.clientHeight || 1);
       return {
         clientX: iframeRect.left - flRect.left + e.clientX * scaleX,
         clientY: iframeRect.top - flRect.top + e.clientY * scaleY,
@@ -527,8 +542,23 @@ export class FixedLayout extends HTMLElement {
     this.#updateFrameScales(scale);
 
     const { contentWidth, contentHeight } = this.#getContentSize();
-    this.#transform.x = (width - contentWidth) / 2;
     this.#transform.y = (height - contentHeight) / 2;
+
+    const isNumericZoom = typeof this.#zoom === "number" && !isNaN(this.#zoom);
+    const hasDualFrames =
+      !this.#center && !this.#left?.blank && !this.#right?.blank;
+
+    if (isNumericZoom && hasDualFrames) {
+      const leftWidth = (this.#left.width ?? 0) * scale;
+      const rightWidth = (this.#right.width ?? 0) * scale;
+      if (side === "right") {
+        this.#transform.x = (width - rightWidth) / 2 - leftWidth;
+      } else {
+        this.#transform.x = (width - leftWidth) / 2;
+      }
+    } else {
+      this.#transform.x = (width - contentWidth) / 2;
+    }
 
     this.#applyTransform();
   }
@@ -562,6 +592,15 @@ export class FixedLayout extends HTMLElement {
       this.#reportLocation("page");
       return true;
     }
+
+    // zoomed-in dual-pane - pan to left frame
+    if (typeof this.#zoom === "number" && !this.#right?.blank) {
+      if (this.#side === "right") {
+        this.#side = "left";
+        this.#render();
+        return true;
+      }
+    }
   }
 
   #goRight() {
@@ -571,6 +610,15 @@ export class FixedLayout extends HTMLElement {
       this.#render();
       this.#reportLocation("page");
       return true;
+    }
+
+    // zoomed-in dual-pane - pan to right frame
+    if (typeof this.#zoom === "number" && !this.#left?.blank) {
+      if (this.#side === "left") {
+        this.#side = "right";
+        this.#render();
+        return true;
+      }
     }
   }
 
