@@ -87,6 +87,11 @@ export class FixedLayout extends HTMLElement {
   attributeChangedCallback(name, _, value) {
     switch (name) {
       case "zoom": {
+        if (value == null) {
+          this.#zoom = undefined;
+          this.#render();
+          return;
+        }
         const newZoom =
           value !== "fit-width" && value !== "fit-page"
             ? parseFloat(value)
@@ -503,6 +508,13 @@ export class FixedLayout extends HTMLElement {
   }
 
   #render(side = this.#side) {
+    console.log("[FXL] render:", {
+      side,
+      zoom: this.#zoom,
+      transformScale: this.#transform.scale,
+      isNumericZoom: typeof this.#zoom === "number" && !isNaN(this.#zoom),
+      hasDualFrames: !this.#center && !this.#left?.blank && !this.#right?.blank,
+    });
     if (!side) return;
     const left = this.#left ?? {};
     const right = this.#center ?? this.#right ?? {};
@@ -594,7 +606,7 @@ export class FixedLayout extends HTMLElement {
     }
 
     // zoomed-in dual-pane - pan to left frame
-    if (typeof this.#zoom === "number" && !this.#right?.blank) {
+    if (typeof this.#zoom === "number" && !isNaN(this.#zoom) && !this.#right?.blank) {
       if (this.#side === "right") {
         this.#side = "left";
         this.#render();
@@ -613,7 +625,7 @@ export class FixedLayout extends HTMLElement {
     }
 
     // zoomed-in dual-pane - pan to right frame
-    if (typeof this.#zoom === "number" && !this.#left?.blank) {
+    if (typeof this.#zoom === "number" && !isNaN(this.#zoom) && !this.#left?.blank) {
       if (this.#side === "left") {
         this.#side = "right";
         this.#render();
