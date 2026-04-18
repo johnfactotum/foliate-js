@@ -1,32 +1,23 @@
 const parseViewport = (str) =>
   str
-    ?.split(/[,;\s]/) // NOTE: technically, only the comma is valid
+    ?.split(/[,;\s]/)
     ?.filter((x) => x)
     ?.map((x) => x.split("=").map((x) => x.trim()));
 
 const getViewport = (doc, viewport) => {
-  // use `viewBox` for SVG
   if (doc.documentElement.localName === "svg") {
     const [, , width, height] =
       doc.documentElement.getAttribute("viewBox")?.split(/\s/) ?? [];
     return { width, height };
   }
-
-  // get `viewport` `meta` element
   const meta = parseViewport(
     doc.querySelector('meta[name="viewport"]')?.getAttribute("content"),
   );
   if (meta) return Object.fromEntries(meta);
-
-  // fallback to book's viewport
   if (typeof viewport === "string") return parseViewport(viewport);
   if (viewport?.width && viewport.height) return viewport;
-
-  // if no viewport (possibly with image directly in spine), get image size
   const img = doc.querySelector("img");
   if (img) return { width: img.naturalWidth, height: img.naturalHeight };
-
-  // just show *something*, i guess...
   console.warn(new Error("Missing viewport properties"));
   return { width: 1000, height: 2000 };
 };
@@ -45,6 +36,8 @@ export class FixedLayout extends HTMLElement {
   #center;
   #side;
   #zoom;
+  #wrapper;
+  #transform = { x: 0, y: 0, scale: 1 };
   #zoomState = {
     minScale: 0.1,
     maxScale: 10,
@@ -52,14 +45,10 @@ export class FixedLayout extends HTMLElement {
   };
   #dragState = {
     isDragging: false,
-    isPotentialDrag: false,
-    dragTimeout: null,
-    pressDelay: 200, // milliseconds
     startX: 0,
     startY: 0,
-    scrollLeft: 0,
-    scrollTop: 0,
-    draggable: true,
+    startTX: 0,
+    startTY: 0,
   };
   dragOffset = { x: 0, y: 0 };
   #magnifier = {
@@ -68,6 +57,7 @@ export class FixedLayout extends HTMLElement {
     magnification: 2,
     element: null,
   };
+
   constructor() {
     super();
 
@@ -76,54 +66,58 @@ export class FixedLayout extends HTMLElement {
     sheet.replaceSync(`:host {
             width: 100%;
             height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            overflow: auto;
+            display: block;
+            overflow: hidden;
+            position: relative;
         }`);
 
+    this.#wrapper = document.createElement("div");
+    this.#wrapper.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            display: flex;
+            transform-origin: 0 0;
+        `;
+    this.#root.appendChild(this.#wrapper);
+
     this.#observer.observe(this);
-    // DEBUG: Log initialization
-    console.log("[FixedLayout Debug] ✓ FixedLayout initialized", {
-      hasZoomState: !!this.#zoomState,
-      hasDragState: !!this.#dragState,
-      hasMagnifier: !!this.#magnifier,
-      zoomState: this.#zoomState,
-      dragState: this.#dragState,
-    });
-    // NOTE: Event listeners will be attached to wrapper elements in #showSpread
-    console.log(
-      "[FixedLayout Debug] Event listeners will be attached to frame wrappers",
-    );
-    // NOTE: Event listeners will be attached to iframe documents in #createFrame
-    console.log(
-      "[FixedLayout Debug] Event listeners will be attached to iframe documents",
-    );
   }
+
   attributeChangedCallback(name, _, value) {
     switch (name) {
-      case "zoom":
-        this.#zoom =
+      case "zoom": {
+        const newZoom =
           value !== "fit-width" && value !== "fit-page"
             ? parseFloat(value)
             : value;
-        this.#render();
+
+        if (typeof newZoom === "number" && !isNaN(newZoom)) {
+          if (this.#transform.scale === newZoom) return;
+          const rect = this.getBoundingClientRect();
+          const cx = rect.width / 2;
+          const cy = rect.height / 2;
+          this.#zoomByRatio(cx, cy, newZoom / this.#transform.scale);
+        } else {
+          this.#zoom = newZoom;
+          this.#render();
+        }
         break;
+      }
     }
   }
-  toggleMagnifier() {
-    console.log("[FixedLayout Debug] 🔍 Toggle magnifier:", {
-      current: this.#magnifier.enabled,
-      willBe: !this.#magnifier.enabled,
-    });
 
+  get zoom() {
+    return this.#zoom;
+  }
+
+  toggleMagnifier() {
     this.#magnifier.enabled = !this.#magnifier.enabled;
 
     if (this.#magnifier.enabled) {
       this.#createMagnifier();
       this.addEventListener("mousemove", this.#handleMagnifierMove.bind(this));
       this.style.cursor = "crosshair";
-      console.log("[FixedLayout Debug] ✅ Magnifier enabled");
     } else {
       this.#destroyMagnifier();
       this.removeEventListener(
@@ -131,16 +125,11 @@ export class FixedLayout extends HTMLElement {
         this.#handleMagnifierMove.bind(this),
       );
       this.style.cursor = "";
-      console.log("[FixedLayout Debug] ❌ Magnifier disabled");
     }
   }
 
   #createMagnifier() {
-    if (this.#magnifier.element) {
-      console.log("[FixedLayout Debug] ⏸️ Magnifier already exists");
-      return;
-    }
-    console.log("[FixedLayout Debug] 🔧 Creating magnifier element");
+    if (this.#magnifier.element) return;
 
     const magnifier = document.createElement("div");
     magnifier.className = "magnifier";
@@ -170,14 +159,12 @@ export class FixedLayout extends HTMLElement {
     magnifier.appendChild(lens);
     this.#root.appendChild(magnifier);
     this.#magnifier.element = magnifier;
-    console.log("[FixedLayout Debug] ✅ Magnifier element created");
   }
 
   #destroyMagnifier() {
     if (this.#magnifier.element) {
       this.#magnifier.element.remove();
       this.#magnifier.element = null;
-      console.log("[FixedLayout Debug] ✅ Magnifier destroyed");
     }
   }
 
@@ -188,239 +175,165 @@ export class FixedLayout extends HTMLElement {
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
 
-    // Position magnifier
     const magnifier = this.#magnifier.element;
     magnifier.style.display = "block";
     magnifier.style.left = `${x - this.#magnifier.size / 2}px`;
     magnifier.style.top = `${y - this.#magnifier.size / 2}px`;
 
-    // Update lens (clone and zoom iframe content)
     const lens = magnifier.querySelector(".magnifier-lens");
     const frame = this.#center || this.#left || this.#right;
     if (frame?.iframe) {
       const iframe = frame.iframe;
       lens.innerHTML = "";
       lens.appendChild(iframe.cloneNode(true));
+      const scale = this.#transform.scale || 1;
       lens.style.transform = `scale(${this.#magnifier.magnification})`;
 
       const iframeRect = iframe.getBoundingClientRect();
-      const relX = (x - iframeRect.left) / (this.#zoom || 1);
-      const relY = (y - iframeRect.top) / (this.#zoom || 1);
+      const relX = (x - iframeRect.left) / scale;
+      const relY = (y - iframeRect.top) / scale;
 
       lens.style.transformOrigin = `${-relX + this.#magnifier.size / 2}px ${-relY + this.#magnifier.size / 2}px`;
     }
   }
-  #handleWheel(event) {
-    console.log("[FixedLayout Debug] 🖱️ Wheel event:", {
-      deltaY: event.deltaY,
-      ctrlKey: event.ctrlKey,
-      metaKey: event.metaKey,
-      panelMode: this.hasAttribute("panel-mode"),
-      currentZoom: this.#zoom,
-    });
-    // Don't interfere with panel mode
-    if (this.hasAttribute("panel-mode")) {
-      console.log("[FixedLayout Debug] ⏸️ Ignoring wheel - panel mode active");
-      return;
+
+  #applyTransform() {
+    this.#wrapper.style.transform = `translate(${this.#transform.x}px, ${this.#transform.y}px)`;
+  }
+
+  #updateFrameScales(scale) {
+    const left = this.#left ?? {};
+    const right = this.#center ?? this.#right ?? {};
+    const { width: hostWidth, height: hostHeight } = this.getBoundingClientRect();
+    const portrait =
+      this.spread !== "both" && this.spread !== "portrait" && hostHeight > hostWidth;
+    const target = this.#side === "left" ? left : right;
+    const blankWidth = left.width ?? right.width ?? 0;
+    const blankHeight = left.height ?? right.height ?? 0;
+
+    const transform = (frame) => {
+      let { element, iframe, width, height, blank, onZoom } = frame;
+      if (!iframe) return;
+      if (onZoom) onZoom({ doc: frame.iframe.contentDocument, scale });
+      const iframeScale = onZoom ? scale : 1;
+      Object.assign(iframe.style, {
+        width: `${width * iframeScale}px`,
+        height: `${height * iframeScale}px`,
+        transform: onZoom ? "none" : `scale(${scale})`,
+        transformOrigin: "top left",
+        display: blank ? "none" : "block",
+      });
+      Object.assign(element.style, {
+        width: `${(width ?? blankWidth) * scale}px`,
+        height: `${(height ?? blankHeight) * scale}px`,
+        overflow: "hidden",
+        display: "block",
+        flexShrink: "0",
+      });
+      if (portrait && frame !== target) {
+        element.style.display = "none";
+      }
+    };
+    if (this.#center) {
+      transform(this.#center);
+    } else {
+      transform(left);
+      transform(right);
     }
+  }
 
-    // Allow browser zoom with Ctrl/Cmd
-    if (event.ctrlKey || event.metaKey) {
-      console.log(
-        "[FixedLayout Debug] ⏸️ Ignoring wheel - browser zoom shortcut",
-      );
-      return;
+  #getContentSize() {
+    const left = this.#left ?? {};
+    const right = this.#center ?? this.#right ?? {};
+    const { width: hostWidth, height: hostHeight } = this.getBoundingClientRect();
+    const portrait =
+      this.spread !== "both" && this.spread !== "portrait" && hostHeight > hostWidth;
+    const target = this.#side === "left" ? left : right;
+    const blankWidth = left.width ?? right.width ?? 0;
+    const blankHeight = left.height ?? right.height ?? 0;
+    const scale = this.#transform.scale;
+
+    let contentWidth;
+    let contentHeight;
+
+    if (this.#center || portrait) {
+      const tw = (target.width ?? blankWidth) * scale;
+      const th = (target.height ?? blankHeight) * scale;
+      contentWidth = tw;
+      contentHeight = th;
+    } else {
+      const lw = (left.width ?? blankWidth) * scale;
+      const rw = (right.width ?? blankWidth) * scale;
+      const lh = (left.height ?? blankHeight) * scale;
+      const rh = (right.height ?? blankHeight) * scale;
+      contentWidth = lw + rw;
+      contentHeight = Math.max(lh, rh);
     }
-    event.preventDefault();
+    return { contentWidth, contentHeight };
+  }
 
-    const delta = event.deltaY;
-    const rect = this.getBoundingClientRect();
-
-    // DETERMINE WHICH IFRAME SENT THE EVENT
-    const source = event.sourceIframe || "right"; // Default to right
-    const leftWidth = this.#left?.element?.offsetWidth || 0;
-
-    // ADJUST CURSOR POSITION BASED ON SOURCE IFRAME
-    const rawCursorX = event.clientX - rect.left;
-    const rawCursorY = event.clientY - rect.top;
-
-    // For both pages, calculate cursor position relative to the spread's viewport
-    // The cursor position is already relative to the container, not individual pages
-    const cursorX = rawCursorX;
-    const cursorY = rawCursorY;
-    // Current zoom level (default to fit-page if not set)
-    const oldScale =
-      this.#zoom === "fit-page" || this.#zoom === "fit-width"
-        ? 1
-        : this.#zoom || 1;
-    console.log("[FixedLayout Debug] 📍 Cursor calculation:", {
-      source,
-      leftWidth,
-      rawCursorX,
-      cursorX,
-      rectLeft: rect.left,
-      clientX: event.clientX,
-    });
-    // Calculate new scale
-    const zoomFactor =
-      delta > 0 ? 1 - this.#zoomState.zoomStep : 1 + this.#zoomState.zoomStep;
+  #zoomByRatio(cx, cy, ratio) {
+    const oldScale = this.#transform.scale;
     const newScale = Math.min(
       this.#zoomState.maxScale,
-      Math.max(this.#zoomState.minScale, oldScale * zoomFactor),
+      Math.max(this.#zoomState.minScale, oldScale * ratio),
     );
+    const actualRatio = newScale / oldScale;
 
-    const scaleChange = newScale / oldScale;
+    this.#transform.x = cx - actualRatio * (cx - this.#transform.x);
+    this.#transform.y = cy - actualRatio * (cy - this.#transform.y);
+    this.#transform.scale = newScale;
 
-    // Calculate new scroll position (same calculation for both pages)
-    const newScrollX =
-      (this.scrollLeft + this.dragOffset.x + cursorX) * scaleChange -
-      cursorX -
-      this.dragOffset.x;
-    const newScrollY =
-      (this.scrollTop + this.dragOffset.y + cursorY) * scaleChange -
-      cursorY -
-      this.dragOffset.y;
-    // Apply zoom
-    console.log("[FixedLayout Debug] 🔍 Applying zoom:", {
-      oldScale,
-      newScale,
-      cursorX,
-      cursorY,
-      dragOffsetX: this.dragOffset.x,
-      dragOffsetY: this.dragOffset.y,
-      scrollLeft: this.scrollLeft,
-      scrollTop: this.scrollTop,
-      newScrollX,
-      newScrollY,
-      source,
-      leftWidth,
-    });
-    // Apply zoom
+    this.#zoom = newScale;
+    this.#updateFrameScales(newScale);
+    this.#applyTransform();
+
     this.setAttribute("zoom", newScale);
-    this.scrollTo(newScrollX, newScrollY);
+  }
+
+  #handleWheel(event) {
+    if (this.hasAttribute("panel-mode")) return;
+    if (event.ctrlKey || event.metaKey) return;
+    event.preventDefault();
+
+    const rect = this.getBoundingClientRect();
+    const cx = event.clientX - rect.left;
+    const cy = event.clientY - rect.top;
+
+    const ratio =
+      event.deltaY > 0
+        ? 1 - this.#zoomState.zoomStep
+        : 1 + this.#zoomState.zoomStep;
+
+    this.#zoomByRatio(cx, cy, ratio);
   }
 
   #handleMouseDown(event) {
-    console.log("[FixedLayout Debug] 🖱️ Mouse down:", {
-      button: event.button,
-      clientX: event.clientX,
-      clientY: event.clientY,
-    });
-    // Only left mouse button
-    if (event.button !== 0) {
-      console.log("[FixedLayout Debug] ⏸️ Ignoring - not left button");
-      return;
-    }
+    if (event.button !== 0) return;
 
-    // Store initial state
     this.#dragState.startX = event.clientX;
     this.#dragState.startY = event.clientY;
-    this.#dragState.scrollLeft = this.scrollLeft;
-    this.#dragState.scrollTop = this.scrollTop;
-    this.#dragState.isPotentialDrag = true;
-    console.log(
-      "[FixedLayout Debug] ⏱️ Potential drag started, timeout set for",
-      this.#dragState.pressDelay,
-      "ms",
-    );
-
-    // Start timer to detect long press
-    this.#dragState.dragTimeout = setTimeout(() => {
-      // If we haven't moved much and haven't released yet, it's a drag
-      if (this.#dragState.isPotentialDrag) {
-        console.log("[FixedLayout Debug] ✋ DRAG MODE ACTIVATED (timeout)");
-        this.#dragState.isDragging = true;
-        this.#dragState.isPotentialDrag = false;
-        this.dragOffset.x = 0;
-        this.dragOffset.y = 0;
-        this.style.cursor = "grabbing";
-      }
-    }, this.#dragState.pressDelay);
+    this.#dragState.startTX = this.#transform.x;
+    this.#dragState.startTY = this.#transform.y;
+    this.#dragState.isDragging = true;
+    this.style.cursor = "grabbing";
   }
 
   #handleMouseMove(event) {
-    // Check if this is the start of a drag (moved during potential drag)
-    if (this.#dragState.isPotentialDrag) {
-      const dx = event.clientX - this.#dragState.startX;
-      const dy = event.clientY - this.#dragState.startY;
-      const moved = Math.sqrt(dx * dx + dy * dy);
-
-      // If moved more than 3 pixels, start dragging immediately
-      if (moved > 3) {
-        clearTimeout(this.#dragState.dragTimeout);
-        this.#dragState.isPotentialDrag = false;
-        this.#dragState.isDragging = true;
-        this.dragOffset.x = 0;
-        this.dragOffset.y = 0;
-        this.style.cursor = "grabbing";
-      }
-    }
-
-    // Handle actual drag
     if (!this.#dragState.isDragging) return;
+
     const dx = event.clientX - this.#dragState.startX;
     const dy = event.clientY - this.#dragState.startY;
-    if (this.#zoom === "fit-page") {
-      // Track how far user has dragged
-      this.dragOffset.x -= dx;
-      this.dragOffset.y -= dy;
-      this.#render();
-      return;
-    }
-    if (
-      this.#zoom !== "fit-page" &&
-      this.#zoom !== "fit-width" &&
-      this.#zoom !== 1 &&
-      this.#dragState.draggable
-    ) {
-      // Calculate new scroll position directly from mouse movement
-      const newScrollX = this.#dragState.scrollLeft - dx;
-      const newScrollY = this.#dragState.scrollTop - dy;
 
-      // Apply scroll (browser will automatically clamp to valid range)
-      this.scrollLeft = newScrollX;
-      this.scrollTop = newScrollY;
-    } else {
-      const reason = !this.#dragState.draggable
-        ? "draggable is false"
-        : this.#zoom === "fit-page"
-          ? "zoom is fit-page"
-          : this.#zoom === "fit-width"
-            ? "zoom is fit-width"
-            : this.#zoom === 1
-              ? "zoom is 1"
-              : "unknown";
-      console.log(`[FixedLayout Debug] ⛔ Drag ignored - ${reason}`);
-    }
+    this.#transform.x = this.#dragState.startTX + dx;
+    this.#transform.y = this.#dragState.startTY + dy;
+    this.#applyTransform();
   }
 
   #handleMouseUp(event) {
-    console.log("[FixedLayout Debug] 🖱️ Mouse up:", {
-      wasDragging: this.#dragState.isDragging,
-      wasPotentialDrag: this.#dragState.isPotentialDrag,
-      hasTimeout: !!this.#dragState.dragTimeout,
-      isDraggingBeforeReset: this.#dragState.isDragging, // ADD THIS
-    });
-    // Clear any pending drag timeout
-    if (this.#dragState.dragTimeout) {
-      console.log("[FixedLayout Debug] ⏱️ Clearing drag timeout");
-      clearTimeout(this.#dragState.dragTimeout);
-      this.#dragState.dragTimeout = null;
-    }
-    // Reset drag state
-    const wasDragging = this.#dragState.isDragging;
+    if (!this.#dragState.isDragging) return;
     this.#dragState.isDragging = false;
-    this.#dragState.isPotentialDrag = false;
     this.style.cursor = "";
-    this.dragOffset.x = 0;
-    this.dragOffset.y = 0;
-    // NEW: Reset drag offset when drag completes
-    if (wasDragging) {
-      console.log("[FixedLayout Debug] ✅ Drag completed");
-      this.dragOffset.x = 0;
-      this.dragOffset.y = 0;
-      this.#render(); // Apply the reset
-    }
   }
 
   async #createFrame({ index, src: srcOption }, frameId) {
@@ -436,12 +349,10 @@ export class FixedLayout extends HTMLElement {
       display: "none",
       overflow: "hidden",
     });
-    // `allow-scripts` is needed for events because of WebKit bug
-    // https://bugs.webkit.org/show_bug.cgi?id=218086
     iframe.setAttribute("sandbox", "allow-same-origin allow-scripts");
     iframe.setAttribute("scrolling", "no");
     iframe.setAttribute("part", "filter");
-    this.#root.append(element);
+    this.#wrapper.append(element);
     if (!src) return { blank: true, element, iframe, frameId };
     return new Promise((resolve) => {
       iframe.addEventListener(
@@ -453,7 +364,6 @@ export class FixedLayout extends HTMLElement {
           );
           const { width, height } = getViewport(doc, this.defaultViewport);
 
-          // NEW: Attach event listeners INSIDE the iframe document
           this.#attachEventListenersToIframe(doc, frameId, { element, iframe });
 
           resolve({
@@ -470,15 +380,19 @@ export class FixedLayout extends HTMLElement {
       iframe.src = src;
     });
   }
-  #attachEventListenersToIframe(doc, frameId, frame) {
-    if (!doc) {
-      console.log("[FixedLayout Debug] ⏸️ No document to attach listeners");
-      return;
-    }
 
-    console.log(
-      "[FixedLayout Debug] 🔧 Attaching event listeners to iframe document",
-    );
+  #attachEventListenersToIframe(doc, frameId, frame) {
+    const convertCoords = (e) => {
+      const iframeRect = frame.iframe.getBoundingClientRect();
+      const flRect = this.getBoundingClientRect();
+      const scaleX = iframeRect.width / (doc.documentElement.clientWidth || 1);
+      const scaleY = iframeRect.height / (doc.documentElement.clientHeight || 1);
+      return {
+        clientX: iframeRect.left - flRect.left + e.clientX * scaleX,
+        clientY: iframeRect.top - flRect.top + e.clientY * scaleY,
+      };
+    };
+    if (!doc) return;
 
     const images = doc.querySelectorAll("img");
     images.forEach((img) => {
@@ -487,22 +401,18 @@ export class FixedLayout extends HTMLElement {
       img.style.webkitUserDrag = "none";
       img.style.WebkitUserDrag = "none";
     });
-    console.log(
-      `[FixedLayout Debug] 🔒 Disabled native drag on ${images.length} images`,
-    );
 
-    // Attach wheel event listener for zoom to the iframe's document
     doc.addEventListener(
       "wheel",
       (event) => {
-        // Re-target to FixedLayout element so handler can access scroll position
+        const { clientX, clientY } = convertCoords(event);
         const fixedLayoutEvent = new WheelEvent("wheel", {
           deltaX: event.deltaX,
           deltaY: event.deltaY,
           deltaZ: event.deltaZ,
           deltaMode: event.deltaMode,
-          clientX: event.clientX,
-          clientY: event.clientY,
+          clientX,
+          clientY,
           ctrlKey: event.ctrlKey,
           metaKey: event.metaKey,
           shiftKey: event.shiftKey,
@@ -510,39 +420,21 @@ export class FixedLayout extends HTMLElement {
           bubbles: true,
           cancelable: true,
         });
-
-        // TAG EVENT WITH SOURCE IFRAME
         fixedLayoutEvent.sourceIframe = frameId;
         fixedLayoutEvent.sourceFrame = frame;
-
-        // Call our handler with the event
         this.#handleWheel(fixedLayoutEvent);
-
-        // Prevent default in iframe
         event.preventDefault();
         event.stopPropagation();
       },
       { passive: false },
     );
 
-    console.log(
-      "[FixedLayout Debug] ✓ Wheel listener attached to iframe document",
-    );
-
-    // Attach mouse drag support for pan to the iframe's document
     doc.addEventListener("mousedown", (event) => {
-      console.log("[FixedLayout Debug] 🖱️ Mouse down inside iframe:", {
-        button: event.button,
-        clientX: event.clientX,
-        clientY: event.clientY,
-        target: event.target.tagName,
-      });
-
-      // Re-target to FixedLayout element
+      const { clientX, clientY } = convertCoords(event);
       const mouseEvent = new MouseEvent("mousedown", {
         button: event.button,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        clientX,
+        clientY,
         ctrlKey: event.ctrlKey,
         metaKey: event.metaKey,
         shiftKey: event.shiftKey,
@@ -550,8 +442,6 @@ export class FixedLayout extends HTMLElement {
         bubbles: true,
         cancelable: true,
       });
-
-      // TAG EVENT WITH SOURCE IFRAME
       mouseEvent.sourceIframe = frameId;
       mouseEvent.sourceFrame = frame;
       this.#handleMouseDown(mouseEvent);
@@ -559,10 +449,11 @@ export class FixedLayout extends HTMLElement {
     });
 
     doc.addEventListener("mousemove", (event) => {
+      const { clientX, clientY } = convertCoords(event);
       const mouseEvent = new MouseEvent("mousemove", {
         button: event.button,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        clientX,
+        clientY,
         ctrlKey: event.ctrlKey,
         metaKey: event.metaKey,
         shiftKey: event.shiftKey,
@@ -570,8 +461,6 @@ export class FixedLayout extends HTMLElement {
         bubbles: true,
         cancelable: true,
       });
-
-      // TAG EVENT WITH SOURCE IFRAME
       mouseEvent.sourceIframe = frameId;
       mouseEvent.sourceFrame = frame;
       this.#handleMouseMove(mouseEvent);
@@ -579,10 +468,11 @@ export class FixedLayout extends HTMLElement {
     });
 
     doc.addEventListener("mouseup", (event) => {
+      const { clientX, clientY } = convertCoords(event);
       const mouseEvent = new MouseEvent("mouseup", {
         button: event.button,
-        clientX: event.clientX,
-        clientY: event.clientY,
+        clientX,
+        clientY,
         ctrlKey: event.ctrlKey,
         metaKey: event.metaKey,
         shiftKey: event.shiftKey,
@@ -590,18 +480,13 @@ export class FixedLayout extends HTMLElement {
         bubbles: true,
         cancelable: true,
       });
-
-      // TAG EVENT WITH SOURCE IFRAME
       mouseEvent.sourceIframe = frameId;
       mouseEvent.sourceFrame = frame;
       this.#handleMouseUp(mouseEvent);
       event.preventDefault();
     });
-
-    console.log(
-      "[FixedLayout Debug] ✓ Mouse drag listeners attached to iframe document",
-    );
   }
+
   #render(side = this.#side) {
     if (!side) return;
     const left = this.#left ?? {};
@@ -637,40 +522,19 @@ export class FixedLayout extends HTMLElement {
                     ),
                 )) || 1;
 
-    const transform = (frame) => {
-      let { element, iframe, width, height, blank, onZoom } = frame;
-      if (!iframe) return;
-      if (onZoom) onZoom({ doc: frame.iframe.contentDocument, scale });
-      const iframeScale = onZoom ? scale : 1;
-      Object.assign(iframe.style, {
-        width: `${width * iframeScale}px`,
-        height: `${height * iframeScale}px`,
-        transform: onZoom ? "none" : `scale(${scale})`,
-        transformOrigin: "top left",
-        display: blank ? "none" : "block",
-      });
-      Object.assign(element.style, {
-        width: `${(width ?? blankWidth) * scale}px`,
-        height: `${(height ?? blankHeight) * scale}px`,
-        overflow: "hidden",
-        display: "block",
-        flexShrink: "0",
-        marginBlock: "auto",
-      });
-      if (portrait && frame !== target) {
-        element.style.display = "none";
-      }
-    };
-    if (this.#center) {
-      transform(this.#center);
-    } else {
-      transform(left);
-      transform(right);
-    }
+    this.#transform.scale = scale;
+
+    this.#updateFrameScales(scale);
+
+    const { contentWidth, contentHeight } = this.#getContentSize();
+    this.#transform.x = (width - contentWidth) / 2;
+    this.#transform.y = (height - contentHeight) / 2;
+
+    this.#applyTransform();
   }
+
   async #showSpread({ left, right, center, side }) {
-    this.#root.replaceChildren();
-    console.log("[FixedLayout Debug] 🧹 Old frame wrappers removed");
+    this.#wrapper.replaceChildren();
     this.#left = null;
     this.#right = null;
     this.#center = null;
@@ -689,6 +553,7 @@ export class FixedLayout extends HTMLElement {
       this.#render();
     }
   }
+
   #goLeft() {
     if (this.#center || this.#left?.blank) return;
     if (this.#portrait && this.#left?.element?.style?.display === "none") {
@@ -698,6 +563,7 @@ export class FixedLayout extends HTMLElement {
       return true;
     }
   }
+
   #goRight() {
     if (this.#center || this.#right?.blank) return;
     if (this.#portrait && this.#right?.element?.style?.display === "none") {
@@ -707,6 +573,7 @@ export class FixedLayout extends HTMLElement {
       return true;
     }
   }
+
   open(book) {
     this.book = book;
     const { rendition } = book;
@@ -754,6 +621,7 @@ export class FixedLayout extends HTMLElement {
         [{}],
       );
   }
+
   get index() {
     const spread = this.#spreads[this.#index];
     const section =
@@ -763,6 +631,7 @@ export class FixedLayout extends HTMLElement {
         : (spread.right ?? spread.left));
     return this.book.sections.indexOf(section);
   }
+
   #reportLocation(reason) {
     this.dispatchEvent(
       new CustomEvent("relocate", {
@@ -776,6 +645,7 @@ export class FixedLayout extends HTMLElement {
       }),
     );
   }
+
   getSpreadOf(section) {
     const spreads = this.#spreads;
     for (let index = 0; index < spreads.length; index++) {
@@ -785,6 +655,7 @@ export class FixedLayout extends HTMLElement {
       if (center === section) return { index, side: "center" };
     }
   }
+
   async goToSpread(index, side, reason) {
     if (index < 0 || index > this.#spreads.length - 1) return;
     if (index === this.#index) {
@@ -808,10 +679,11 @@ export class FixedLayout extends HTMLElement {
     }
     this.#reportLocation(reason);
   }
+
   async select(target) {
     await this.goTo(target);
-    // TODO
   }
+
   async goTo(target) {
     const { book } = this;
     const resolved = await target;
@@ -820,6 +692,7 @@ export class FixedLayout extends HTMLElement {
     const { index, side } = this.getSpreadOf(section);
     await this.goToSpread(index, side);
   }
+
   async next() {
     const s = this.rtl ? this.#goLeft() : this.#goRight();
     if (!s)
@@ -829,6 +702,7 @@ export class FixedLayout extends HTMLElement {
         "page",
       );
   }
+
   async prev() {
     const s = this.rtl ? this.#goRight() : this.#goLeft();
     if (!s)
@@ -838,12 +712,13 @@ export class FixedLayout extends HTMLElement {
         "page",
       );
   }
+
   getContents() {
     return Array.from(this.#root.querySelectorAll("iframe"), (frame) => ({
       doc: frame.contentDocument,
-      // TODO: index, overlayer
     }));
   }
+
   destroy() {
     this.#observer.unobserve(this);
   }
