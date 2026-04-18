@@ -357,8 +357,8 @@ export class View extends HTMLElement {
             const href_ = a.getAttribute('href')
             const href = section?.resolveHref?.(href_) ?? href_
             if (book?.isExternal?.(href))
-                Promise.resolve(this.#emit('external-link', { a, href }, true))
-                    .then(x => x ? globalThis.open(href, '_blank') : null)
+                Promise.resolve(this.#emit('external-link', { a, href_ }, true))
+                    .then(x => x ? globalThis.open(href_, '_blank') : null)
                     .catch(e => console.error(e))
             else Promise.resolve(this.#emit('link', { a, href }, true))
                 .then(x => x ? this.goTo(href) : null)
