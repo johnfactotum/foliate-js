@@ -221,6 +221,9 @@ class Reader {
     $("#magnifier-toggle").addEventListener("click", () => {
       console.log("[Reader Debug] 🔍 Magnifier toggle button clicked");
       const renderer = this.view.renderer;
+      renderer.addEventListener("zoom", (e) => {
+        $("#zoom-reset").textContent = `${Math.round(e.detail.scale * 100)}%`;
+      });
       console.log(
         "[Reader Debug] Is FixedLayout?",
         renderer instanceof FixedLayout,
@@ -230,6 +233,26 @@ class Reader {
         console.log("[Reader Debug] ✅ Magnifier toggled");
       } else {
         console.log("[Reader Debug] ❌ Not a FixedLayout renderer, ignoring");
+      }
+    });
+    const modeToggle = $("#interaction-mode-toggle");
+    modeToggle.addEventListener("click", () => {
+      const renderer = this.view.renderer;
+      if (!(renderer instanceof FixedLayout)) return;
+      const current = renderer.getAttribute("interaction-mode") || "select";
+      const next = current === "select" ? "pan" : "select";
+      renderer.setAttribute("interaction-mode", next);
+      modeToggle.title = next === "select" ? "Select Mode" : "Pan Mode";
+      const svg = modeToggle.querySelector("svg");
+      svg.innerHTML =
+        next === "select"
+          ? '<path d="M 5 3 v 12 M 5 15 l -2 2 M 5 15 l 2 2 M 5 3 l 3 3" />'
+          : '<path d="M 5 9 h 10 M 10 5 v 10" />';
+    });
+    this.view.addEventListener("load", () => {
+      const renderer = this.view.renderer;
+      if (renderer instanceof FixedLayout && renderer.isPDF) {
+        modeToggle.style.display = "";
       }
     });
     console.log("[Reader Debug] ✅ Zoom control listeners configured");
@@ -327,6 +350,11 @@ class Reader {
         renderer.dragOffset = { x: 0, y: 0 };
         $("#zoom-reset").textContent = "100%";
         console.log("[Reader Debug] ✅ Keyboard zoom reset");
+      }
+    } else if (k === "Escape") {
+      const renderer = this.view.renderer;
+      if (renderer instanceof FixedLayout && renderer.zoomMagnifierEnabled) {
+        renderer.toggleMagnifier();
       }
     }
   }

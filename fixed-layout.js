@@ -23,7 +23,7 @@ const getViewport = (doc, viewport) => {
 };
 
 export class FixedLayout extends HTMLElement {
-  static observedAttributes = ["zoom"];
+  static observedAttributes = ["zoom", "interaction-mode"];
   #root = this.attachShadow({ mode: "closed" });
   #observer = new ResizeObserver(() => this.#render());
   #spreads;
@@ -36,6 +36,8 @@ export class FixedLayout extends HTMLElement {
   #center;
   #side;
   #zoom;
+  #isPDF;
+  #interactionMode = "select";
   #wrapper;
   #transform = { x: 0, y: 0, scale: 1 };
   #zoomState = {
@@ -109,11 +111,25 @@ export class FixedLayout extends HTMLElement {
         }
         break;
       }
+      case "interaction-mode": {
+        if (value === "pan" || value === "select") {
+          this.#interactionMode = value;
+        }
+        break;
+      }
     }
   }
 
   get zoom() {
     return this.#zoom;
+  }
+
+  get isPDF() {
+    return this.#isPDF;
+  }
+
+  get zoomMagnifierEnabled() {
+    return this.#magnifier.enabled;
   }
 
   toggleMagnifier() {
@@ -159,6 +175,7 @@ export class FixedLayout extends HTMLElement {
             height: 100%;
             border-radius: 50%;
             overflow: hidden;
+            background-repeat: no-repeat;
         `;
 
     magnifier.appendChild(lens);
@@ -175,31 +192,109 @@ export class FixedLayout extends HTMLElement {
 
   #handleMagnifierMove(event) {
     if (!this.#magnifier.enabled) return;
-
     const rect = this.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
-
     const magnifier = this.#magnifier.element;
     magnifier.style.display = "block";
     magnifier.style.left = `${x - this.#magnifier.size / 2}px`;
     magnifier.style.top = `${y - this.#magnifier.size / 2}px`;
-
     const lens = magnifier.querySelector(".magnifier-lens");
-    const frame = this.#center || this.#left || this.#right;
-    if (frame?.iframe) {
-      const iframe = frame.iframe;
-      lens.innerHTML = "";
-      lens.appendChild(iframe.cloneNode(true));
-      const scale = this.#transform.scale || 1;
-      lens.style.transform = `scale(${this.#magnifier.magnification})`;
-
-      const iframeRect = iframe.getBoundingClientRect();
-      const relX = (x - iframeRect.left) / scale;
-      const relY = (y - iframeRect.top) / scale;
-
-      lens.style.transformOrigin = `${-relX + this.#magnifier.size / 2}px ${-relY + this.#magnifier.size / 2}px`;
+    const candidates = this.#center
+      ? [this.#center]
+      : [this.#left, this.#right].filter((f) => f && !f.blank);
+    let frame = null;
+    for (const f of candidates) {
+      if (!f?.iframe) continue;
+      const fRect = f.iframe.getBoundingClientRect();
+      if (
+        event.clientX >= fRect.left &&
+        event.clientX <= fRect.right &&
+        event.clientY >= fRect.top &&
+        event.clientY <= fRect.bottom
+      ) {
+        frame = f;
+        break;
+      }
     }
+    if (!frame?.iframe) return;
+    const iframe = frame.iframe;
+    const doc = iframe.contentDocument;
+    const scale = this.#transform.scale || 1;
+    const magScale = this.#magnifier.magnification;
+    const size = this.#magnifier.size;
+    const iframeRect = iframe.getBoundingClientRect();
+    const relX = x - iframeRect.left;
+    const relY = y - iframeRect.top;
+
+    // Comic book: img inside iframe
+    const img = doc?.querySelector("img");
+    if (img) {
+      if (!img.naturalWidth || !img.naturalHeight) {
+        lens.style.display = "none";
+        return;
+      }
+      // Calculate rendered image dimensions
+      // The img is at natural size, iframe is CSS-scaled by 'scale'
+      const renderedWidth = img.naturalWidth * scale;
+      const renderedHeight = img.naturalHeight * scale;
+      // Position within rendered image (0-1 range)
+      const normX = relX / renderedWidth;
+      const normY = relY / renderedHeight;
+      if (normX < 0 || normX > 1 || normY < 0 || normY > 1) {
+        lens.style.display = "none";
+        return;
+      }
+      // Background size (zoomed)
+      const bgWidth = renderedWidth * magScale;
+      const bgHeight = renderedHeight * magScale;
+      // Background position (centered on cursor)
+      const bgPosX = -(normX * bgWidth - size / 2);
+      const bgPosY = -(normY * bgHeight - size / 2);
+      lens.style.backgroundImage = `url('${img.src}')`;
+      lens.style.backgroundSize = `${bgWidth}px ${bgHeight}px`;
+      lens.style.backgroundPosition = `${bgPosX}px ${bgPosY}px`;
+      lens.style.display = "";
+      return;
+    }
+
+    // PDF: canvas inside iframe
+    const canvas =
+      doc?.querySelector("#canvas canvas") || doc?.querySelector("canvas");
+    if (canvas) {
+      // Clean up comic book background-image if present
+      lens.style.backgroundImage = "";
+      lens.style.backgroundSize = "";
+      lens.style.backgroundPosition = "";
+      let lensCanvas = lens.querySelector("canvas");
+      if (!lensCanvas) {
+        lensCanvas = document.createElement("canvas");
+        lensCanvas.width = size;
+        lensCanvas.height = size;
+        lensCanvas.style.cssText = "border-radius: 50%;";
+        lens.innerHTML = "";
+        lens.appendChild(lensCanvas);
+      }
+      const ctx = lensCanvas.getContext("2d");
+      ctx.clearRect(0, 0, size, size);
+      const dpr = devicePixelRatio;
+      const captureSize = size / magScale;
+      const sx = relX * dpr - (captureSize * dpr) / 2;
+      const sy = relY * dpr - (captureSize * dpr) / 2;
+      ctx.drawImage(
+        canvas,
+        sx,
+        sy,
+        captureSize * dpr,
+        captureSize * dpr,
+        0,
+        0,
+        size,
+        size,
+      );
+      return;
+    }
+    lens.style.display = "none";
   }
 
   #applyTransform() {
@@ -300,6 +395,10 @@ export class FixedLayout extends HTMLElement {
     this.#applyTransform();
 
     this.setAttribute("zoom", newScale);
+
+    this.dispatchEvent(
+      new CustomEvent("zoom", { detail: { scale: newScale } }),
+    );
   }
 
   #handleWheel(event) {
@@ -321,6 +420,8 @@ export class FixedLayout extends HTMLElement {
 
   #handleMouseDown(event) {
     if (event.button !== 0) return;
+    if (this.#isPDF && this.#interactionMode === "select" && !event.shiftKey)
+      return;
 
     this.#dragState.startX = event.clientX;
     this.#dragState.startY = event.clientY;
@@ -470,6 +571,9 @@ export class FixedLayout extends HTMLElement {
 
     doc.addEventListener("mousemove", (event) => {
       const { clientX, clientY } = convertCoords(event);
+      if (this.#magnifier.enabled) {
+        this.#handleMagnifierMove({ clientX, clientY });
+      }
       const mouseEvent = new MouseEvent("mousemove", {
         button: event.button,
         clientX,
@@ -583,6 +687,7 @@ export class FixedLayout extends HTMLElement {
     if (center) {
       this.#center = await this.#createFrame(center, "center");
       this.#side = "center";
+      this.#isPDF = !!this.#center?.onZoom;
       this.#render();
     } else {
       this.#left = await this.#createFrame(left, "left");
@@ -592,6 +697,7 @@ export class FixedLayout extends HTMLElement {
         : this.#right.blank
           ? "left"
           : side;
+      this.#isPDF = !!(this.#left?.onZoom || this.#right?.onZoom);
       this.#render();
     }
   }
@@ -606,7 +712,11 @@ export class FixedLayout extends HTMLElement {
     }
 
     // zoomed-in dual-pane - pan to left frame
-    if (typeof this.#zoom === "number" && !isNaN(this.#zoom) && !this.#right?.blank) {
+    if (
+      typeof this.#zoom === "number" &&
+      !isNaN(this.#zoom) &&
+      !this.#right?.blank
+    ) {
       if (this.#side === "right") {
         this.#side = "left";
         this.#render();
@@ -625,7 +735,11 @@ export class FixedLayout extends HTMLElement {
     }
 
     // zoomed-in dual-pane - pan to right frame
-    if (typeof this.#zoom === "number" && !isNaN(this.#zoom) && !this.#left?.blank) {
+    if (
+      typeof this.#zoom === "number" &&
+      !isNaN(this.#zoom) &&
+      !this.#left?.blank
+    ) {
       if (this.#side === "left") {
         this.#side = "right";
         this.#render();
