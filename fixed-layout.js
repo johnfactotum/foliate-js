@@ -25,7 +25,7 @@ const getViewport = (doc, viewport) => {
 export class FixedLayout extends HTMLElement {
   static observedAttributes = ["zoom", "interaction-mode"];
   #root = this.attachShadow({ mode: "closed" });
-  #observer = new ResizeObserver(() => this.#render());
+  #observer = new ResizeObserver(() => this.#onResize());
   #spreads;
   #index = -1;
   defaultViewport;
@@ -132,6 +132,11 @@ export class FixedLayout extends HTMLElement {
     return this.#magnifier.enabled;
   }
 
+  resetZoom() {
+    this.#zoom = undefined;
+    this.#render();
+  }
+
   toggleMagnifier() {
     this.#magnifier.enabled = !this.#magnifier.enabled;
 
@@ -146,6 +151,17 @@ export class FixedLayout extends HTMLElement {
         this.#handleMagnifierMove.bind(this),
       );
       this.style.cursor = "";
+    }
+  }
+
+  #onResize() {
+    if (typeof this.#zoom === "number" && !isNaN(this.#zoom)) {
+      // Numeric zoom: rescale frames but preserve user's pan position
+      this.#updateFrameScales(this.#transform.scale);
+      this.#applyTransform();
+    } else {
+      // Fit-page/fit-width: full re-render (recalculate scale + center)
+      this.#render();
     }
   }
 
@@ -379,6 +395,14 @@ export class FixedLayout extends HTMLElement {
   }
 
   #zoomByRatio(cx, cy, ratio) {
+    console.log("[FXL] zoomByRatio:", {
+      cx,
+      cy,
+      ratio,
+      oldScale: this.#transform.scale,
+      oldX: this.#transform.x,
+      oldY: this.#transform.y,
+    });
     const oldScale = this.#transform.scale;
     const newScale = Math.min(
       this.#zoomState.maxScale,
@@ -394,11 +418,15 @@ export class FixedLayout extends HTMLElement {
     this.#updateFrameScales(newScale);
     this.#applyTransform();
 
-    this.setAttribute("zoom", newScale);
-
     this.dispatchEvent(
       new CustomEvent("zoom", { detail: { scale: newScale } }),
     );
+    console.log("[FXL] zoomByRatio result:", {
+      newX: this.#transform.x,
+      newY: this.#transform.y,
+      newScale: this.#transform.scale,
+      actualRatio,
+    });
   }
 
   #handleWheel(event) {
@@ -414,14 +442,23 @@ export class FixedLayout extends HTMLElement {
       event.deltaY > 0
         ? 1 - this.#zoomState.zoomStep
         : 1 + this.#zoomState.zoomStep;
-
+    console.log("[FXL] wheel:", {
+      cx,
+      cy,
+      transformX: this.#transform.x,
+      transformY: this.#transform.y,
+      transformScale: this.#transform.scale,
+      zoom: this.#zoom,
+      side: this.#side,
+      hostWidth: rect.width,
+    });
     this.#zoomByRatio(cx, cy, ratio);
   }
 
   #handleMouseDown(event) {
     if (event.button !== 0) return;
     if (this.#isPDF && this.#interactionMode === "select" && !event.shiftKey)
-      return;
+      return false;
 
     this.#dragState.startX = event.clientX;
     this.#dragState.startY = event.clientY;
@@ -429,6 +466,7 @@ export class FixedLayout extends HTMLElement {
     this.#dragState.startTY = this.#transform.y;
     this.#dragState.isDragging = true;
     this.style.cursor = "grabbing";
+    return true;
   }
 
   #handleMouseMove(event) {
@@ -448,7 +486,12 @@ export class FixedLayout extends HTMLElement {
     this.style.cursor = "";
 
     // sync #side with the frame the user actually panned to
-    if (!this.#center && !this.#left?.blank && !this.#right?.blank) {
+    if (
+      !this.#center &&
+      !this.#left?.blank &&
+      !this.#right?.blank &&
+      !this.#portrait
+    ) {
       const leftWidth = (this.#left.width ?? 0) * this.#transform.scale;
       const viewportCenterInWrapper =
         this.getBoundingClientRect().width / 2 - this.#transform.x;
@@ -565,8 +608,8 @@ export class FixedLayout extends HTMLElement {
       });
       mouseEvent.sourceIframe = frameId;
       mouseEvent.sourceFrame = frame;
-      this.#handleMouseDown(mouseEvent);
-      event.preventDefault();
+      const dragStarted = this.#handleMouseDown(mouseEvent);
+      if (dragStarted) event.preventDefault();
     });
 
     doc.addEventListener("mousemove", (event) => {
@@ -588,7 +631,8 @@ export class FixedLayout extends HTMLElement {
       mouseEvent.sourceIframe = frameId;
       mouseEvent.sourceFrame = frame;
       this.#handleMouseMove(mouseEvent);
-      event.preventDefault();
+      if (this.#dragState.isDragging || this.#magnifier.enabled)
+        event.preventDefault();
     });
 
     doc.addEventListener("mouseup", (event) => {
@@ -664,7 +708,7 @@ export class FixedLayout extends HTMLElement {
     const hasDualFrames =
       !this.#center && !this.#left?.blank && !this.#right?.blank;
 
-    if (isNumericZoom && hasDualFrames) {
+    if (isNumericZoom && hasDualFrames && !portrait) {
       const leftWidth = (this.#left.width ?? 0) * scale;
       const rightWidth = (this.#right.width ?? 0) * scale;
       if (side === "right") {
