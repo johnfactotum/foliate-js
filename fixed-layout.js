@@ -44,8 +44,11 @@ export class FixedLayout extends HTMLElement {
   #zoomState = {
     minScale: 0.1,
     maxScale: 10,
-    zoomStep: 0.1,
+    zoomStep: 0.05,
   };
+  #zoomAccum = { ratio: 1, cx: 0, cy: 0, raf: null };
+  #pdfLastRenderedScale = 1;
+  #pdfSettleTimeout = null;
   #dragState = {
     isDragging: false,
     startX: 0,
@@ -164,6 +167,7 @@ export class FixedLayout extends HTMLElement {
   }
 
   #onResize() {
+    clearTimeout(this.#pdfSettleTimeout);
     if (typeof this.#zoom === "number" && !isNaN(this.#zoom)) {
       // Numeric zoom: rescale frames but preserve user's pan position
       this.#updateFrameScales(this.#transform.scale);
@@ -326,6 +330,34 @@ export class FixedLayout extends HTMLElement {
     this.#wrapper.style.transform = `translate(${this.#transform.x}px, ${this.#transform.y}px)`;
   }
 
+  #applyPDFZoomScale(scale) {
+    const cssScale = scale / this.#pdfLastRenderedScale;
+    const candidates = this.#center
+      ? [this.#center]
+      : [this.#left, this.#right];
+    for (const frame of candidates) {
+      if (!frame?.onZoom || !frame.iframe) continue;
+      Object.assign(frame.iframe.style, {
+        width: `${frame.width * this.#pdfLastRenderedScale}px`,
+        height: `${frame.height * this.#pdfLastRenderedScale}px`,
+        transform: `scale(${cssScale})`,
+        transformOrigin: "top left",
+      });
+      Object.assign(frame.element.style, {
+        width: `${frame.width * scale}px`,
+        height: `${frame.height * scale}px`,
+      });
+    }
+  }
+
+  #schedulePDFRerender(scale) {
+    clearTimeout(this.#pdfSettleTimeout);
+    this.#pdfSettleTimeout = setTimeout(() => {
+      this.#updateFrameScales(scale);
+      this.#pdfSettleTimeout = null;
+    }, 150);
+  }
+
   #updateFrameScales(scale) {
     const left = this.#left ?? {};
     const right = this.#center ?? this.#right ?? {};
@@ -368,6 +400,7 @@ export class FixedLayout extends HTMLElement {
       transform(left);
       transform(right);
     }
+    if (this.isPDF) this.#pdfLastRenderedScale = scale;
   }
 
   #getContentSize() {
@@ -416,7 +449,12 @@ export class FixedLayout extends HTMLElement {
     this.#transform.scale = newScale;
 
     this.#zoom = newScale;
-    this.#updateFrameScales(newScale);
+    if (this.isPDF) {
+      this.#applyPDFZoomScale(newScale);
+      this.#schedulePDFRerender(newScale);
+    } else {
+      this.#updateFrameScales(newScale);
+    }
     this.#applyTransform();
 
     this.dispatchEvent(
@@ -430,14 +468,26 @@ export class FixedLayout extends HTMLElement {
     event.preventDefault();
 
     const rect = this.getBoundingClientRect();
-    const cx = event.clientX - rect.left;
-    const cy = event.clientY - rect.top;
+    this.#zoomAccum.cx = event.clientX - rect.left;
+    this.#zoomAccum.cy = event.clientY - rect.top;
 
-    const ratio =
+    const tick =
       event.deltaY > 0
         ? 1 - this.#zoomState.zoomStep
         : 1 + this.#zoomState.zoomStep;
-    this.#zoomByRatio(cx, cy, ratio);
+    this.#zoomAccum.ratio = tick;
+
+    if (!this.#zoomAccum.raf) {
+      this.#zoomAccum.raf = requestAnimationFrame(() => {
+        this.#zoomByRatio(
+          this.#zoomAccum.cx,
+          this.#zoomAccum.cy,
+          this.#zoomAccum.ratio,
+        );
+        this.#zoomAccum.ratio = 1;
+        this.#zoomAccum.raf = null;
+      });
+    }
   }
 
   #handleMouseDown(event) {
@@ -706,6 +756,7 @@ export class FixedLayout extends HTMLElement {
   }
 
   async #showSpread({ left, right, center, side }) {
+    clearTimeout(this.#pdfSettleTimeout);
     this.#wrapper.replaceChildren();
     this.#left = null;
     this.#right = null;
@@ -921,6 +972,7 @@ export class FixedLayout extends HTMLElement {
 
   destroy() {
     this.#observer.unobserve(this);
+    clearTimeout(this.#pdfSettleTimeout);
   }
 }
 
