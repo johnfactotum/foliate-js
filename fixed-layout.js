@@ -40,6 +40,7 @@ export class FixedLayout extends HTMLElement {
   #interactionMode = "select";
   #wrapper;
   #transform = { x: 0, y: 0, scale: 1 };
+  #baseScale = 1;
   #zoomState = {
     minScale: 0.1,
     maxScale: 10,
@@ -130,6 +131,14 @@ export class FixedLayout extends HTMLElement {
 
   get zoomMagnifierEnabled() {
     return this.#magnifier.enabled;
+  }
+
+  get currentScale() {
+    return this.#transform.scale;
+  }
+
+  get zoomPercent() {
+    return Math.round((this.#transform.scale / this.#baseScale) * 100);
   }
 
   resetZoom() {
@@ -395,14 +404,6 @@ export class FixedLayout extends HTMLElement {
   }
 
   #zoomByRatio(cx, cy, ratio) {
-    console.log("[FXL] zoomByRatio:", {
-      cx,
-      cy,
-      ratio,
-      oldScale: this.#transform.scale,
-      oldX: this.#transform.x,
-      oldY: this.#transform.y,
-    });
     const oldScale = this.#transform.scale;
     const newScale = Math.min(
       this.#zoomState.maxScale,
@@ -421,12 +422,6 @@ export class FixedLayout extends HTMLElement {
     this.dispatchEvent(
       new CustomEvent("zoom", { detail: { scale: newScale } }),
     );
-    console.log("[FXL] zoomByRatio result:", {
-      newX: this.#transform.x,
-      newY: this.#transform.y,
-      newScale: this.#transform.scale,
-      actualRatio,
-    });
   }
 
   #handleWheel(event) {
@@ -442,16 +437,6 @@ export class FixedLayout extends HTMLElement {
       event.deltaY > 0
         ? 1 - this.#zoomState.zoomStep
         : 1 + this.#zoomState.zoomStep;
-    console.log("[FXL] wheel:", {
-      cx,
-      cy,
-      transformX: this.#transform.x,
-      transformY: this.#transform.y,
-      transformScale: this.#transform.scale,
-      zoom: this.#zoom,
-      side: this.#side,
-      hostWidth: rect.width,
-    });
     this.#zoomByRatio(cx, cy, ratio);
   }
 
@@ -656,13 +641,6 @@ export class FixedLayout extends HTMLElement {
   }
 
   #render(side = this.#side) {
-    console.log("[FXL] render:", {
-      side,
-      zoom: this.#zoom,
-      transformScale: this.#transform.scale,
-      isNumericZoom: typeof this.#zoom === "number" && !isNaN(this.#zoom),
-      hasDualFrames: !this.#center && !this.#left?.blank && !this.#right?.blank,
-    });
     if (!side) return;
     const left = this.#left ?? {};
     const right = this.#center ?? this.#right ?? {};
@@ -698,6 +676,10 @@ export class FixedLayout extends HTMLElement {
                 )) || 1;
 
     this.#transform.scale = scale;
+
+    if (typeof this.#zoom !== "number" || isNaN(this.#zoom)) {
+      this.#baseScale = scale;
+    }
 
     this.#updateFrameScales(scale);
 

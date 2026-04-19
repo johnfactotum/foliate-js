@@ -120,19 +120,8 @@ class Reader {
 
     const { book } = this.view;
 
-    // DEBUG: Log book and renderer info
-    console.log("[Reader Debug] 📖 Book opened:", {
-      title: book.metadata?.title,
-      type: file.name,
-      rendition: book.rendition,
-      isFixedLayout: this.view.isFixedLayout,
-      renderer: this.view.renderer?.localName,
-      rendererClass: this.view.renderer?.constructor.name,
-      isFixedLayoutInstance: this.view.renderer instanceof FixedLayout,
-    });
     book.transformTarget?.addEventListener("data", ({ detail }) => {
-      detail.data = Promise.resolve(detail.data).catch((e) => {
-        console.error(new Error(`Failed to load ${detail.name}`, { cause: e }));
+      detail.data = Promise.resolve(detail.data).catch(() => {
         return "";
       });
     });
@@ -156,83 +145,44 @@ class Reader {
     }
 
     document.addEventListener("keydown", this.#handleKeydown.bind(this));
-    console.log("[Reader Debug] 🔧 Setting up zoom control listeners...");
 
     // Add zoom control listeners
     $("#zoom-in").addEventListener("click", () => {
-      console.log("[Reader Debug] 🔍 Zoom in button clicked");
       const renderer = this.view.renderer;
-      console.log(
-        "[Reader Debug] Renderer:",
-        renderer?.localName,
-        renderer?.constructor.name,
-      );
-      console.log(
-        "[Reader Debug] Is FixedLayout?",
-        renderer instanceof FixedLayout,
-      );
 
       if (renderer instanceof FixedLayout) {
-        const current = renderer.getAttribute("zoom") || 1;
-        const newZoom = Math.min(10, parseFloat(current) * 1.2);
-        renderer.setAttribute("zoom", newZoom);
-        $("#zoom-reset").textContent = `${Math.round(newZoom * 100)}%`;
-        console.log("[Reader Debug] ✅ Zoom applied:", current, "->", newZoom);
-      } else {
-        console.log("[Reader Debug] ❌ Not a FixedLayout renderer, ignoring");
+        const newScale = Math.min(10, renderer.currentScale * 1.2);
+        renderer.setAttribute("zoom", newScale);
+        $("#zoom-reset").textContent = `${renderer.zoomPercent}%`;
       }
     });
 
     $("#zoom-out").addEventListener("click", () => {
-      console.log("[Reader Debug] 🔍 Zoom out button clicked");
       const renderer = this.view.renderer;
-      console.log(
-        "[Reader Debug] Is FixedLayout?",
-        renderer instanceof FixedLayout,
-      );
       if (renderer instanceof FixedLayout) {
-        const current = renderer.getAttribute("zoom") || 1;
-        const newZoom = Math.max(0.1, parseFloat(current) / 1.2);
-        renderer.setAttribute("zoom", newZoom);
-        $("#zoom-reset").textContent = `${Math.round(newZoom * 100)}%`;
-        console.log("[Reader Debug] ✅ Zoom applied:", current, "->", newZoom);
-      } else {
-        console.log("[Reader Debug] ❌ Not a FixedLayout renderer, ignoring");
+        const newScale = Math.max(0.1, renderer.currentScale / 1.2);
+        renderer.setAttribute("zoom", newScale);
+        $("#zoom-reset").textContent = `${renderer.zoomPercent}%`;
       }
     });
 
     $("#zoom-reset").addEventListener("click", () => {
-      console.log("[Reader Debug] 🔄 Reset zoom button clicked");
       const renderer = this.view.renderer;
-      console.log(
-        "[Reader Debug] Is FixedLayout?",
-        renderer instanceof FixedLayout,
-      );
       if (renderer instanceof FixedLayout) {
         renderer.resetZoom();
         renderer.dragOffset = { x: 0, y: 0 };
         $("#zoom-reset").textContent = "100%";
-        console.log("[Reader Debug] ✅ Zoom reset");
-      } else {
-        console.log("[Reader Debug] ❌ Not a FixedLayout renderer, ignoring");
       }
     });
 
+    const renderer = this.view.renderer;
+    renderer.addEventListener("zoom", () => {
+      $("#zoom-reset").textContent = `${renderer.zoomPercent}%`;
+    });
     $("#magnifier-toggle").addEventListener("click", () => {
-      console.log("[Reader Debug] 🔍 Magnifier toggle button clicked");
       const renderer = this.view.renderer;
-      renderer.addEventListener("zoom", (e) => {
-        $("#zoom-reset").textContent = `${Math.round(e.detail.scale * 100)}%`;
-      });
-      console.log(
-        "[Reader Debug] Is FixedLayout?",
-        renderer instanceof FixedLayout,
-      );
       if (renderer instanceof FixedLayout) {
         renderer.toggleMagnifier();
-        console.log("[Reader Debug] ✅ Magnifier toggled");
-      } else {
-        console.log("[Reader Debug] ❌ Not a FixedLayout renderer, ignoring");
       }
     });
     const modeToggle = $("#interaction-mode-toggle");
@@ -255,7 +205,6 @@ class Reader {
         modeToggle.style.display = "";
       }
     });
-    console.log("[Reader Debug] ✅ Zoom control listeners configured");
 
     const title = formatLanguageMap(book.metadata?.title) || "Untitled Book";
     document.title = title;
@@ -309,47 +258,28 @@ class Reader {
   }
   #handleKeydown(event) {
     const k = event.key;
-    console.log("[Reader Debug] ⌨️ Key pressed:", k);
     if (k === "ArrowLeft" || k === "h") this.view.goLeft();
     else if (k === "ArrowRight" || k === "l") this.view.goRight();
     else if (k === "+" || k === "=") {
-      console.log("[Reader Debug] 🔍 Zoom in via keyboard");
       const renderer = this.view.renderer;
       if (renderer instanceof FixedLayout) {
-        const current = renderer.getAttribute("zoom") || 1;
-        const newZoom = Math.min(10, parseFloat(current) * 1.2);
-        renderer.setAttribute("zoom", newZoom);
-        $("#zoom-reset").textContent = `${Math.round(newZoom * 100)}%`;
-        console.log(
-          "[Reader Debug] ✅ Keyboard zoom applied:",
-          current,
-          "->",
-          newZoom,
-        );
+        const newScale = Math.min(10, renderer.currentScale * 1.2);
+        renderer.setAttribute("zoom", newScale);
+        $("#zoom-reset").textContent = `${renderer.zoomPercent}%`;
       }
     } else if (k === "-" || k === "_") {
-      console.log("[Reader Debug] 🔍 Zoom out via keyboard");
       const renderer = this.view.renderer;
       if (renderer instanceof FixedLayout) {
-        const current = renderer.getAttribute("zoom") || 1;
-        const newZoom = Math.max(0.1, parseFloat(current) / 1.2);
-        renderer.setAttribute("zoom", newZoom);
-        $("#zoom-reset").textContent = `${Math.round(newZoom * 100)}%`;
-        console.log(
-          "[Reader Debug] ✅ Keyboard zoom applied:",
-          current,
-          "->",
-          newZoom,
-        );
+        const newScale = Math.max(0.1, renderer.currentScale / 1.2);
+        renderer.setAttribute("zoom", newScale);
+        $("#zoom-reset").textContent = `${renderer.zoomPercent}%`;
       }
     } else if (k === "0") {
-      console.log("[Reader Debug] 🔄 Reset zoom via keyboard");
       const renderer = this.view.renderer;
       if (renderer instanceof FixedLayout) {
         renderer.resetZoom();
         renderer.dragOffset = { x: 0, y: 0 };
         $("#zoom-reset").textContent = "100%";
-        console.log("[Reader Debug] ✅ Keyboard zoom reset");
       }
     } else if (k === "Escape") {
       const renderer = this.view.renderer;
