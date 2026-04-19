@@ -209,7 +209,7 @@ class Reader {
         renderer instanceof FixedLayout,
       );
       if (renderer instanceof FixedLayout) {
-        renderer.removeAttribute("zoom");
+        renderer.resetZoom();
         renderer.dragOffset = { x: 0, y: 0 };
         $("#zoom-reset").textContent = "100%";
         console.log("[Reader Debug] ✅ Zoom reset");
@@ -346,7 +346,7 @@ class Reader {
       console.log("[Reader Debug] 🔄 Reset zoom via keyboard");
       const renderer = this.view.renderer;
       if (renderer instanceof FixedLayout) {
-        renderer.removeAttribute("zoom");
+        renderer.resetZoom();
         renderer.dragOffset = { x: 0, y: 0 };
         $("#zoom-reset").textContent = "100%";
         console.log("[Reader Debug] ✅ Keyboard zoom reset");
