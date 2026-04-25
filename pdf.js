@@ -156,6 +156,25 @@ export const makePDF = async file => {
             cache.set(i, url)
             return url
         },
+        createDocument: async () => {
+            const page = await pdf.getPage(i + 1)
+            const doc = document.implementation.createHTMLDocument()
+            // mirror the rendered iframe structure so search CFIs resolve
+            const canvasDiv = doc.createElement('div')
+            canvasDiv.id = 'canvas'
+            const textLayer = doc.createElement('div')
+            textLayer.className = 'textLayer'
+            const annotationLayer = doc.createElement('div')
+            annotationLayer.className = 'annotationLayer'
+            doc.body.append(canvasDiv, textLayer, annotationLayer)
+            const viewport = page.getViewport({ scale: 1 })
+            await new pdfjsLib.TextLayer({
+                textContentSource: await page.streamTextContent(),
+                container: textLayer,
+                viewport,
+            }).render()
+            return doc
+        },
         size: 1000,
     }))
     book.isExternal = uri => /^\w+:/i.test(uri)
