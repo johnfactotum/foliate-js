@@ -40,12 +40,15 @@ const FACET_GROUP = Symbol('facetGroup')
 
 const groupByArray = (arr, f) => {
     const map = new Map()
-    if (arr) for (const el of arr) {
-        const keys = f(el)
-        for (const key of [keys].flat()) {
-            const group = map.get(key)
-            if (group) group.push(el)
-            else map.set(key, [el])
+    if (arr) {
+        for (const el of arr) {
+            const keys = f(el)
+            const keyArray = keys == null ? [] : (Array.isArray(keys) ? keys : [keys])
+            for (const key of keyArray) {
+                const group = map.get(key)
+                if (group) group.push(el)
+                else map.set(key, [el])
+            }
         }
     }
     return map
@@ -55,12 +58,16 @@ const groupByArray = (arr, f) => {
 const parseMediaType = str => {
     if (!str) return
     const [mediaType, ...ps] = str.split(/ *; */)
+    if (!mediaType) return
     return {
         mediaType: mediaType.toLowerCase(),
-        parameters: Object.fromEntries(ps.map(p => {
+        parameters: ps.reduce((acc, p) => {
             const [name, val] = p.split('=')
-            return [name.toLowerCase(), val?.replace(/(^"|"$)/g, '')]
-        })),
+            if (name) {
+                acc[name.toLowerCase()] = val?.replace(/(^"|"$)/g, '')
+            }
+            return acc
+        }, {}),
     }
 }
 
@@ -106,17 +113,25 @@ const getDirectChildren = (el, ns, localName, tagName) => {
         (
             (node.namespaceURI === ns && node.localName === localName) ||
             (node.tagName === tagName)
-        ),
+        )
     )
 }
 
 const getPrice = link => {
     const prices = getDirectChildren(link, NS.OPDS, 'price', 'opds:price')
     if (!prices.length) return
-    const parsed = prices.map(price => ({
-        currency: price.getAttribute('currencycode') ?? undefined,
-        value: parseFloat(price.textContent),
-    }))
+    const parsed = prices.reduce((acc, price) => {
+        const value = parseFloat(price.textContent)
+        if (!isNaN(value)) {
+            acc.push({
+                currency: price.getAttribute('currencycode') ?? undefined,
+                value,
+            })
+        }
+        return acc
+    }, [])
+
+    if (!parsed.length) return
     // OPDS 1.x allows multiple prices, OPDS 2.0 schema defines price as a single object
     return parsed.length === 1 ? parsed[0] : parsed
 }
@@ -124,14 +139,16 @@ const getPrice = link => {
 const getIndirectAcquisition = el => {
     const ias = getDirectChildren(el, NS.OPDS, 'indirectAcquisition', 'opds:indirectAcquisition')
     if (!ias.length) return []
-    return ias.map(ia => {
+    return ias.reduce((acc, ia) => {
         const type = ia.getAttribute('type')
-        if (!type) return undefined
-        return {
-            type,
-            child: getIndirectAcquisition(ia),
+        if (type) {
+            acc.push({
+                type,
+                child: getIndirectAcquisition(ia),
+            })
         }
-    }).filter(Boolean)
+        return acc
+    }, [])
 }
 
 const getLink = link => {
@@ -161,7 +178,7 @@ const getLink = link => {
         type: link.getAttribute('type') ?? undefined,
         title: link.getAttribute('title') ?? undefined,
         // --- Facet Grouping ---
-        [FACET_GROUP]: link.getAttributeNS(NS.OPDS, 'facetGroup') || link.getAttribute('opds:facetGroup') || undefined,
+        [FACET_GROUP]: link.getAttributeNS(NS.OPDS, 'facetGroup') || link.getAttribute('opds:facetGroup') ?? undefined,
         properties: {
             price: (isAcquisition || isStream) ? getPrice(link) : undefined,
             indirectAcquisition: (isAcquisition || isStream) ? getIndirectAcquisition(link) : undefined,
@@ -231,14 +248,15 @@ export const getFeed = doc => {
         const children = Array.from(entry.children)
         const links = children.filter(filter('link')).map(getLink)
         const linksByRel = groupByArray(links, link => link.rel)
-        const isPub = [...linksByRel.keys()]
+        const isPub = Array.from(linksByRel.keys())
             .some(rel => rel?.startsWith(REL.ACQ) || rel === 'preview' || rel === REL.STREAM)
 
         const groupLinks = linksByRel.get(REL.GROUP) ?? linksByRel.get('collection')
         const groupLink = groupLinks?.length
             ? groupLinks.find(link => groupedItems.has(link.href)) ?? groupLinks[0] : undefined
-        if (groupLink && !groupLinkMap.has(groupLink.href))
+        if (groupLink?.href && !groupLinkMap.has(groupLink.href)) {
             groupLinkMap.set(groupLink.href, groupLink)
+        }
 
         const item = isPub
             ? getPublication(entry)
@@ -258,10 +276,10 @@ export const getFeed = doc => {
         const link = groupLinkMap.get(key)
         return {
             metadata: {
-                title: link.title,
-                numberOfItems: link.properties?.numberOfItems,
+                title: link?.title,
+                numberOfItems: link?.properties?.numberOfItems,
             },
-            links: [{ rel: 'self', href: link.href, type: link.type }],
+            links: [{ rel: 'self', href: link?.href, type: link?.type }],
             [itemsKey]: items,
         }
     })
@@ -294,19 +312,20 @@ export const getFeed = doc => {
         groups: groups.length ? groups : undefined,
         facets: Array.from(
             groupByArray(linksByRel.get(REL.FACET) ?? [], link => link[FACET_GROUP]),
-            ([facet, links]) => ({ metadata: { title: facet ?? undefined }, links }),
+            ([facet, links]) => ({ metadata: { title: facet ?? undefined }, links })
         ),
     }
 }
 
 export const getSearch = async link => {
     const { replace, getVariables } = await import('./uri-template.js')
+    const href = link.href || ''
     return {
         metadata: {
             title: link.title ?? undefined,
         },
-        search: map => replace(link.href, map.get(undefined)),
-        params: Array.from(getVariables(link.href), name => ({ name })),
+        search: map => replace(href, map.get(undefined)),
+        params: Array.from(getVariables(href), name => ({ name })),
     }
 }
 
@@ -329,7 +348,7 @@ export const getOpenSearch = doc => {
         ['outputEncoding', 'UTF-8'],
     ])
 
-    const template = $url.getAttribute('template')
+    const template = $url.getAttribute('template') || ''
     return {
         metadata: {
             title: (children.find(filter('LongName')) ?? children.find(filter('ShortName')))?.textContent ?? undefined,
@@ -346,9 +365,9 @@ export const getOpenSearch = doc => {
             const ns = namespace === defaultNS ? undefined : namespace
             return {
                 ns,
-                name: param,
+                name: param, // (.+?) ensures `param` is non-empty
                 required: !optional,
-                value: ns && ns !== defaultNS ? undefined : (defaultMap.get(param) ?? undefined),
+                value: ns && ns !== defaultNS ? undefined : defaultMap.get(param) ?? undefined,
             }
         }),
     }
