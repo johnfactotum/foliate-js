@@ -351,6 +351,7 @@ export const makeFB2 = async blob => {
     }
     book.splitTOCHref = href => href?.split('#')?.map(x => Number(x)) ?? []
     book.getTOCFragment = (doc, id) => doc.querySelector(`[${dataID}="${id}"]`)
+    book.isExternal = uri => /^\w+:/i.test(uri)
 
     book.destroy = () => {
         for (const url of urls) URL.revokeObjectURL(url)
