@@ -287,7 +287,6 @@ export class FixedLayout extends HTMLElement {
     }
     async select(target) {
         await this.goTo(target)
-        // TODO
     }
     async goTo(target) {
         const { book } = this
@@ -296,6 +295,20 @@ export class FixedLayout extends HTMLElement {
         if (!section) return
         const { index, side } = this.getSpreadOf(section)
         await this.goToSpread(index, side)
+        if (resolved.select && resolved.anchor) {
+            for (const frame of this.#root.querySelectorAll('iframe')) {
+                const doc = frame.contentDocument
+                if (!doc) continue
+                try {
+                    const range = typeof resolved.anchor === 'function' ? resolved.anchor(doc) : resolved.anchor
+                    if (range) {
+                        const sel = doc.defaultView.getSelection()
+                        sel.removeAllRanges()
+                        sel.addRange(range)
+                    }
+                } catch (e) {}
+            }
+        }
     }
     async next() {
         const s = this.rtl ? this.#goLeft() : this.#goRight()
