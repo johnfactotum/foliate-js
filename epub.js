@@ -573,7 +573,48 @@ const deobfuscate = async (key, length, blob) => {
     return new Blob([array, blob.slice(length)], { type: blob.type })
 }
 
+// Pure-JS SHA-1 fallback for non-secure contexts (http://) where
+// crypto.subtle is unavailable. Implements FIPS 180-4.
+const pureSHA1 = str => {
+    const bytes = new TextEncoder().encode(str)
+    const len = bytes.length, bitLen = len * 8
+    const padLen = (len + 9 + 63) & ~63
+    const msg = new Uint8Array(padLen)
+    msg.set(bytes); msg[len] = 0x80
+    const dv = new DataView(msg.buffer)
+    dv.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false)
+    dv.setUint32(padLen - 4, bitLen >>> 0, false)
+    let H0 = 0x67452301, H1 = 0xEFCDAB89, H2 = 0x98BADCFE,
+        H3 = 0x10325476, H4 = 0xC3D2E1F0
+    const W = new Int32Array(80)
+    for (let off = 0; off < padLen; off += 64) {
+        for (let i = 0; i < 16; i++) W[i] = dv.getInt32(off + i * 4, false)
+        for (let i = 16; i < 80; i++) {
+            const n = W[i - 3] ^ W[i - 8] ^ W[i - 14] ^ W[i - 16]
+            W[i] = (n << 1) | (n >>> 31)
+        }
+        let a = H0, b = H1, c = H2, d = H3, e = H4
+        for (let i = 0; i < 80; i++) {
+            let f, k
+            if      (i < 20) { f = (b & c) | (~b & d); k = 0x5A827999 }
+            else if (i < 40) { f = b ^ c ^ d;           k = 0x6ED9EBA1 }
+            else if (i < 60) { f = (b & c) | (b & d) | (c & d); k = 0x8F1BBCDC }
+            else             { f = b ^ c ^ d;           k = 0xCA62C1D6 }
+            const t = ((a << 5) | (a >>> 27)) + f + e + k + W[i]
+            e = d; d = c; c = (b << 30) | (b >>> 2); b = a; a = t
+        }
+        H0 = (H0 + a) | 0; H1 = (H1 + b) | 0; H2 = (H2 + c) | 0
+        H3 = (H3 + d) | 0; H4 = (H4 + e) | 0
+    }
+    const out = new Uint8Array(20), ov = new DataView(out.buffer)
+    ov.setInt32(0, H0, false); ov.setInt32(4, H1, false)
+    ov.setInt32(8, H2, false); ov.setInt32(12, H3, false)
+    ov.setInt32(16, H4, false)
+    return Promise.resolve(out)
+}
+
 const WebCryptoSHA1 = async str => {
+    if (!globalThis.crypto?.subtle) return pureSHA1(str)
     const data = new TextEncoder().encode(str)
     const buffer = await globalThis.crypto.subtle.digest('SHA-1', data)
     return new Uint8Array(buffer)
