@@ -197,6 +197,13 @@ foliate-view::part(head) {
 }
 ```
 
+### The Fixed Layout renderer
+
+This renderer's layout can be configured by setting the following attributes:
+- `zoom`: a [boolean attribute](https://developer.mozilla.org/en-US/docs/Glossary/Boolean/HTML), `fit-width` or `fit-page`. Scales the fixed layout accordingly.
+- `spread`: changes the `rendition:spread` and respreads the book. It can be used to dynamically enable and disable synthetic spreads.
+- `odd-pages`: set to `recto` or `verso` to force the first page to be on the front or back side of the book when spreading. If set to neither one, the first page is determined based on the information embedded in the e-book (if any).
+
 ### EPUB CFI
 
 Parsed CFIs are represented as a plain array or object. The basic type is called a "part", which is an object with the following structure: `{ index, id, offset, temporal, spatial, text, side }`, corresponding to a step + offset in the CFI.
