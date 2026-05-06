@@ -28,12 +28,26 @@ const render = async (page, doc, zoom) => {
     await page.render({ canvasContext, viewport }).promise
     doc.querySelector('#canvas').replaceChildren(doc.adoptNode(canvas))
 
-    const container = doc.querySelector('.textLayer')
-    const textLayer = new pdfjsLib.TextLayer({
-        textContentSource: await page.streamTextContent(),
-        container, viewport,
-    })
-    await textLayer.render()
+    if (doc._textLayer) doc._textLayer.update({ viewport })
+    else {
+        const container = doc.querySelector('.textLayer')
+        container.replaceChildren()
+        const textLayer = new pdfjsLib.TextLayer({
+            textContentSource: await page.streamTextContent(),
+            container, viewport,
+        })
+        await textLayer.render()
+        doc._textLayer = textLayer
+
+        // fix text selection
+        // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
+        const endOfContent = document.createElement('div')
+        endOfContent.className = 'endOfContent'
+        container.append(endOfContent)
+        // TODO: this only works in Firefox; see https://github.com/mozilla/pdf.js/pull/17923
+        container.onpointerdown = () => container.classList.add('selecting')
+        container.onpointerup = () => container.classList.remove('selecting')
+    }
 
     // hide "offscreen" canvases appended to docuemnt when rendering text layer
     // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/pdf_viewer.css#L51-L58
@@ -47,23 +61,18 @@ const render = async (page, doc, zoom) => {
             display: 'none',
         })
 
-    // fix text selection
-    // https://github.com/mozilla/pdf.js/blob/642b9a5ae67ef642b9a8808fd9efd447e8c350e2/web/text_layer_builder.js#L105-L107
-    const endOfContent = document.createElement('div')
-    endOfContent.className = 'endOfContent'
-    container.append(endOfContent)
-    // TODO: this only works in Firefox; see https://github.com/mozilla/pdf.js/pull/17923
-    container.onpointerdown = () => container.classList.add('selecting')
-    container.onpointerup = () => container.classList.remove('selecting')
-
-    const div = doc.querySelector('.annotationLayer')
-    const linkService = {
-        goToDestination: () => {},
-        getDestinationHash: dest => JSON.stringify(dest),
-        addLinkAttributes: (link, url) => link.href = url,
+    if (doc._annotationLayer) doc._annotationLayer.update({ viewport })
+    else {
+        const div = doc.querySelector('.annotationLayer')
+        const linkService = {
+            goToDestination: () => {},
+            getDestinationHash: dest => JSON.stringify(dest),
+            addLinkAttributes: (link, url) => link.href = url,
+        }
+        const annotationLayer = new pdfjsLib.AnnotationLayer({ page, viewport, div, linkService })
+        await annotationLayer.render({ annotations: await page.getAnnotations() })
+        doc._annotationLayer = annotationLayer
     }
-    await new pdfjsLib.AnnotationLayer({ page, viewport, div, linkService })
-        .render({ annotations: await page.getAnnotations() })
 }
 
 const renderPage = async (page, getImageBlob) => {
