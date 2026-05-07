@@ -585,8 +585,14 @@ export class View extends HTMLElement {
         const doc = this.renderer.getContents()[0].doc
         if (this.tts && this.tts.doc === doc) return
         const { TTS } = await import('./tts.js')
-        this.tts = new TTS(doc, textWalker, highlight || (range =>
-            this.renderer.scrollToAnchor(range, true)), granularity)
+        this.tts = new TTS(doc, textWalker, highlight || (range => {
+            // Not every renderer implements scrollToAnchor — in particular,
+            // the PDF renderer is fixed-layout and has no notion of an
+            // anchor to scroll to. Guard the call so that TTS still works
+            // on PDFs, just without sentence-highlight sync.
+            if (typeof this.renderer.scrollToAnchor === 'function')
+                this.renderer.scrollToAnchor(range, true)
+        }), granularity)
     }
     startMediaOverlay() {
         const { index } = this.renderer.getContents()[0]
