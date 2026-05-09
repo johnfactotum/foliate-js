@@ -231,6 +231,7 @@ const dataID = 'data-foliate-id'
 
 export const makeFB2 = async blob => {
     const book = {}
+
     const doc = await parseXML(blob)
     const converter = new FB2Converter(doc)
 

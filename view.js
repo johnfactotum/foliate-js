@@ -83,6 +83,7 @@ export const makeBook = async file => {
         const loader = await makeDirectoryLoader(file)
         const { EPUB } = await import('./epub.js')
         book = await new EPUB(loader).init()
+        book.type = 'epub'
     }
     else if (!file.size) throw new NotFoundError('File not found')
     else if (await isZip(file)) {
@@ -90,6 +91,7 @@ export const makeBook = async file => {
         if (isCBZ(file)) {
             const { makeComicBook } = await import('./comic-book.js')
             book = makeComicBook(loader, file)
+            book.type = 'comic-book'
         }
         else if (isFBZ(file)) {
             const { makeFB2 } = await import('./fb2.js')
@@ -97,25 +99,30 @@ export const makeBook = async file => {
             const entry = entries.find(entry => entry.filename.endsWith('.fb2'))
             const blob = await loader.loadBlob((entry ?? entries[0]).filename)
             book = await makeFB2(blob)
+            book.type = 'fb2'
         }
         else {
             const { EPUB } = await import('./epub.js')
             book = await new EPUB(loader).init()
+            book.type = 'epub'
         }
     }
     else if (await isPDF(file)) {
         const { makePDF } = await import('./pdf.js')
         book = await makePDF(file)
+        book.type = 'pdf'
     }
     else {
         const { isMOBI, MOBI } = await import('./mobi.js')
         if (await isMOBI(file)) {
             const fflate = await import('./vendor/fflate.js')
             book = await new MOBI({ unzlib: fflate.unzlibSync }).open(file)
+            book.type = 'mobi'
         }
         else if (isFB2(file)) {
             const { makeFB2 } = await import('./fb2.js')
             book = await makeFB2(file)
+            book.type = 'fb2'
         }
     }
     if (!book) throw new UnsupportedTypeError('File type not supported')

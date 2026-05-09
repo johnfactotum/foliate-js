@@ -86,6 +86,7 @@ It is therefore imperative that you use [Content Security Policy (CSP)](https://
 ### The Main Interface for Books
 
 Processors for each book format return an object that implements the following interface:
+- `.type`: a string that identifies the book format.
 - `.sections`: an array of sections in the book. Each item has the following properties:
     - `.load()`: returns a string containing the URL that will be rendered. May be async.
     - `.unload()`: returns nothing. If present, can be used to free the section.
