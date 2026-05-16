@@ -370,7 +370,7 @@ export class View extends HTMLElement {
         if (value.startsWith(SEARCH_PREFIX)) {
             const cfi = value.replace(SEARCH_PREFIX, '')
             const { index, anchor } = await this.resolveNavigation(cfi)
-            const obj = this.#getOverlayer(index)
+            const obj = this.#getOverlayer(index, false)
             if (obj) {
                 const { overlayer, doc } = obj
                 if (remove) {
@@ -383,7 +383,7 @@ export class View extends HTMLElement {
             return
         }
         const { index, anchor } = await this.resolveNavigation(value)
-        const obj = this.#getOverlayer(index)
+        const obj = this.#getOverlayer(index, false)
         if (obj) {
             const { overlayer, doc } = obj
             overlayer.remove(value)
@@ -399,8 +399,8 @@ export class View extends HTMLElement {
     deleteAnnotation(annotation) {
         return this.addAnnotation(annotation, true)
     }
-    #getOverlayer(index) {
-        return this.renderer.getContents()
+    #getOverlayer(index, onlyVisible = true) {
+        return this.renderer.getContents({ onlyVisible })
             .find(x => x.index === index && x.overlayer)
     }
     #createOverlayer({ doc, index }) {
@@ -581,15 +581,20 @@ export class View extends HTMLElement {
             for (const item of list) this.deleteAnnotation(item)
         this.#searchResults.clear()
     }
+    getCurrentContents() {
+        const contents = this.renderer.getContents()
+        return contents.find(x => x.index === this.lastLocation
+            ?.section?.current) ?? contents[0]
+    }
     async initTTS(granularity = 'word', highlight) {
-        const doc = this.renderer.getContents()[0].doc
+        const doc = this.getCurrentContents().doc
         if (this.tts && this.tts.doc === doc) return
         const { TTS } = await import('./tts.js')
         this.tts = new TTS(doc, textWalker, highlight || (range =>
-            this.renderer.scrollToAnchor(range, true)), granularity)
+            this.renderer.scrollToAnchor?.(range, true)), granularity)
     }
     startMediaOverlay() {
-        const { index } = this.renderer.getContents()[0]
+        const { index } = this.getCurrentContents()
         return this.mediaOverlay.start(index)
     }
 }
