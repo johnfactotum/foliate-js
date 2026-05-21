@@ -283,7 +283,7 @@ class View {
         })
     }
     render(layout) {
-        if (!layout) return
+        if (!layout || !this.document?.body) return
         this.#column = layout.flow !== 'scrolled'
         this.#layout = layout
         if (this.#column) this.columnize(layout)
@@ -620,7 +620,7 @@ export class Paginator extends HTMLElement {
         })
 
         this.#mediaQueryListener = () => {
-            if (!this.#view) return
+            if (!this.#view || !this.#view.document?.body) return
             this.#background.style.background = getBackground(this.#view.document)
         }
         this.#mediaQuery.addEventListener('change', this.#mediaQueryListener)
