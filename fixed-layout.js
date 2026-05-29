@@ -243,6 +243,17 @@ export class FixedLayout extends HTMLElement {
             return arr
         }, [{}])
     }
+    async respread() {
+        if (!this.book) return
+        const section = this.#index !== -1 ? this.book.sections[this.index] : null
+        this.open(this.book)
+        if (section) {
+            const target = this.getSpreadOf(section)
+            if (!target) return
+            this.#index = -1
+            return this.goToSpread(target.index, target.side, 'page')
+        }
+    }
     get index() {
         const spread = this.#spreads[this.#index]
         const section = spread?.center ?? (this.#side === 'left'
