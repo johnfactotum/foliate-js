@@ -1,4 +1,3 @@
-import * as CFI from './epubcfi.js'
 import { TOCProgress, SectionProgress } from './progress.js'
 import { Overlayer } from './overlayer.js'
 import { textWalker } from './text-walker.js'
@@ -76,13 +75,13 @@ const fetchFile = async url => {
     return new File([await res.blob()], new URL(res.url).pathname)
 }
 
-export const makeBook = async file => {
+export const makeBook = async (file, opts) => {
     if (typeof file === 'string') file = await fetchFile(file)
     let book
     if (file.isDirectory) {
         const loader = await makeDirectoryLoader(file)
         const { EPUB } = await import('./epub.js')
-        book = await new EPUB(loader).init()
+        book = await new EPUB(loader).init({ CFI: opts?.CFI })
     }
     else if (!file.size) throw new NotFoundError('File not found')
     else if (await isZip(file)) {
@@ -100,7 +99,7 @@ export const makeBook = async file => {
         }
         else {
             const { EPUB } = await import('./epub.js')
-            book = await new EPUB(loader).init()
+            book = await new EPUB(loader).init({ CFI: opts?.CFI })
         }
     }
     else if (await isPDF(file)) {
@@ -223,6 +222,7 @@ export class View extends HTMLElement {
     isFixedLayout = false
     lastLocation
     history = new History()
+    CFI
     constructor() {
         super()
         this.history.addEventListener('popstate', ({ detail }) => {
@@ -230,10 +230,11 @@ export class View extends HTMLElement {
             this.renderer.goTo(resolved)
         })
     }
-    async open(book) {
+    async open(book, { CFI } = {}) {
+        this.CFI = CFI ?? await import('./epubcfi.js')
         if (typeof book === 'string'
         || typeof book.arrayBuffer === 'function'
-        || book.isDirectory) book = await makeBook(book)
+        || book.isDirectory) book = await makeBook(book, { CFI: this.CFI })
         this.book = book
         this.language = languageInfo(book.metadata?.language)
 
@@ -429,17 +430,17 @@ export class View extends HTMLElement {
         }
     }
     getCFI(index, range) {
-        const baseCFI = this.book.sections[index].cfi ?? CFI.fake.fromIndex(index)
+        const baseCFI = this.book.sections[index].cfi ?? this.CFI.fake.fromIndex(index)
         if (!range) return baseCFI
-        return CFI.joinIndir(baseCFI, CFI.fromRange(range))
+        return this.CFI.joinIndir(baseCFI, this.CFI.fromRange(range))
     }
     resolveCFI(cfi) {
         if (this.book.resolveCFI)
             return this.book.resolveCFI(cfi)
         else {
-            const parts = CFI.parse(cfi)
-            const index = CFI.fake.toIndex((parts.parent ?? parts).shift())
-            const anchor = doc => CFI.toRange(doc, parts)
+            const parts = this.CFI.parse(cfi)
+            const index = this.CFI.fake.toIndex((parts.parent ?? parts).shift())
+            const anchor = doc => this.CFI.toRange(doc, parts)
             return { index, anchor }
         }
     }
@@ -450,7 +451,7 @@ export class View extends HTMLElement {
                 const [index, anchor] = this.#sectionProgress.getSection(target.fraction)
                 return { index, anchor }
             }
-            if (CFI.isCFI.test(target)) return this.resolveCFI(target)
+            if (this.CFI.isCFI.test(target)) return this.resolveCFI(target)
             return this.book.resolveHref(target)
         } catch (e) {
             console.error(e)
