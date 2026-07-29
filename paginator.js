@@ -833,6 +833,11 @@ export class Paginator extends HTMLElement {
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
         if (this.scrolled || state.pinched) return
+
+        const doc = e.target.ownerDocument || document
+        const sel = doc.getSelection()
+        if (sel && sel.type === 'Range' && !sel.isCollapsed) return
+
         if (e.touches.length > 1) {
             if (this.#touchScrolled) e.preventDefault()
             return
@@ -850,9 +855,13 @@ export class Paginator extends HTMLElement {
         this.#touchScrolled = true
         this.scrollBy(dx, dy)
     }
-    #onTouchEnd() {
+    #onTouchEnd(e) {
         this.#touchScrolled = false
         if (this.scrolled) return
+
+        const doc = e?.target?.ownerDocument || document
+        const sel = doc.getSelection()
+        if (sel && sel.type === 'Range' && !sel.isCollapsed) return
 
         // XXX: Firefox seems to report scale as 1... sometimes...?
         // at this point I'm basically throwing `requestAnimationFrame` at
