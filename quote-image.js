@@ -63,7 +63,7 @@ customElements.define('foliate-quoteimage', class extends HTMLElement {
         fit(this.#root.querySelector('main'))
 
         const img = document.createElement('img')
-        return new Promise(resolve => {
+        return new Promise((resolve, reject) => {
             img.onload = () => {
                 const canvas = document.createElement('canvas')
                 canvas.width = pixelRatio * width
@@ -72,6 +72,7 @@ customElements.define('foliate-quoteimage', class extends HTMLElement {
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
                 canvas.toBlob(resolve)
             }
+            img.onerror = () => reject(new Error('Failed to render quote image'))
             const doc = document.implementation.createDocument(SVG_NS, 'svg')
             doc.documentElement.setAttribute('viewBox', `0 0 ${width} ${height}`)
             const obj = doc.createElementNS(SVG_NS, 'foreignObject')
@@ -79,8 +80,12 @@ customElements.define('foliate-quoteimage', class extends HTMLElement {
             obj.setAttribute('height', height)
             obj.append(doc.importNode(this.#root.querySelector('main'), true))
             doc.documentElement.append(obj)
-            img.src = 'data:image/svg+xml;charset=utf-8,'
-                + new XMLSerializer().serializeToString(doc)
+            // percent-encode the document: an unescaped `#` starts the URL
+            // fragment and `%` an escape sequence, and both occur here, as the
+            // styles above use hex colours and the text can contain anything;
+            // a selection can also split a surrogate pair, which will not encode
+            img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(
+                new XMLSerializer().serializeToString(doc).toWellFormed())
         })
     }
 })
