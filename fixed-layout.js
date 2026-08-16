@@ -194,19 +194,15 @@ export class FixedLayout extends HTMLElement {
         // the race: drop the frames it built and leave the previous spread
         // alone, or several in-flight spreads could all end up visible at
         // once; whichever call is current when it finishes does the swap
-        if (gen !== this.#gen) {
-            for (const element of newElements) element.remove()
-            return
-        }
+        const dropIfStale = () => gen !== this.#gen
+            && (newElements.forEach(element => element.remove()), true)
+        if (dropIfStale()) return
         this.#center = newCenter
         this.#left = newLeft
         this.#right = newRight
         this.#side = newSide
         await this.#render()
-        if (gen !== this.#gen) {
-            for (const element of newElements) element.remove()
-            return
-        }
+        if (dropIfStale()) return
         for (const child of oldChildren) child.remove()
     }
     #goLeft() {
