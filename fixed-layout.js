@@ -43,6 +43,7 @@ export class FixedLayout extends HTMLElement {
     #center
     #side
     #zoom
+    #gen = 0
     constructor() {
         super()
 
@@ -132,10 +133,18 @@ export class FixedLayout extends HTMLElement {
                             right.height ?? blankHeight)))
             ) || 1
 
-        const transform = async frame => {
+        // paint (async) and reveal (sync) are separate so that, for a
+        // two-page spread, one side never becomes visible before the
+        // other has finished painting: both are painted first, then
+        // both are revealed together in one synchronous step
+        const paint = async frame => {
+            const { iframe, onZoom } = frame
+            if (!iframe || !onZoom) return
+            await onZoom({ doc: frame.iframe.contentDocument, scale })
+        }
+        const reveal = frame => {
             let { element, iframe, width, height, blank, onZoom } = frame
             if (!iframe) return
-            if (onZoom) await onZoom({ doc: frame.iframe.contentDocument, scale })
             const iframeScale = onZoom ? scale : 1
             Object.assign(iframe.style, {
                 width: `${width * iframeScale}px`,
@@ -157,28 +166,46 @@ export class FixedLayout extends HTMLElement {
             }
         }
         if (this.#center) {
-            return transform(this.#center)
+            await paint(this.#center)
+            reveal(this.#center)
         } else {
-            return Promise.all([transform(left), transform(right)])
+            await Promise.all([paint(left), paint(right)])
+            reveal(left)
+            reveal(right)
         }
     }
     async #showSpread({ left, right, center, side }) {
         // keep the current spread mounted while the next one loads and
         // renders, so the view is never left blank between page turns
+        const gen = ++this.#gen
         const oldChildren = [...this.#root.children]
+        let newLeft = null, newRight = null, newCenter = null, newSide
         if (center) {
-            this.#center = await this.#createFrame(center)
-            this.#left = null
-            this.#right = null
-            this.#side = 'center'
-            await this.#render()
+            newCenter = await this.#createFrame(center)
+            newSide = 'center'
         } else {
-            this.#left = await this.#createFrame(left)
-            this.#right = await this.#createFrame(right)
-            this.#center = null
-            this.#side = this.#left.blank ? 'right'
-                : this.#right.blank ? 'left' : side
-            await this.#render()
+            newLeft = await this.#createFrame(left)
+            newRight = await this.#createFrame(right)
+            newSide = newLeft.blank ? 'right' : newRight.blank ? 'left' : side
+        }
+        const newElements = [newCenter, newLeft, newRight]
+            .filter(frame => frame).map(frame => frame.element)
+        // if a later page turn has started in the meantime, this one lost
+        // the race: drop the frames it built and leave the previous spread
+        // alone, or several in-flight spreads could all end up visible at
+        // once; whichever call is current when it finishes does the swap
+        if (gen !== this.#gen) {
+            for (const element of newElements) element.remove()
+            return
+        }
+        this.#center = newCenter
+        this.#left = newLeft
+        this.#right = newRight
+        this.#side = newSide
+        await this.#render()
+        if (gen !== this.#gen) {
+            for (const element of newElements) element.remove()
+            return
         }
         for (const child of oldChildren) child.remove()
     }
