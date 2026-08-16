@@ -103,7 +103,7 @@ export class FixedLayout extends HTMLElement {
             iframe.src = src
         })
     }
-    #render(side = this.#side) {
+    async #render(side = this.#side) {
         if (!side) return
         const left = this.#left ?? {}
         const right = this.#center ?? this.#right ?? {}
@@ -132,10 +132,10 @@ export class FixedLayout extends HTMLElement {
                             right.height ?? blankHeight)))
             ) || 1
 
-        const transform = frame => {
+        const transform = async frame => {
             let { element, iframe, width, height, blank, onZoom } = frame
             if (!iframe) return
-            if (onZoom) onZoom({ doc: frame.iframe.contentDocument, scale })
+            if (onZoom) await onZoom({ doc: frame.iframe.contentDocument, scale })
             const iframeScale = onZoom ? scale : 1
             Object.assign(iframe.style, {
                 width: `${width * iframeScale}px`,
@@ -157,28 +157,30 @@ export class FixedLayout extends HTMLElement {
             }
         }
         if (this.#center) {
-            transform(this.#center)
+            return transform(this.#center)
         } else {
-            transform(left)
-            transform(right)
+            return Promise.all([transform(left), transform(right)])
         }
     }
     async #showSpread({ left, right, center, side }) {
-        this.#root.replaceChildren()
-        this.#left = null
-        this.#right = null
-        this.#center = null
+        // keep the current spread mounted while the next one loads and
+        // renders, so the view is never left blank between page turns
+        const oldChildren = [...this.#root.children]
         if (center) {
             this.#center = await this.#createFrame(center)
+            this.#left = null
+            this.#right = null
             this.#side = 'center'
-            this.#render()
+            await this.#render()
         } else {
             this.#left = await this.#createFrame(left)
             this.#right = await this.#createFrame(right)
+            this.#center = null
             this.#side = this.#left.blank ? 'right'
                 : this.#right.blank ? 'left' : side
-            this.#render()
+            await this.#render()
         }
+        for (const child of oldChildren) child.remove()
     }
     #goLeft() {
         if (this.#center || this.#left?.blank) return
