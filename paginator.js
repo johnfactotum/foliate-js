@@ -1062,10 +1062,18 @@ export class Paginator extends HTMLElement {
         this.#locked = true
         const prev = dir === -1
         const shouldGo = await (prev ? this.#scrollPrev(distance) : this.#scrollNext(distance))
-        if (shouldGo) await this.#goTo({
-            index: this.#adjacentIndex(dir),
-            anchor: prev ? () => 1 : () => 0,
-        })
+        if (shouldGo) {
+            const nextIndex = this.#adjacentIndex(dir)
+            // Safety validation to prevent crashing the global arrow key layout handlers
+            if (nextIndex >= 0 && this.sections && this.sections[nextIndex]) {
+                await this.#goTo({
+                    index: nextIndex,
+                    anchor: prev ? () => 1 : () => 0,
+                })
+            } else {
+                console.warn(`Foliate Patch: Bypassed layout crash. Section index ${nextIndex} out of bounds.`)
+            }
+        }
         if (shouldGo || !this.hasAttribute('animated')) await wait(100)
         this.#locked = false
     }
