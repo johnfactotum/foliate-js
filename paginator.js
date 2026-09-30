@@ -1,3 +1,11 @@
+// An absent or empty attribute preserves the existing 300 ms transition.
+export function pageTurnAnimationDuration(value) {
+    if (value == null || String(value).trim() === '') return 300
+    const duration = Number(value)
+    if (!Number.isFinite(duration)) return 300
+    return Math.max(0, Math.min(1000, duration))
+}
+
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms))
 
 const debounce = (f, wait, immediate) => {
@@ -898,8 +906,9 @@ export class Paginator extends HTMLElement {
         }
         // FIXME: vertical-rl only, not -lr
         if (this.scrolled && this.#vertical) offset = -offset
-        if ((reason === 'snap' || smooth) && this.hasAttribute('animated')) return animate(
-            element[scrollProp], offset, 300, easeOutQuad,
+        const duration = pageTurnAnimationDuration(this.getAttribute('animation-duration'))
+        if (duration > 0 && (reason === 'snap' || smooth) && this.hasAttribute('animated')) return animate(
+            element[scrollProp], offset, duration, easeOutQuad,
             x => element[scrollProp] = x,
         ).then(() => {
             this.#scrollBounds = [offset, this.atStart ? 0 : size, this.atEnd ? 0 : size]
@@ -1066,7 +1075,8 @@ export class Paginator extends HTMLElement {
             index: this.#adjacentIndex(dir),
             anchor: prev ? () => 1 : () => 0,
         })
-        if (shouldGo || !this.hasAttribute('animated')) await wait(100)
+        if (pageTurnAnimationDuration(this.getAttribute('animation-duration')) > 0
+            && (shouldGo || !this.hasAttribute('animated'))) await wait(100)
         this.#locked = false
     }
     prev(distance) {
