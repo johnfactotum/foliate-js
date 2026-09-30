@@ -372,3 +372,13 @@ Vendored libraries:
 - [zip.js](https://github.com/gildas-lormeau/zip.js) is licensed under the BSD-3-Clause license.
 - [fflate](https://github.com/101arrowz/fflate) is MIT licensed.
 - [PDF.js](https://mozilla.github.io/pdf.js/) is licensed under Apache.
+
+### Bounded MOBI decoding
+
+`new MOBI({ unzlib, maxTextBytes, maxRecordBytes, strictResourceErrors })` can
+limit decoded text and records when importing untrusted books. Size limits default
+to `Infinity`; `strictResourceErrors` defaults to `false`. Malformed PalmDOC
+references, cyclic HUFF dictionaries, invalid index tables, and unknown encodings
+raise errors rather than hanging or producing corrupted text.
+
+Run the focused decoder tests with `node --test tests/mobi-safety.test.mjs`.

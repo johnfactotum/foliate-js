@@ -200,6 +200,7 @@ const getVarLen = (byteArray, i = 0) => {
         length++
         if (byte & 0b1000_0000) break
     }
+    if (!length || !(byteArray[i + length - 1] & 0x80)) throw new Error('Truncated MOBI variable-length value')
     return { value, length }
 }
 
@@ -221,33 +222,38 @@ const countBitsSet = x => {
 }
 
 const countUnsetEnd = x => {
+    if (!x) throw new Error('Invalid zero MOBI tag mask')
     let count = 0
     while ((x & 1) === 0) x = x >> 1, count++
     return count
 }
 
-const decompressPalmDOC = array => {
+export const decompressPalmDOC = (array, maxBytes = Infinity) => {
     let output = []
     for (let i = 0; i < array.length; i++) {
         const byte = array[i]
         if (byte === 0) output.push(0) // uncompressed literal, just copy it
-        else if (byte <= 8) // copy next 1-8 bytes
-            for (const x of array.subarray(i + 1, (i += byte) + 1))
-                output.push(x)
+        else if (byte <= 8) { // copy next 1-8 bytes
+            if (i + byte >= array.length) throw new Error('Truncated PalmDOC literal')
+            for (const x of array.subarray(i + 1, (i += byte) + 1)) output.push(x)
+        }
         else if (byte <= 0b0111_1111) output.push(byte) // uncompressed literal
         else if (byte <= 0b1011_1111) {
             // 1st and 2nd bits are 10, meaning this is a length-distance pair
             // read next byte and combine it with current byte
+            if (i + 1 >= array.length) throw new Error('Truncated PalmDOC reference')
             const bytes = (byte << 8) | array[i++ + 1]
             // the 3rd to 13th bits encode distance
             const distance = (bytes & 0b0011_1111_1111_1111) >>> 3
             // the last 3 bits, plus 3, is the length to copy
             const length = (bytes & 0b111) + 3
+            if (!distance || distance > output.length) throw new Error('Invalid PalmDOC distance')
             for (let j = 0; j < length; j++)
                 output.push(output[output.length - distance])
         }
         // compressed from space plus char
         else output.push(32, byte ^ 0b1000_0000)
+        if (output.length > maxBytes) throw new Error('MOBI record expansion limit exceeded')
     }
     return Uint8Array.from(output)
 }
@@ -262,10 +268,11 @@ const read32Bits = (byteArray, from) => {
     return (bits >> (8n - BigInt(end & 7))) & 0xffffffffn
 }
 
-const huffcdic = async (mobi, loadRecord) => {
+export const huffcdic = async (mobi, loadRecord, maxBytes = Infinity, maxDictionaryBytes = Infinity) => {
     const huffRecord = await loadRecord(mobi.huffcdic)
     const { magic, offset1, offset2 } = getStruct(HUFF_HEADER, huffRecord)
-    if (magic !== 'HUFF') throw new Error('Invalid HUFF record')
+    if (magic !== 'HUFF' || offset1 + 1024 > huffRecord.byteLength || offset2 + 256 > huffRecord.byteLength) throw new Error('Invalid HUFF record')
+    if (!Number.isInteger(mobi.numHuffcdic) || mobi.numHuffcdic < 2 || mobi.numHuffcdic > 1024) throw new Error('Invalid HUFF dictionary count')
 
     // table1 is indexed by byte value
     const table1 = Array.from({ length: 256 }, (_, i) => offset1 + i * 4)
@@ -279,46 +286,61 @@ const huffcdic = async (mobi, loadRecord) => {
             getUint(huffRecord.slice(offset + 4, offset + 8))]))
 
     const dictionary = []
+    let dictionaryBytes = 0
     for (let i = 1; i < mobi.numHuffcdic; i++) {
         const record = await loadRecord(mobi.huffcdic + i)
         const cdic = getStruct(CDIC_HEADER, record)
-        if (cdic.magic !== 'CDIC') throw new Error('Invalid CDIC record')
+        if (cdic.magic !== 'CDIC' || cdic.codeLength > 16 || cdic.numEntries > 65536 || cdic.numEntries < dictionary.length || cdic.length < 16 || cdic.length > record.byteLength) throw new Error('Invalid CDIC record')
         // `numEntries` is the total number of dictionary data across CDIC records
         // so `n` here is the number of entries in *this* record
         const n = Math.min(1 << cdic.codeLength, cdic.numEntries - dictionary.length)
         const buffer = record.slice(cdic.length)
+        if (n * 2 > buffer.byteLength) throw new Error('Truncated CDIC offset table')
         for (let i = 0; i < n; i++) {
             const offset = getUint(buffer.slice(i * 2, i * 2 + 2))
+            if (offset < n * 2 || offset + 2 > buffer.byteLength) throw new Error('Invalid CDIC offset')
             const x = getUint(buffer.slice(offset, offset + 2))
             const length = x & 0x7fff
+            if (offset + 2 + length > buffer.byteLength) throw new Error('Truncated CDIC value')
             const decompressed = x & 0x8000
-            const value = new Uint8Array(
-                buffer.slice(offset + 2, offset + 2 + length))
+            dictionaryBytes += length
+            if (dictionaryBytes > maxDictionaryBytes) throw new Error('HUFF dictionary expansion limit exceeded')
+            const value = new Uint8Array(buffer, offset + 2, length)
             dictionary.push([value, decompressed])
         }
     }
 
-    const decompress = byteArray => {
+    const active = new Set()
+    const decompress = (byteArray, depth = 0) => {
+        if (depth > 64) throw new Error('HUFF recursion limit exceeded')
         let output = new Uint8Array()
         const bitLength = byteArray.byteLength * 8
         for (let i = 0; i < bitLength;) {
             const bits = Number(read32Bits(byteArray, i))
             let [found, codeLength, value] = table1[bits >>> 24]
+            if (!codeLength || codeLength > 32) throw new Error('Invalid HUFF code length')
             if (!found) {
-                while (bits >>> (32 - codeLength) < table2[codeLength][0])
-                    codeLength += 1
+                while (bits >>> (32 - codeLength) < table2[codeLength][0]) {
+                    if (++codeLength > 32) throw new Error('Invalid HUFF code')
+                }
                 value = table2[codeLength][1]
             }
             if ((i += codeLength) > bitLength) break
 
             const code = value - (bits >>> (32 - codeLength))
+            if (!dictionary[code] || active.has(code)) throw new Error('Invalid or cyclic HUFF dictionary reference')
             let [result, decompressed] = dictionary[code]
             if (!decompressed) {
                 // the result is itself compressed
-                result = decompress(result)
+                active.add(code)
+                result = decompress(result, depth + 1)
+                active.delete(code)
+                dictionaryBytes += result.length - dictionary[code][0].length
+                if (dictionaryBytes > maxDictionaryBytes) throw new Error('HUFF dictionary expansion limit exceeded')
                 // cache the result for next time
                 dictionary[code] = [result, true]
             }
+            if (output.length + result.length > maxBytes) throw new Error('HUFF expansion limit exceeded')
             output = concatTypedArray(output, result)
         }
         return output
@@ -326,16 +348,17 @@ const huffcdic = async (mobi, loadRecord) => {
     return decompress
 }
 
-const getIndexData = async (indxIndex, loadRecord) => {
+export const getIndexData = async (indxIndex, loadRecord) => {
     const indxRecord = await loadRecord(indxIndex)
     const indx = getStruct(INDX_HEADER, indxRecord)
-    if (indx.magic !== 'INDX') throw new Error('Invalid INDX record')
+    if (indx.magic !== 'INDX' || indx.numRecords > 2048 || indx.numCncx > 2048 || indx.length > indxRecord.byteLength - 12) throw new Error('Invalid INDX record')
     const decoder = getDecoder(indx.encoding)
 
     const tagxBuffer = indxRecord.slice(indx.length)
     const tagx = getStruct(TAGX_HEADER, tagxBuffer)
-    if (tagx.magic !== 'TAGX') throw new Error('Invalid TAGX section')
+    if (tagx.magic !== 'TAGX' || tagx.length < 12 || tagx.length > tagxBuffer.byteLength || (tagx.length - 12) % 4 || tagx.numControlBytes > 64) throw new Error('Invalid TAGX section')
     const numTags = (tagx.length - 12) / 4
+    if (numTags > 4096) throw new Error('MOBI tag table limit exceeded')
     const tagTable = Array.from({ length: numTags }, (_, i) =>
         new Uint8Array(tagxBuffer.slice(12 + i * 4, 12 + i * 4 + 4)))
 
@@ -345,9 +368,12 @@ const getIndexData = async (indxIndex, loadRecord) => {
         const record = await loadRecord(indxIndex + indx.numRecords + i + 1)
         const array = new Uint8Array(record)
         for (let pos = 0; pos < array.byteLength;) {
+            // CNCX records may end with alignment padding, not another VWI string.
+            if (array[pos] === 0 && array.subarray(pos).every(byte => byte === 0)) break
             const index = pos
             const { value, length } = getVarLen(array, pos)
             pos += length
+            if (value > record.byteLength - pos) throw new Error('Truncated MOBI index string')
             const result = record.slice(pos, pos + value)
             pos += value
             cncx[cncxRecordOffset + index] = decoder.decode(result)
@@ -360,7 +386,7 @@ const getIndexData = async (indxIndex, loadRecord) => {
         const record = await loadRecord(indxIndex + 1 + i)
         const array = new Uint8Array(record)
         const indx = getStruct(INDX_HEADER, record)
-        if (indx.magic !== 'INDX') throw new Error('Invalid INDX record')
+        if (indx.magic !== 'INDX' || indx.idxt + 4 + indx.numRecords * 2 > record.byteLength) throw new Error('Invalid INDX record')
         for (let j = 0; j < indx.numRecords; j++) {
             const offsetOffset = indx.idxt + 4 + 2 * j
             const offset = getUint(record.slice(offsetOffset, offsetOffset + 2))
@@ -370,6 +396,7 @@ const getIndexData = async (indxIndex, loadRecord) => {
 
             const tags = []
             const startPos = offset + 1 + length
+            if (startPos + tagx.numControlBytes > record.byteLength) throw new Error('Truncated MOBI tag entry')
             let controlByteIndex = 0
             let pos = startPos + tagx.numControlBytes
             for (const [tag, numValues, mask, end] of tagTable) {
@@ -408,6 +435,7 @@ const getIndexData = async (indxIndex, loadRecord) => {
                 }
                 tagMap[tag] = values
             }
+            if (table.length >= 150000) throw new Error('MOBI index complexity limit exceeded')
             table.push({ name, tagMap })
         }
     }
@@ -427,23 +455,27 @@ const getNCX = async (indxIndex, loadRecord) => {
         firstChild: tagMap[22]?.[0],
         lastChild: tagMap[23]?.[0],
     }))
-    const getChildren = item => {
+    const getChildren = (item, depth = 0, ancestors = new Set()) => {
+        if (depth > 96 || ancestors.has(item.index)) throw new Error('Invalid MOBI contents hierarchy')
         if (item.firstChild == null) return item
-        item.children = items.filter(x => x.parent === item.index).map(getChildren)
+        const next = new Set(ancestors); next.add(item.index)
+        item.children = items.filter(x => x.parent === item.index).map(child => getChildren(child, depth + 1, next))
         return item
     }
-    return items.filter(item => item.headingLevel === 0).map(getChildren)
+    return items.filter(item => item.headingLevel === 0).map(item => getChildren(item))
 }
 
 const getEXTH = (buf, encoding) => {
     const { magic, count } = getStruct(EXTH_HEADER, buf)
-    if (magic !== 'EXTH') throw new Error('Invalid EXTH header')
-    const decoder = getDecoder(encoding)
+    if (magic !== 'EXTH' || count > 4096 || count > (buf.byteLength - 12) / 8) throw new Error('Invalid EXTH header')
+    if (!MOBI_ENCODING[encoding]) throw new Error('Unsupported MOBI encoding')
+    const decoder = new TextDecoder(MOBI_ENCODING[encoding], { fatal: true })
     const results = {}
     let offset = 12
     for (let i = 0; i < count; i++) {
         const type = getUint(buf.slice(offset, offset + 4))
         const length = getUint(buf.slice(offset + 4, offset + 8))
+        if (length < 8 || offset + length > buf.byteLength) throw new Error('Invalid EXTH entry length')
         if (type in EXTH_RECORD_TYPE) {
             const [name, typ, many] = EXTH_RECORD_TYPE[type]
             const data = buf.slice(offset + 8, offset + length)
@@ -458,8 +490,9 @@ const getEXTH = (buf, encoding) => {
     return results
 }
 
-const getFont = async (buf, unzlib) => {
+const getFont = async (buf, unzlib, strict = false) => {
     const { flags, dataStart, keyLength, keyStart } = getStruct(FONT_HEADER, buf)
+    if (dataStart < 24 || dataStart > buf.byteLength || (flags & 2) && (!keyLength || keyStart + keyLength > buf.byteLength)) throw new Error('Invalid MOBI font record')
     const array = new Uint8Array(buf.slice(dataStart))
     // deobfuscate font
     if (flags & 0b10) {
@@ -473,6 +506,7 @@ const getFont = async (buf, unzlib) => {
         return await unzlib(array)
     } catch (e) {
         console.warn(e)
+        if (strict) throw e
         console.warn('Failed to decompress font')
     }
     return array
@@ -515,8 +549,12 @@ export class MOBI extends PDB {
     #encoder
     #decompress
     #removeTrailingEntries
-    constructor({ unzlib }) {
+    constructor({ unzlib, maxTextBytes = Infinity, maxRecordBytes = Infinity, strictResourceErrors = false }) {
         super()
+        this.maxTextBytes = maxTextBytes
+        this.strictResourceErrors = strictResourceErrors
+        this.maxRecordBytes = maxRecordBytes
+        this.textBytes = new Map()
         this.unzlib = unzlib
     }
     async open(file) {
@@ -557,7 +595,8 @@ export class MOBI extends PDB {
     }
     async #setup() {
         const { palmdoc, mobi } = this.headers
-        this.#decoder = getDecoder(mobi.encoding)
+        if (!MOBI_ENCODING[mobi.encoding]) throw new Error('Unsupported MOBI encoding')
+        this.#decoder = new TextDecoder(MOBI_ENCODING[mobi.encoding], { fatal: true })
         // `TextEncoder` only supports UTF-8
         // we are only encoding ASCII anyway, so I think it's fine
         this.#encoder = new TextEncoder()
@@ -565,8 +604,8 @@ export class MOBI extends PDB {
         // set up decompressor
         const { compression } = palmdoc
         this.#decompress = compression === 1 ? f => f
-            : compression === 2 ? decompressPalmDOC
-            : compression === 17480 ? await huffcdic(mobi, this.loadRecord.bind(this))
+            : compression === 2 ? f => decompressPalmDOC(f, this.maxRecordBytes)
+            : compression === 17480 ? await huffcdic(mobi, this.loadRecord.bind(this), this.maxRecordBytes, this.maxTextBytes)
             : null
         if (!this.#decompress) throw new Error('Unknown compression type')
 
@@ -603,11 +642,18 @@ export class MOBI extends PDB {
             .then(buf => new Uint8Array(buf))
             .then(this.#removeTrailingEntries)
             .then(this.#decompress)
+            .then(data => {
+                if (data.byteLength > this.maxRecordBytes) throw new Error('MOBI record limit exceeded')
+                this.textBytes.set(index, data.byteLength)
+                const total = [...this.textBytes.values()].reduce((sum, length) => sum + length, 0)
+                if (total > this.maxTextBytes) throw new Error('MOBI text expansion limit exceeded')
+                return data
+            })
     }
     async loadResource(index) {
         const buf = await super.loadRecord(this.#resourceStart + index)
         const magic = getString(buf.slice(0, 4))
-        if (magic === 'FONT') return getFont(buf, this.unzlib)
+        if (magic === 'FONT') return getFont(buf, this.unzlib, this.strictResourceErrors)
         if (magic === 'VIDE' || magic === 'AUDI') return buf.slice(12)
         return buf
     }
@@ -965,6 +1011,7 @@ class KF8 {
             const fdstBuffer = await loadRecord(kf8.fdst)
             const fdst = getStruct(FDST_HEADER, fdstBuffer)
             if (fdst.magic !== 'FDST') throw new Error('Missing FDST record')
+            if (fdst.numEntries > 2048 || 12 + fdst.numEntries * 8 > fdstBuffer.byteLength) throw new Error('Invalid FDST table')
             const fdstTable = Array.from({ length: fdst.numEntries },
                 (_, i) => 12 + i * 8)
                 .map(offset => [
@@ -1116,6 +1163,7 @@ class KF8 {
     // how to know the decompressed size of the records without decompressing?
     // 4096 is just the maximum size
     async loadRaw(start, end) {
+        if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || end < start || end > this.mobi.maxTextBytes) throw new Error('Invalid KF8 text range')
         // here we load either from the front or back until we have reached the
         // required offsets; at worst you'd have to load half the book at once
         const distanceHead = end - this.#rawHead.length
