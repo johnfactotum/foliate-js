@@ -179,6 +179,7 @@ The paginator uses the same pagination strategy as [Epub.js](https://github.com/
 
 The layout can be configured by setting the following attributes:
 - `animated`: a [boolean attribute](https://developer.mozilla.org/en-US/docs/Glossary/Boolean/HTML). If present, adds a sliding transition effect.
+- `swipe-disabled`: a boolean attribute. If present, touch gestures do not scroll or snap pages, and touch moves are not cancelled. Programmatic navigation and ordinary scrolled-mode scrolling remain available. It can be changed during a gesture.
 - `flow`: either `paginated` or `scrolled`.
 - `margin`: a CSS `<length>`. The unit must be `px`. The height of the header and footer.
 - `gap`: a CSS `<percentage>`. The size of the space between columns, relative to page size.
