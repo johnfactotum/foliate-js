@@ -821,6 +821,11 @@ export class Paginator extends HTMLElement {
         })
     }
     #onTouchStart(e) {
+        if (this.hasAttribute('swipe-disabled')) {
+            this.#touchState = null
+            this.#touchScrolled = false
+            return
+        }
         const touch = e.changedTouches[0]
         this.#touchState = {
             x: touch?.screenX, y: touch?.screenY,
@@ -829,7 +834,13 @@ export class Paginator extends HTMLElement {
         }
     }
     #onTouchMove(e) {
+        if (this.hasAttribute('swipe-disabled')) {
+            this.#touchState = null
+            this.#touchScrolled = false
+            return
+        }
         const state = this.#touchState
+        if (!state) return
         if (state.pinched) return
         state.pinched = globalThis.visualViewport.scale > 1
         if (this.scrolled || state.pinched) return
@@ -852,14 +863,16 @@ export class Paginator extends HTMLElement {
     }
     #onTouchEnd() {
         this.#touchScrolled = false
-        if (this.scrolled) return
+        const state = this.#touchState
+        if (this.scrolled || !state || this.hasAttribute('swipe-disabled')) return
 
         // XXX: Firefox seems to report scale as 1... sometimes...?
         // at this point I'm basically throwing `requestAnimationFrame` at
         // anything that doesn't work
         requestAnimationFrame(() => {
-            if (globalThis.visualViewport.scale === 1)
-                this.snap(this.#touchState.vx, this.#touchState.vy)
+            if (globalThis.visualViewport.scale === 1
+                && !this.hasAttribute('swipe-disabled') && this.#touchState === state)
+                this.snap(state.vx, state.vy)
         })
     }
     // allows one to process rects as if they were LTR and horizontal
