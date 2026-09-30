@@ -179,6 +179,7 @@ The paginator uses the same pagination strategy as [Epub.js](https://github.com/
 
 The layout can be configured by setting the following attributes:
 - `animated`: a [boolean attribute](https://developer.mozilla.org/en-US/docs/Glossary/Boolean/HTML). If present, adds a sliding transition effect.
+- `animation-duration`: transition duration in milliseconds, clamped to 0–1000. Absent, empty, or non-finite values use 300 ms. An explicit `0` disables transitions and the page-turn cooldown, including when `animated` is present.
 - `flow`: either `paginated` or `scrolled`.
 - `margin`: a CSS `<length>`. The unit must be `px`. The height of the header and footer.
 - `gap`: a CSS `<percentage>`. The size of the space between columns, relative to page size.
