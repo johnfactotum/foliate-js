@@ -308,7 +308,7 @@ export class View extends HTMLElement {
     }
     goToTextStart() {
         return this.goTo(this.book.landmarks
-            ?.find(m => m.type.includes('bodymatter') || m.type.includes('text'))
+            ?.find(m => m.type?.includes('bodymatter') || m.type?.includes('text'))
             ?.href ?? this.book.sections.findIndex(s => s.linear !== 'no'))
     }
     async init({ lastLocation, showTextStart }) {
