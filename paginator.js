@@ -236,7 +236,11 @@ class View {
         Object.assign(this.#iframe.style, {
             overflow: 'hidden',
             border: '0',
-            display: 'none',
+            // Keep a layout box while loading so WebKit initializes the frame
+            // with the current page zoom. display:none leaves new chapters
+            // incorrectly scaled until the next zoom change.
+            display: 'block',
+            visibility: 'hidden',
             width: '100%', height: '100%',
         })
         // `allow-scripts` is needed for events because of WebKit bug
@@ -257,19 +261,17 @@ class View {
                 const doc = this.document
                 afterLoad?.(doc)
 
-                // it needs to be visible for Firefox to get computed style
-                this.#iframe.style.display = 'block'
+                // The frame must participate in layout for computed styles.
                 const { vertical, rtl } = getDirection(doc)
                 const background = getBackground(doc)
-                this.#iframe.style.display = 'none'
 
                 this.#vertical = vertical
                 this.#rtl = rtl
 
                 this.#contentRange.selectNodeContents(doc.body)
                 const layout = beforeRender?.({ vertical, rtl, background })
-                this.#iframe.style.display = 'block'
                 this.render(layout)
+                this.#iframe.style.visibility = 'visible'
                 this.#observer.observe(doc.body)
 
                 // the resize observer above doesn't work in Firefox
