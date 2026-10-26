@@ -218,6 +218,10 @@ class View {
     #column = true
     #size
     #layout = {}
+    // true from the document's load until destroy(): before it the iframe's
+    // document is not the section's (or not fully parsed), after it the
+    // iframe is gone, and neither may be laid out, restyled or measured
+    #ready = false
     constructor({ container, onExpand }) {
         this.container = container
         this.onExpand = onExpand
@@ -250,6 +254,9 @@ class View {
     get document() {
         return this.#iframe.contentDocument
     }
+    get ready() {
+        return this.#ready
+    }
     async load(src, afterLoad, beforeRender) {
         if (typeof src !== 'string') throw new Error(`${src} is not string`)
         return new Promise(resolve => {
@@ -269,6 +276,7 @@ class View {
                 this.#contentRange.selectNodeContents(doc.body)
                 const layout = beforeRender?.({ vertical, rtl, background })
                 this.#iframe.style.display = 'block'
+                this.#ready = true
                 this.render(layout)
                 this.#observer.observe(doc.body)
 
@@ -283,7 +291,7 @@ class View {
         })
     }
     render(layout) {
-        if (!layout) return
+        if (!layout || !this.#ready) return
         this.#column = layout.flow !== 'scrolled'
         this.#layout = layout
         if (this.#column) this.columnize(layout)
@@ -360,6 +368,7 @@ class View {
         }
     }
     expand() {
+        if (!this.#ready) return
         const { documentElement } = this.document
         if (this.#column) {
             const side = this.#vertical ? 'height' : 'width'
@@ -416,6 +425,7 @@ class View {
         return this.#overlayer
     }
     destroy() {
+        this.#ready = false
         if (this.document) this.#observer.unobserve(this.document.body)
     }
 }
@@ -620,7 +630,7 @@ export class Paginator extends HTMLElement {
         })
 
         this.#mediaQueryListener = () => {
-            if (!this.#view) return
+            if (!this.#view?.ready) return
             this.#background.style.background = getBackground(this.#view.document)
         }
         this.#mediaQuery.addEventListener('change', this.#mediaQueryListener)
@@ -752,7 +762,7 @@ export class Paginator extends HTMLElement {
         return { height, width, margin, gap, columnWidth }
     }
     render() {
-        if (!this.#view) return
+        if (!this.#view?.ready) return
         this.#view.render(this.#beforeRender({
             vertical: this.#vertical,
             rtl: this.#rtl,
@@ -1109,11 +1119,15 @@ export class Paginator extends HTMLElement {
         } else $style.textContent = styles
 
         // NOTE: needs `requestAnimationFrame` in Chromium
-        requestAnimationFrame(() =>
-            this.#background.style.background = getBackground(this.#view.document))
+        requestAnimationFrame(() => {
+            if (this.#view?.ready)
+                this.#background.style.background = getBackground(this.#view.document)
+        })
 
         // needed because the resize observer doesn't work in Firefox
-        this.#view?.document?.fonts?.ready?.then(() => this.#view.expand())
+        this.#view?.document?.fonts?.ready?.then(() => {
+            if (this.#view?.ready) this.#view.expand()
+        })
     }
     focusView() {
         this.#view.document.defaultView.focus()
