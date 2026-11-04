@@ -276,7 +276,7 @@ export class View extends HTMLElement {
                 this.renderer.goTo(resolved)
                     .then(() => {
                         const { doc } = this.renderer.getContents()
-                            .find(x => x.index = resolved.index)
+                            .find(x => x.index === resolved.index)
                         const el = resolved.anchor(doc)
                         el.classList.add(activeClass)
                         if (playbackActiveClass) el.ownerDocument
