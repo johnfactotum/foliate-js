@@ -356,6 +356,8 @@ class View {
                 'page-break-inside': 'avoid',
                 'break-inside': 'avoid',
                 'box-sizing': 'border-box',
+                'height': 'auto',
+                'margin': '5% auto',
             })
         }
     }
